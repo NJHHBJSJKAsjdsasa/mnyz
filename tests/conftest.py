@@ -91,6 +91,14 @@ def _truncate(dsn: str) -> None:
                      restructuring_plans, plan_votes, asset_sales CASCADE
             """
         )
+        conn.execute(
+            """
+            TRUNCATE dt_decisions, dt_outbox, dt_coordinator_lease, dt_participants,
+                     distributed_transactions CASCADE
+            """
+        )
+        conn.execute("TRUNCATE dt_config")
+        conn.execute("INSERT INTO dt_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
         from server.domain import court_service
 
         court_service.ensure_courts(conn)
@@ -137,6 +145,7 @@ def test_dsn() -> str:
     os.environ["ATLAS_RATE_LIMIT"] = "off"
     os.environ["ATLAS_REDIS_URL"] = "memory://"
     os.environ["ATLAS_ENV"] = "dev"
+    os.environ["ATLAS_INTERNAL_TOKEN"] = "test-internal-token"
     _ensure_database(dsn)
     _migrate()
     return dsn

@@ -30,6 +30,8 @@ LOCK_TTL = {
     "ai_economy_tick": 240,
     "court_deadlines": 600,
     "insolvency_plan_tick": 600,
+    "dt_recovery": 120,
+    "dt_outbox_relay": 30,
 }
 
 

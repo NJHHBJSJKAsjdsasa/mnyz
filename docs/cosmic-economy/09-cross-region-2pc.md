@@ -398,3 +398,31 @@ congestion_premium =
 - 5s 上限；超过拒绝；
 - 做市商对跨区订单可加宽点差，但必须公开；
 - 不隐藏费用/延迟，不按 AI/真人差异定价。
+
+---
+
+## 14. 落地状态（`0115_cross_region_2pc`）
+
+已落地：`distributed_transactions`、`dt_participants`、`dt_decisions`、`dt_outbox`、
+`dt_coordinator_lease`、`dt_config`（budget/prepare/commit/lease/unknown/freeze/capacity 可在线调整）；
+`repo/distributed_tx.py`、`domain/dt_coordinator.py`、`api/v1/internal_dt.py`；
+job `dt_recovery`（15s）、`dt_outbox_relay`（10s）。
+
+实现口径：
+
+- **单库 = 单参与者 no-op**：`begin` 写事务日志后内联完成 prepare+commit；调用方在真正分库后无需改动。
+  `defer=true` 时停在 `preparing`，用于演练真实两阶段。
+- **状态机**：`preparing → prepared → committing → committed`，任一失败 → `aborting → aborted`；
+  commit 之后 abort 返回 422（09 §3.4「已发 commit 不可回滚」）。
+- **预算**：`estimated_settlement_ms = 区域延迟 + 200ms`，超过 5s 直接 422 拒绝，不进入 prepare。
+- **费率**：`base(同区0/相邻5/跨区10/远端20/高风险25) + risk(现金0/股票2/产权2/法院冻5) + 拥堵(≤50% 为 0，否则 ceil(10u²) 上限 10)`，
+  同区不收跨区费；clamp 0–30；分账 40/30/20/10 写入 `dt_outbox`；abort 时 `fee_amount` 归零。
+- **租约与恢复**：副本 1s 续租/3s 租约（`dt_config.lease_seconds`）；`dt_recovery` 接管过期租约，
+  超期未 prepared 的 abort、prepared/committing 的推进 commit、超过 8s 标 `unknown`、超过 10s 写
+  `dt.frozen` outbox（仅影响相关 actor）。
+- **unknown 人工决议**：`POST /internal/dt/{tx}/resolve`，必须两个不同署名（决定人 ≠ 复核人），
+  写 `heuristic_commit`/`heuristic_abort` 决策记录。
+- **鉴权**：`ATLAS_INTERNAL_TOKEN` 未配置时整个 `/internal/dt/*` 关闭（fail closed），令牌不匹配返回 403。
+
+未做：真实多库参与者（当前无跨库 prepare/commit 的网络调用）、费用与分账的实际资金划转、
+`court_recognition` 跨区判决承认、参与方读写的 undo/redo 日志、混沌测试与灾备演练。

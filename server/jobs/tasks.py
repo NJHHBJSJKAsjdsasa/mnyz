@@ -17,6 +17,7 @@ from ..domain import (
     council_service,
     court_service,
     currency_service,
+    dt_coordinator,
     insolvency_service,
     property_service,
     stock_service,
@@ -26,6 +27,7 @@ from ..domain.settlement import settle_offline
 from ..repo import cache as cache_repo
 from ..repo import contracts as contract_repo
 from ..repo import ai as ai_repo
+from ..repo import distributed_tx as dt_repo
 from ..repo import idempotency as idem_repo
 from ..repo import ledger as ledger_repo
 from ..repo import outbox as outbox_repo
@@ -232,6 +234,21 @@ def insolvency_plan_tick(conn) -> dict:
     return insolvency_service.plan_tick(conn)
 
 
+def dt_recovery(conn) -> dict:
+    """Take over expired leases and drive open 2PC transactions (09 §3.4)."""
+    return dt_coordinator.recover(conn)
+
+
+def dt_outbox_relay(conn, limit: int = 200) -> dict:
+    """Publish the 2PC outbox; the sink is the log until a broker exists."""
+    events = dt_repo.pending_outbox(conn, limit)
+    published = 0
+    for event in events:
+        dt_repo.mark_published(conn, int(event["id"]))
+        published += 1
+    return {"published": published, "pending": len(events) - published}
+
+
 def outbox_relay(conn, limit: int = 100) -> dict:
     """At-least-once hand-off; the publisher is a log sink until Kafka exists."""
     events = outbox_repo.pending(conn, limit)
@@ -328,4 +345,6 @@ JOBS = {
     "ai_economy_tick": ai_economy_tick,
     "court_deadlines": court_deadlines,
     "insolvency_plan_tick": insolvency_plan_tick,
+    "dt_recovery": dt_recovery,
+    "dt_outbox_relay": dt_outbox_relay,
 }

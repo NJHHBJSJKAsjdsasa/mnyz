@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = REPO_ROOT / ".env.server"
-DEFAULT_REVISION = "0114_company_law_court"
+DEFAULT_REVISION = "0115_cross_region_2pc"
 
 _VALID_ENVS = {"dev", "staging", "prod"}
 _VALID_CACHE_BACKENDS = {"pg", "sqlite", "json"}
@@ -86,6 +86,7 @@ class Settings:
     db_pool_max: int = 10
     rate_limit_enabled: bool = True
     cors_origins: tuple[str, ...] = ()
+    internal_token: str = ""
     problems: list[str] = field(default_factory=list)
 
     @property
@@ -136,6 +137,7 @@ class Settings:
                 for item in os.getenv("ATLAS_CORS_ORIGINS", "").split(",")
                 if item.strip()
             ),
+            internal_token=os.getenv("ATLAS_INTERNAL_TOKEN", "").strip(),
         )
         return settings.with_problems(settings.validate())
 

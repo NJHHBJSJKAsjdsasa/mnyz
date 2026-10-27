@@ -16,6 +16,7 @@ from . import (
     economy,
     explore,
     insolvency,
+    internal_dt,
     properties,
     session,
     stocks,
@@ -39,3 +40,4 @@ api_bp.register_blueprint(stocks.bp)
 api_bp.register_blueprint(admin_ai.bp)
 api_bp.register_blueprint(court.bp)
 api_bp.register_blueprint(insolvency.bp)
+api_bp.register_blueprint(internal_dt.bp)

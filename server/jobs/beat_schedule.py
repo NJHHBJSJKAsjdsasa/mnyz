@@ -22,4 +22,6 @@ SCHEDULE = {
     "ai_economy_tick": 60,
     "court_deadlines": 3600,
     "insolvency_plan_tick": 3600,
+    "dt_recovery": 15,
+    "dt_outbox_relay": 10,
 }

@@ -114,7 +114,7 @@ python sim/simulate.py --only low # 单场景
 | `0112_stock_market` | ✅ 已落地 | 11 张表、`stock_service`、`repo/stocks.py`、`api/v1/stocks.py`、2 个 job、10 个集成测试 |
 | `0113_ai_economy` | ✅ 已落地 | 2 张表 + `ai_provider`/`ai_economy`、`api/v1/admin_ai.py`、job `ai_economy_tick`、5 个集成测试 |
 | `0114_company_law_court` | ✅ 已落地 | 19 张表 + `company_law`/`court_service`/`insolvency_service`、`api/v1/court.py`、`api/v1/insolvency.py`、2 个 job、7 个集成测试 |
-| `0115_cross_region_2pc` | ⬜ 未开始 | |
+| `0115_cross_region_2pc` | ✅ 已落地 | 6 张表 + `dt_coordinator`、`api/v1/internal_dt.py`、job `dt_recovery`/`dt_outbox_relay`、9 个集成测试 |
 | `0116_ai_decision_provider` | ⬜ 未开始 | |
 
 `0110` 已实现的能力：

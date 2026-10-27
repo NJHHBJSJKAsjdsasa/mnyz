@@ -54,4 +54,6 @@ celery_app.conf.beat_schedule = {
     "ai_economy_tick": {"task": "atlas.job", "schedule": 60.0, "args": ("ai_economy_tick",)},
     "court_deadlines": {"task": "atlas.job", "schedule": 3600.0, "args": ("court_deadlines",)},
     "insolvency_plan_tick": {"task": "atlas.job", "schedule": 3600.0, "args": ("insolvency_plan_tick",)},
+    "dt_recovery": {"task": "atlas.job", "schedule": 15.0, "args": ("dt_recovery",)},
+    "dt_outbox_relay": {"task": "atlas.job", "schedule": 10.0, "args": ("dt_outbox_relay",)},
 }
