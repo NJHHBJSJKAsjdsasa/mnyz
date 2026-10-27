@@ -15,7 +15,7 @@ from ..infra.errors import Forbidden, InsufficientFunds, InvalidArgument, NotFou
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
 from ..repo import legal
-from . import currency_service
+from . import currency_service, dt_coordinator
 from .currency_service import Move, q4
 from .rng import stream
 
@@ -354,6 +354,9 @@ def enforce(conn, *, actor: dict, case_id: str, region: str = "") -> dict:
     if judgment["status"] == "enforced":
         raise Unprocessable("判决已执行")
     amount = Decimal(str(judgment["remedy"].get("pay", "0")))
+    recognition = legal.recognition_for(conn, str(judgment["id"]), region.strip().lower()) \
+        if region.strip().lower() not in ("", HOME_REGION) else None
+    dt_tx_id = _enforce_settlement(conn, case, judgment, amount, region)
     if amount <= 0:
         legal.set_judgment_status(conn, str(judgment["id"]), "final")
         legal.set_case_status(conn, case_id, "closed")
@@ -386,6 +389,8 @@ def enforce(conn, *, actor: dict, case_id: str, region: str = "") -> dict:
     )
     legal.set_judgment_status(conn, str(judgment["id"]), "enforced", enforced=True)
     legal.set_case_status(conn, case_id, "enforced", closed_at=datetime.now(timezone.utc))
+    if recognition is not None and dt_tx_id:
+        legal.set_recognition_dt(conn, str(recognition["id"]), dt_tx_id)
     return {
         "case_id": case_id,
         "paid": str(pay),
@@ -393,6 +398,7 @@ def enforce(conn, *, actor: dict, case_id: str, region: str = "") -> dict:
         "status": "enforced",
         "freeze": bool(freeze),
         "enforced_by": str(actor["id"]),
+        "dt_tx_id": dt_tx_id,
     }
 
 
@@ -453,6 +459,8 @@ def _recognition_payload(row: dict) -> dict:
         "reason": row["reason"],
         "decided_by": row["decided_by"],
         "decided_at": row["decided_at"].isoformat() if row["decided_at"] else None,
+        "dt_tx_id": str(row["dt_tx_id"]) if row["dt_tx_id"] else None,
+        "conflict_with": str(row["conflict_with"]) if row["conflict_with"] else None,
         "created_at": row["created_at"].isoformat(),
     }
 
@@ -496,6 +504,18 @@ def decide_recognition(conn, recognition_id: str, *, recognize: bool, reason_cod
     if row["status"] != "requested":
         raise Unprocessable("该承认申请已处理")
     if recognize:
+        conflict = legal.conflicting_recognition(conn, str(row["judgment_id"]), row["region"])
+        if conflict is not None:
+            # 08 §12.3 (5): a contradictory verdict already recognized here wins
+            legal.decide_recognition(
+                conn, recognition_id, status="rejected",
+                reason_code="conflicting_judgment",
+                reason=("与本区已承认的判决 %s 冲突，需上级法院协调"
+                        % conflict["judgment_id"]),
+                decided_by=decided_by,
+            )
+            legal.set_recognition_conflict(conn, recognition_id, str(conflict["id"]))
+            return _recognition_payload(legal.recognition_by_id(conn, recognition_id))
         legal.decide_recognition(conn, recognition_id, status="recognized", reason_code=None,
                                  reason=reason[:500], decided_by=decided_by)
     else:
@@ -545,3 +565,32 @@ def require_recognition(conn, judgment_id: str, region: str) -> dict | None:
     if row["status"] not in ("recognized",):
         raise Unprocessable(f"该判决在 {target} 区未被承认（{row['status']}）")
     return row
+
+
+def _enforce_settlement(conn, case: dict, judgment: dict, amount: Decimal,
+                        region: str) -> str | None:
+    """Asset movement for a judgment runs as a 2PC transaction (09 §8).
+
+    Single-database stage: the coordinator commits inline, but the attempt is
+    logged with its fee and outbox event, so splitting regions later needs no
+    change here.
+    """
+    if amount <= 0:
+        return None
+    target = (region or "").strip().lower() or HOME_REGION
+    tx = dt_coordinator.begin(
+        conn,
+        kind="court_enforcement",
+        participants=[{"participant_id": f"assets:{target}", "region": target}],
+        payload={"case_id": str(case["id"]), "judgment_id": str(judgment["id"]),
+                 "amount": str(amount)},
+        origin_region=HOME_REGION,
+        coordinator_id="court",
+        idempotency_key=f"court_enforce:{case['id']}:{target}",
+        notional=amount,
+        currency_code=case["currency_code"],
+        asset_class="court_freeze",
+    )
+    if tx["status"] != "committed":
+        raise Unprocessable("跨区执行事务未提交（09 §3.4）")
+    return str(tx["tx_id"])

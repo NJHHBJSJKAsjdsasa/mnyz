@@ -27,6 +27,7 @@ from ..infra.errors import (
 )
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
+from ..repo import revenue as revenue_repo
 from ..repo import stocks as stock_repo
 from . import currency_service
 from .currency_service import Move, q4
@@ -551,6 +552,15 @@ def _settle_trade(conn, listing: dict, buyer_order: dict, seller_order: dict,
         ref_type="stock_listing",
         ref_id=str(listing["id"]),
         memo=f"{listing['ticker']} {quantity}@{price}",
+    )
+    # 05 §11: the fee pool is recorded so the split job can move the shares later
+    revenue_repo.collect(
+        conn,
+        kind="stock_fee",
+        currency_code=code,
+        amount=q4(fee_buy + fee_sell + tax),
+        ref_type="stock_trade",
+        ref_id=tx["tx_id"],
     )
 
     stock_repo.ensure_holder(conn, buyer, str(listing["id"]))

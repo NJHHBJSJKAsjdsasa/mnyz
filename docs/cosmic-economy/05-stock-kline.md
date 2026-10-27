@@ -525,3 +525,15 @@ listed
 
 未做：CCMC 审核与议会 4 票、玩家子交易所/券商接入撮合、拆股并股复权、退市整理期拍卖与做市商、
 清算分配（依赖 08）、投资者保护基金、K 线保留/冷归档、前端图表。
+
+---
+
+## 14. 费用归集与分账（`0119_revenue_split`）
+
+- 成交时手续费与印花税仍**即时全额进 treasury**（不改热路径），同时写一条
+  `revenue_collections(kind='stock_fee')`。
+- `revenue_split_tick`（每小时）或管理端 `POST /admin/economy/revenue/split` 按
+  `revenue_split_rules` 把归集款分出：交易所 `market` 50% / 券商池 `officer_pool` 30% /
+  投资者保护 `insurance_fund` 20%；分账后 collection 标记 `split_run_id`，可审计到每一笔。
+- 规则比例之和必须为 1，否则 422；分区/税费（`property_tax` 70/30）用同一套表，`keep` 腿留在 treasury。
+- 未做：券商/交易所作为真实公司主体（当前映射到系统 actor）、按区费率差异化、退款冲正。

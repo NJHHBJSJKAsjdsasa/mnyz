@@ -24,4 +24,5 @@ SCHEDULE = {
     "insolvency_plan_tick": 3600,
     "dt_recovery": 15,
     "dt_outbox_relay": 10,
+    "revenue_split_tick": 3600,
 }

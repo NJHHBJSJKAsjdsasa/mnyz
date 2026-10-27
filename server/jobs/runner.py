@@ -32,6 +32,7 @@ LOCK_TTL = {
     "insolvency_plan_tick": 600,
     "dt_recovery": 120,
     "dt_outbox_relay": 30,
+    "revenue_split_tick": 3600,
 }
 
 

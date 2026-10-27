@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import properties as property_repo
+from ..repo import revenue as revenue_repo
 from . import currency_service
 from .currency_service import Move, q4
 
@@ -375,6 +376,15 @@ def pay_tax(conn, *, actor: dict, bill_id: str, idem_key: str | None = None) -> 
         memo=f"holding tax {bill['period']}",
     )
     property_repo.mark_bill_paid(conn, str(bill["id"]), tx["tx_id"])
+    # 03 §6.2: the 70/30 split of the holding tax is applied by the revenue job
+    revenue_repo.collect(
+        conn,
+        kind="property_tax",
+        currency_code=bill["currency_code"],
+        amount=amount,
+        ref_type="property_tax_bill",
+        ref_id=str(bill["id"]),
+    )
     return {"bill_id": str(bill["id"]), "paid": str(amount), "status": "paid", "tx_id": tx["tx_id"]}
 
 

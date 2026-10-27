@@ -105,6 +105,22 @@ def _truncate(dsn: str) -> None:
                      distributed_transactions CASCADE
             """
         )
+        conn.execute(
+            "TRUNCATE revenue_collections, revenue_split_runs, revenue_split_rules CASCADE"
+        )
+        conn.execute(
+            """
+            INSERT INTO revenue_split_rules (kind, label, currency_code, legs) VALUES
+              ('stock_fee', '股票手续费与印花税（交易所/券商/投资者保护）', 'cc4',
+               '[{"actor":"market","share":"0.50"},
+                 {"actor":"officer_pool","share":"0.30"},
+                 {"actor":"insurance_fund","share":"0.20"}]'::jsonb),
+              ('property_tax', '产权持有税（中央/地方）', 'cc1',
+               '[{"actor":"treasury","share":"0.70","keep":true},
+                 {"actor":"market","share":"0.30"}]'::jsonb)
+            ON CONFLICT (kind) DO NOTHING
+            """
+        )
         conn.execute("TRUNCATE dt_config")
         conn.execute("INSERT INTO dt_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
         from server.domain import court_service

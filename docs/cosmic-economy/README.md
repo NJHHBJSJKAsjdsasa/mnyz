@@ -117,6 +117,8 @@ python sim/simulate.py --only low # 单场景
 | `0115_cross_region_2pc` | ✅ 已落地 | 6 张表 + `dt_coordinator`、`api/v1/internal_dt.py`、job `dt_recovery`/`dt_outbox_relay`、9 个集成测试 |
 | `0116_ai_decision_provider` | ✅ 已落地 | `ai_decision_providers` + `ai_decisions` 审计字段、`ai_provider.LLMProvider`、管理端 provider 开关、7 个集成测试 |
 | `0117_court_recognition` | ✅ 已落地 | `court_recognition` 表 + `court_service` 承认流程（8 类拒绝理由/一次上诉/执行门控）、3 个集成测试 |
+| `0118_court_enforcement_2pc` | ✅ 已落地 | 承认后执行走 2PC、冲突判决自动驳回、2 个集成测试 |
+| `0119_revenue_split` | ✅ 已落地 | `revenue_collections`/`revenue_split_rules`/`revenue_split_runs`、`revenue_service`、job `revenue_split_tick`、3 个集成测试 |
 
 `0110` 已实现的能力：
 

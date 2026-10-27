@@ -637,7 +637,7 @@ def insert_asset_sale(conn, *, case_id: str, asset_kind: str, asset_id: str, met
 # ------------------------------------------------------------------ recognition
 RECOGNITION_COLUMNS = (
     "id, judgment_id, case_id, region, status, reason_code, reason, requested_by, "
-    "decided_by, decided_at, created_at"
+    "decided_by, decided_at, created_at, dt_tx_id, conflict_with"
 )
 
 
@@ -691,4 +691,45 @@ def judgment_by_id(conn, judgment_id: str) -> dict | None:
         "SELECT id, case_id, judgment, remedy, status, issued_at, enforced_at "
         "FROM court_judgments WHERE id = %s",
         (judgment_id,),
+    ).fetchone()
+
+
+def set_recognition_dt(conn, recognition_id: str, tx_id: str) -> None:
+    conn.execute(
+        "UPDATE court_recognition SET dt_tx_id = %s WHERE id = %s", (tx_id, recognition_id)
+    )
+
+
+def set_recognition_conflict(conn, recognition_id: str, other_id: str) -> None:
+    conn.execute(
+        "UPDATE court_recognition SET conflict_with = %s WHERE id = %s",
+        (other_id, recognition_id),
+    )
+
+
+def conflicting_recognition(conn, judgment_id: str, region: str) -> dict | None:
+    """A contradictory verdict between the same pair already recognized here."""
+    return conn.execute(
+        """
+        WITH target AS (
+          SELECT c.plaintiff_actor_id, c.defendant_actor_id,
+                 j.judgment->>'verdict' AS verdict
+            FROM court_cases c JOIN court_judgments j ON j.case_id = c.id
+           WHERE j.id = %s
+        )
+        SELECT r.id, r.judgment_id, r.case_id
+          FROM court_recognition r
+          JOIN court_judgments j2 ON j2.id = r.judgment_id
+          JOIN court_cases c2 ON c2.id = j2.case_id
+          CROSS JOIN target t
+         WHERE r.region = %s
+           AND r.status = 'recognized'
+           AND r.judgment_id <> %s
+           AND c2.plaintiff_actor_id = t.plaintiff_actor_id
+           AND c2.defendant_actor_id = t.defendant_actor_id
+           AND COALESCE(j2.judgment->>'verdict', '') <> COALESCE(t.verdict, '')
+         ORDER BY r.decided_at DESC
+         LIMIT 1
+        """,
+        (judgment_id, region, judgment_id),
     ).fetchone()

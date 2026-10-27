@@ -18,6 +18,7 @@ from . import (
     insolvency,
     internal_dt,
     properties,
+    revenue,
     session,
     stocks,
     tasks,
@@ -41,3 +42,4 @@ api_bp.register_blueprint(admin_ai.bp)
 api_bp.register_blueprint(court.bp)
 api_bp.register_blueprint(insolvency.bp)
 api_bp.register_blueprint(internal_dt.bp)
+api_bp.register_blueprint(revenue.bp)

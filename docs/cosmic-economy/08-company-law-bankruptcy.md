@@ -535,3 +535,14 @@ job `court_deadlines`、`insolvency_plan_tick`；`companies.status` 增加 `bank
 
 未做：与 2PC 的实际资产划扣联动（当前执行仍读本库余额）、承认后在他区落地执行的参与者调用、
 多区并行承认与冲突判决的自动检测。
+
+---
+
+## 15. 承认后的执行与冲突（`0118_court_enforcement_2pc`）
+
+- **他区执行走 2PC**：`enforce(region=…)` 在划扣前调用协调器 `begin(kind='court_enforcement',
+  asset_class='court_freeze')`，事务提交后才动账；承认记录写 `dt_tx_id` 便于回溯。
+  单库阶段协调器内联提交，行为与直接划扣一致，但留下了事务日志、费率（>5 个区域延迟直接拒绝）与 outbox。
+- **冲突判决自动驳回**：同一当事人对、在同区已承认的相反裁决视为冲突；`decide_recognition(recognize=True)`
+  会改判为 `rejected / conflicting_judgment`，并写 `conflict_with` 指向已承认的那条记录（08 §12.3 第 5 条）。
+- **未做**：冲突的人工协调流程（当前直接驳回）、跨区并行承认的批量申请接口。

@@ -19,6 +19,7 @@ from ..domain import (
     currency_service,
     dt_coordinator,
     insolvency_service,
+    revenue_service,
     property_service,
     stock_service,
     world_service,
@@ -239,6 +240,11 @@ def dt_recovery(conn) -> dict:
     return dt_coordinator.recover(conn)
 
 
+def revenue_split_tick(conn) -> dict:
+    """Move the configured shares of collected fees out of the treasury (05 §11)."""
+    return revenue_service.run_all(conn)
+
+
 def dt_outbox_relay(conn, limit: int = 200) -> dict:
     """Publish the 2PC outbox; the sink is the log until a broker exists."""
     events = dt_repo.pending_outbox(conn, limit)
@@ -347,4 +353,5 @@ JOBS = {
     "insolvency_plan_tick": insolvency_plan_tick,
     "dt_recovery": dt_recovery,
     "dt_outbox_relay": dt_outbox_relay,
+    "revenue_split_tick": revenue_split_tick,
 }

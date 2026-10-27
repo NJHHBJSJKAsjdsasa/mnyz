@@ -55,8 +55,10 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 | `0115_cross_region_2pc` | Cross-region 2PC: coordinator transaction log, participants, decisions and outbox, lease takeover, 5 s budget rejection, cross-region fee (base + risk + congestion, split 4:3:2:1), unknown SLA with two-person resolution; a one-participant no-op while the database is single | 9 |
 | `0116_ai_decision_provider` | Provider registry with four modes (disabled/shadow/canary/live): off by default, shadow audits without executing, canary gated by an AI allowlist, output schema + action whitelist validation, timeout fallback, token/provider audit columns; no public API added | 7 |
 | `0117_court_recognition` | Cross-region judgment recognition: a foreign region does not recognize automatically, its court must decide (8 refusal codes + written reason), a refusal can be appealed once, and enforcement abroad is gated on recognition | 3 |
+| `0118_court_enforcement_2pc` | Enforcement abroad runs as a 2PC transaction (`court_enforcement`, recognition keeps the `dt_tx_id`); contradictory verdicts between the same pair are auto-rejected as `conflicting_judgment` with the conflicting record attached | 2 |
+| `0119_revenue_split` | Fee/tax collection and split: stock fees 50/30/20 (exchange/brokers/investor protection), holding tax 70/30 (central/local), rule-driven splits with an hourly job and an ops trigger | 3 |
 
-Current migration head: `0117_court_recognition` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+Current migration head: `0119_revenue_split` (kept in sync with `server/config.py::DEFAULT_REVISION`).
 
 ### 2.3 Tests
 
@@ -66,7 +68,7 @@ treatment, shareholder meetings and court flow, and liquidation priority.
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 167 passed, ~18 minutes
+  python -m pytest tests -q      # 172 passed, ~20 minutes
 ```
 
 ---
@@ -160,10 +162,11 @@ python __main__.py                    # upstream monolith (universe generation +
 
 ## 7. Status and roadmap
 
-- Done: 0110–0117 (currency/banking, commerce/property, stocks, AI players, company law/courts/insolvency,
-  cross-region 2PC, AI providers, cross-region recognition), 167 integration tests passing.
-- Planned: economy charts in the front end, multi-currency liquidation, player appeal panels,
-  sub-exchange matching, fee/tax revenue splits (fees currently go 100 % to treasury).
+- Done: 0110–0119 (currency/banking, commerce/property, stocks, AI players, company law/courts/insolvency,
+  cross-region 2PC, AI providers, recognition + 2PC enforcement, revenue splits), 172 integration tests
+  passing.
+- Planned: price index and market-maker quotes (0120), economy charts in the front end, multi-currency
+  liquidation, player appeal panels, sub-exchange matching.
 - Known gaps per migration are recorded in the “落地状态 / implementation status” section of each design book
   (e.g. sub-exchange integration, player appeal panels, multi-currency liquidation).
 
