@@ -19,6 +19,7 @@ from ..domain import (
     currency_service,
     dt_coordinator,
     insolvency_service,
+    market_index,
     revenue_service,
     property_service,
     stock_service,
@@ -240,6 +241,11 @@ def dt_recovery(conn) -> dict:
     return dt_coordinator.recover(conn)
 
 
+def price_index_tick(conn) -> dict:
+    """Publish the minute snapshot for every active index (03 §4)."""
+    return market_index.tick(conn)
+
+
 def revenue_split_tick(conn) -> dict:
     """Move the configured shares of collected fees out of the treasury (05 §11)."""
     return revenue_service.run_all(conn)
@@ -354,4 +360,5 @@ JOBS = {
     "dt_recovery": dt_recovery,
     "dt_outbox_relay": dt_outbox_relay,
     "revenue_split_tick": revenue_split_tick,
+    "price_index_tick": price_index_tick,
 }

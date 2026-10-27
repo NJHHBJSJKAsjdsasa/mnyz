@@ -57,4 +57,5 @@ celery_app.conf.beat_schedule = {
     "dt_recovery": {"task": "atlas.job", "schedule": 15.0, "args": ("dt_recovery",)},
     "dt_outbox_relay": {"task": "atlas.job", "schedule": 10.0, "args": ("dt_outbox_relay",)},
     "revenue_split_tick": {"task": "atlas.job", "schedule": 3600.0, "args": ("revenue_split_tick",)},
+    "price_index_tick": {"task": "atlas.job", "schedule": 300.0, "args": ("price_index_tick",)},
 }

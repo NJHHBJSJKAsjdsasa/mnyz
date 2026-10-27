@@ -12,6 +12,7 @@ import CosmicBanner from "./CosmicBanner.tsx";
 import FabricatorTab from "./FabricatorTab.tsx";
 import TechTab from "./TechTab.tsx";
 import CouncilTab from "./CouncilTab.tsx";
+import StockMarketPanel from "./StockMarketPanel.tsx";
 import { PlanetScanSystem } from "../Utils/PlanetScanSystem.tsx";
 
 interface ExplorationLabProps {
@@ -21,7 +22,19 @@ interface ExplorationLabProps {
   coordinates: string;
 }
 
-type LabTab = "scan" | "trade" | "shipyard" | "contracts" | "station" | "craft" | "tech" | "crew" | "codex" | "weekly" | "council";
+type LabTab =
+  | "scan"
+  | "trade"
+  | "shipyard"
+  | "contracts"
+  | "station"
+  | "craft"
+  | "tech"
+  | "crew"
+  | "codex"
+  | "weekly"
+  | "council"
+  | "market";
 
 const TABS: Array<{ id: LabTab; label: string; icon: string }> = [
   { id: "scan", label: "地质扫描", icon: "🔍" },
@@ -35,6 +48,7 @@ const TABS: Array<{ id: LabTab; label: string; icon: string }> = [
   { id: "codex", label: "图鉴", icon: "📖" },
   { id: "weekly", label: "周目标", icon: "🎯" },
   { id: "council", label: "宇宙议会", icon: "🏛" },
+  { id: "market", label: "星际股市", icon: "📈" },
 ];
 
 const ExplorationLab: React.FC<ExplorationLabProps> = ({ planetName, planetType, systemIndex, coordinates }) => {
@@ -58,6 +72,8 @@ const ExplorationLab: React.FC<ExplorationLabProps> = ({ planetName, planetType,
         return <WeeklyTab />;
       case "council":
         return <CouncilTab />;
+      case "market":
+        return <StockMarketPanel />;
       case "station":
         return <StationTab planetKey={planetKey} planetName={planetName} systemIndex={systemIndex} coordinates={coordinates} />;
       case "craft":

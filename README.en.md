@@ -57,8 +57,9 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 | `0117_court_recognition` | Cross-region judgment recognition: a foreign region does not recognize automatically, its court must decide (8 refusal codes + written reason), a refusal can be appealed once, and enforcement abroad is gated on recognition | 3 |
 | `0118_court_enforcement_2pc` | Enforcement abroad runs as a 2PC transaction (`court_enforcement`, recognition keeps the `dt_tx_id`); contradictory verdicts between the same pair are auto-rejected as `conflicting_judgment` with the conflicting record attached | 2 |
 | `0119_revenue_split` | Fee/tax collection and split: stock fees 50/30/20 (exchange/brokers/investor protection), holding tax 70/30 (central/local), rule-driven splits with an hourly job and an ops trigger | 3 |
+| `0120_price_index` | Cap-weighted index (`price_indices`/`price_index_points`, one point per minute, recomputable) and market-maker quotes (`mm_quotes` audit trail, mid/volatility/inventory skew); public `/market/indices` and `/stocks/{ticker}/quote` | 5 |
 
-Current migration head: `0119_revenue_split` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+Current migration head: `0120_price_index` (kept in sync with `server/config.py::DEFAULT_REVISION`).
 
 ### 2.3 Tests
 
@@ -68,7 +69,7 @@ treatment, shareholder meetings and court flow, and liquidation priority.
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 172 passed, ~20 minutes
+  python -m pytest tests -q      # 177 passed, ~22 minutes
 ```
 
 ---
@@ -165,8 +166,10 @@ python __main__.py                    # upstream monolith (universe generation +
 - Done: 0110–0119 (currency/banking, commerce/property, stocks, AI players, company law/courts/insolvency,
   cross-region 2PC, AI providers, recognition + 2PC enforcement, revenue splits), 172 integration tests
   passing.
-- Planned: price index and market-maker quotes (0120), economy charts in the front end, multi-currency
-  liquidation, player appeal panels, sub-exchange matching.
+- Front end: new “Interstellar Market” panel (order book / candles / portfolio, up = red, down = green)
+  mounted in the ship lab; `vite build` and the front-end smoke test pass.
+- Planned: multi-currency liquidation, player appeal panels, sub-exchange matching, automatic two-sided
+  market-maker orders.
 - Known gaps per migration are recorded in the “落地状态 / implementation status” section of each design book
   (e.g. sub-exchange integration, player appeal panels, multi-currency liquidation).
 

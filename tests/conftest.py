@@ -121,6 +121,14 @@ def _truncate(dsn: str) -> None:
             ON CONFLICT (kind) DO NOTHING
             """
         )
+        conn.execute("TRUNCATE mm_quotes, price_index_points, price_indices CASCADE")
+        conn.execute(
+            """
+            INSERT INTO price_indices (code, name, method, currency_code, base_value)
+            VALUES ('CSX', '宇宙股票综合指数', 'cap_weighted', 'cc4', 1000)
+            ON CONFLICT (code) DO NOTHING
+            """
+        )
         conn.execute("TRUNCATE dt_config")
         conn.execute("INSERT INTO dt_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
         from server.domain import court_service

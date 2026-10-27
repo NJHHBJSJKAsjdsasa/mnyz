@@ -25,4 +25,5 @@ SCHEDULE = {
     "dt_recovery": 15,
     "dt_outbox_relay": 10,
     "revenue_split_tick": 3600,
+    "price_index_tick": 300,
 }

@@ -236,3 +236,19 @@ ask = mid × (1 + spread/2) - inventory_skew
 
 未做：AI 在产权/公司/银行/议会/攻城的动作、做市商双边报价、同质化相关性检测、
 `llm_shadow`/`llm_canary`/`llm_live`（留给 0116）、`/players` 分页筛选。
+
+
+---
+
+## 落地状态（`0120_price_index`）
+
+- `price_indices`：`CSX` 宇宙股票综合指数，`cap_weighted`，`base_value=1000`；首次计算时把当时的
+  `Σ(last_price × free_float)` 记为 `base_cap`，此后 `value = 1000 × cap / base_cap`，新宇宙一定从 1000 起。
+- `price_index_points`：每分钟一个快照（同分钟 upsert），`components` 存权重前 5，可从当时行情复算。
+- `mm_quotes`：做市商报价审计，记录 mid / bid / ask / 点差 bp / 波动率 bp / 库存偏移 bp。
+- 报价公式（06 §6.1）：`mid = 最近成交或买一卖一中价`，`spread = clamp(max(0.2%, 0.5×近 20 日平均振幅), 5%)`，
+  库存偏移按 `(持仓 − 目标)/目标` 计算并夹在 ±100bp，**整条报价带平移**（`quoted_mid`），保证 `bid < quoted_mid < ask`。
+- 端点：`GET /market/indices`、`GET /market/indices/{code}/points`、`GET/POST /stocks/{ticker}/quote`、
+  `POST /admin/market/index/publish`；job `price_index_tick` 每 5 分钟发布。
+- 前端：星舰实验舱新增「星际股市」标签，盘口 / K 线（纯 SVG，无图表库）/ 持仓，涨红跌绿。
+- 未做：成分股调整与除权、指数期货、做市商双边自动挂单（当前只出报价与存档）。

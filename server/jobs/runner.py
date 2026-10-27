@@ -33,6 +33,7 @@ LOCK_TTL = {
     "dt_recovery": 120,
     "dt_outbox_relay": 30,
     "revenue_split_tick": 3600,
+    "price_index_tick": 600,
 }
 
 

@@ -8,7 +8,7 @@
 
 ## 1. 迁移拆分
 
-> 进度（2026-10-27）：`0110`–`0119` 已落地，`DEFAULT_REVISION = 0119_revenue_split`。
+> 进度（2026-10-27）：`0110`–`0120` 已落地，`DEFAULT_REVISION = 0120_price_index`。
 > 落地范围与未接服务项见 [README · 实现进度](README.md#实现进度)。
 
 ### `0110_currency_bank`
@@ -256,6 +256,7 @@ GET  /internal/dt/{tx}
 | `dt_recovery` | 15s | 2PC 未决事务恢复/告警（落地：租约接管 + 超时推进 + unknown 标记） |
 | `dt_outbox_relay` | 10s | 2PC outbox 投递 |
 | `revenue_split_tick` | 每小时 | 手续费/税费分账（落地：按 `revenue_split_rules` 把归集款从 treasury 分出） |
+| `price_index_tick` | 5 分钟 | 价格指数快照（落地：每分钟一个点，同分钟 upsert） |
 | `ai_economy_tick` | 60s | AI 玩家决策 |
 | `economy_reconciliation` | 每日 | 账本/持仓/2PC 对账 |
 
