@@ -510,3 +510,28 @@ job `court_deadlines`、`insolvency_plan_tick`；`companies.status` 增加 `bank
 
 未做：玩家合议庭（§12.1）、法官回避/陪审、回购/增发/减资/并购/要约收购的资金动作、评估权与压迫救济、
 跨区判决承认（§8，待 0115）、管理人责任与职业保险、冻结与产权/股票挂牌的联动。
+
+---
+
+## 14. 落地状态（`0117_court_recognition`）
+
+已落地：`court_recognition`（judgment_id/case_id/region/status/reason_code/reason/requested_by/decided_by），
+`court_service.request_recognition / decide_recognition / appeal_recognition / require_recognition`，
+`api/v1/court.py` 新增
+`POST /court/judgments/{id}/recognition`、`POST /court/recognition/{id}/appeal`、
+`POST /admin/court/recognition/{id}/decide`；`POST /court/cases/{id}/enforce` 接受可选 `region`。
+
+实现口径：
+
+- **不自动承认**（§8）：本区（`core`）判决无需承认；他区必须先请求，请求重复返回 `duplicate: true`。
+- **拒绝理由**（§12.3）：8 个代码 `no_jurisdiction` / `no_notice` / `fraud` / `public_policy` /
+  `conflicting_judgment` / `uncertain_remedy` / `punitive_not_final` / `third_party_harm`，
+  必须同时给书面理由，否则 400。
+- **一次上诉**：仅 `rejected` 可上诉；上级法院按记录哈希复核（35% 改判），结果为 `recognized`（改判）或
+  `final`（维持），第二次上诉 422。
+- **执行门控**：`enforce(region=…)` 在他区要求存在 `recognized` 记录，否则 422
+  「该判决尚未在 X 区获得承认」；不传 `region` 表示本区执行，保持原行为。
+- **权限**：只有案件当事人可申请/上诉；裁定仅 admin/ops。
+
+未做：与 2PC 的实际资产划扣联动（当前执行仍读本库余额）、承认后在他区落地执行的参与者调用、
+多区并行承认与冲突判决的自动检测。

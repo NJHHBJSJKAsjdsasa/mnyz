@@ -54,8 +54,9 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 | `0114_company_law_court` | Charter/officers/shareholder meetings/resolutions (ordinary >50%, special >2/3, related-party abstention), related-party approval, commercial court (filing/evidence/deterministic judgment/single appeal/enforcement/freezes), automatic stay, claim priority in liquidation, class voting on restructuring plans | 7 |
 | `0115_cross_region_2pc` | Cross-region 2PC: coordinator transaction log, participants, decisions and outbox, lease takeover, 5 s budget rejection, cross-region fee (base + risk + congestion, split 4:3:2:1), unknown SLA with two-person resolution; a one-participant no-op while the database is single | 9 |
 | `0116_ai_decision_provider` | Provider registry with four modes (disabled/shadow/canary/live): off by default, shadow audits without executing, canary gated by an AI allowlist, output schema + action whitelist validation, timeout fallback, token/provider audit columns; no public API added | 7 |
+| `0117_court_recognition` | Cross-region judgment recognition: a foreign region does not recognize automatically, its court must decide (8 refusal codes + written reason), a refusal can be appealed once, and enforcement abroad is gated on recognition | 3 |
 
-Current migration head: `0116_ai_decision_provider` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+Current migration head: `0117_court_recognition` (kept in sync with `server/config.py::DEFAULT_REVISION`).
 
 ### 2.3 Tests
 
@@ -65,7 +66,7 @@ treatment, shareholder meetings and court flow, and liquidation priority.
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 164 passed, ~18 minutes
+  python -m pytest tests -q      # 167 passed, ~18 minutes
 ```
 
 ---
@@ -159,10 +160,10 @@ python __main__.py                    # upstream monolith (universe generation +
 
 ## 7. Status and roadmap
 
-- Done: 0110–0116 (currency/banking, commerce/property, stocks, AI players, company law/courts/insolvency,
-  cross-region 2PC, AI providers), 164 integration tests passing.
-- Planned: economy charts in the front end, cross-region judgment recognition (`court_recognition`),
-  multi-currency liquidation, player appeal panels, sub-exchange matching.
+- Done: 0110–0117 (currency/banking, commerce/property, stocks, AI players, company law/courts/insolvency,
+  cross-region 2PC, AI providers, cross-region recognition), 167 integration tests passing.
+- Planned: economy charts in the front end, multi-currency liquidation, player appeal panels,
+  sub-exchange matching, fee/tax revenue splits (fees currently go 100 % to treasury).
 - Known gaps per migration are recorded in the “落地状态 / implementation status” section of each design book
   (e.g. sub-exchange integration, player appeal panels, multi-currency liquidation).
 

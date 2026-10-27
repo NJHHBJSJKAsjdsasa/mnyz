@@ -7,7 +7,14 @@ from flask import Blueprint, g
 from ...domain import court_service, currency_service
 from ...infra.context import db
 from ...infra.errors import Forbidden
-from ...models.legal import CourtCaseRequest, EvidenceRequest, FreezeRequest
+from ...models.legal import (
+    CourtCaseRequest,
+    EnforceRequest,
+    EvidenceRequest,
+    FreezeRequest,
+    RecognitionDecisionRequest,
+    RecognitionRequest,
+)
 from ...repo import players as player_repo
 from ..deps import (
     begin_idempotency,
@@ -117,12 +124,66 @@ def appeal(case_id: str):
 @require_auth(write=True)
 @rate_limit("court_enforce", 10, 3600)
 def enforce(case_id: str):
+    body = parse_model(EnforceRequest)
+
     def action(conn, player):
         return court_service.enforce(
-            conn, actor=currency_service.actor_for_player(conn, player), case_id=case_id
+            conn, actor=currency_service.actor_for_player(conn, player), case_id=case_id,
+            region=body.region,
         )
 
-    return _write({"case": case_id, "enforce": True}, action)
+    return _write({"case": case_id, "enforce": True, "region": body.region}, action)
+
+
+@bp.post("/court/judgments/<judgment_id>/recognition")
+@require_auth(write=True)
+@rate_limit("court_recognition", 20, 3600)
+def request_recognition(judgment_id: str):
+    body = parse_model(RecognitionRequest)
+
+    def action(conn, player):
+        return court_service.request_recognition(
+            conn,
+            actor=currency_service.actor_for_player(conn, player),
+            judgment_id=judgment_id,
+            region=body.region,
+        )
+
+    return _write({"judgment": judgment_id, "region": body.region}, action)
+
+
+@bp.post("/court/recognition/<recognition_id>/appeal")
+@require_auth(write=True)
+@rate_limit("court_recognition_appeal", 10, 3600)
+def appeal_recognition(recognition_id: str):
+    def action(conn, player):
+        return court_service.appeal_recognition(
+            conn,
+            actor=currency_service.actor_for_player(conn, player),
+            recognition_id=recognition_id,
+        )
+
+    return _write({"recognition": recognition_id, "appeal": True}, action)
+
+
+@bp.post("/admin/court/recognition/<recognition_id>/decide")
+@require_auth(write=True)
+@rate_limit("court_recognition_decide", 30, 3600)
+def decide_recognition(recognition_id: str):
+    body = parse_model(RecognitionDecisionRequest)
+
+    def action(conn, player):
+        _require_admin(player)
+        return court_service.decide_recognition(
+            conn,
+            recognition_id,
+            recognize=body.recognize,
+            reason_code=body.reason_code,
+            reason=body.reason,
+            decided_by=str(player["id"]),
+        )
+
+    return _write({"recognition": recognition_id, "recognize": body.recognize}, action)
 
 
 @bp.post("/admin/court/cases/<case_id>/judge")

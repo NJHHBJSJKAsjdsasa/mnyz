@@ -50,8 +50,9 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 | `0114_company_law_court` | 章程/高管/股东会/决议表决（普通 >50%、特别 >2/3、关联方回避）、关联交易审批、商业法院（起诉/证据/确定性判决/一次上诉/执行/冻结）、破产自动中止/债权顺位清算/重整计划类别表决 | 7 |
 | `0115_cross_region_2pc` | 跨区 2PC：协调者事务日志、参与者、决策与 outbox、租约接管、5s 预算拒绝、跨区费率（基础+风险+拥堵，4:3:2:1 分账）、unknown SLA 与双人决议；单库阶段为单参与者 no-op | 9 |
 | `0116_ai_decision_provider` | 决策 provider 注册表与四档模式（disabled/shadow/canary/live）：默认关闭、影子只审计不执行、灰度按 AI 白名单、输出 schema+动作白名单校验、超时回退、token/provider 审计字段；不新增公开 API | 7 |
+| `0117_court_recognition` | 跨区判决承认：他区不自动承认，需被请求区裁定（8 类拒绝理由 + 书面理由），拒绝可上诉一次，未获承认不得在他区执行 | 3 |
 
-当前迁移 head：`0116_ai_decision_provider`（与 `server/config.py::DEFAULT_REVISION` 同步）。
+当前迁移 head：`0117_court_recognition`（与 `server/config.py::DEFAULT_REVISION` 同步）。
 
 ### 2.3 测试
 
@@ -60,7 +61,7 @@ AI 回放与同权、股东会与法院流程、破产清算顺位等。
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 164 passed，约 18 分钟
+  python -m pytest tests -q      # 167 passed，约 18 分钟
 ```
 
 ---
@@ -153,9 +154,9 @@ python __main__.py                    # 上游单体入口（宇宙生成 + 游�
 
 ## 7. 状况与路线
 
-- 已完成：0110–0116（货币银行、商业产权、股票、AI 玩家、公司法/法院/破产、跨区 2PC、AI provider），164 个集成测试通过。
-- 待办：经济前端图表（K 线/盘口/持仓）、跨区判决承认（`court_recognition`）、多币种清算折算、
-  玩家合议庭、子交易所接入撮合。
+- 已完成：0110–0117（货币银行、商业产权、股票、AI 玩家、公司法/法院/破产、跨区 2PC、AI provider、跨区判决承认），167 个集成测试通过。
+- 待办：经济前端图表（K 线/盘口/持仓）、多币种清算折算、玩家合议庭、子交易所接入撮合、
+  手续费/税费分账（当前全额进 treasury）。
 - 各迁移的已知缺口记录在对应分册的「落地状态」小节（如股票子交易所接入、玩家合议庭、清算多币种折算）。
 
 ---

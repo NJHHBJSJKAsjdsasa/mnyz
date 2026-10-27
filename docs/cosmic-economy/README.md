@@ -116,6 +116,7 @@ python sim/simulate.py --only low # 单场景
 | `0114_company_law_court` | ✅ 已落地 | 19 张表 + `company_law`/`court_service`/`insolvency_service`、`api/v1/court.py`、`api/v1/insolvency.py`、2 个 job、7 个集成测试 |
 | `0115_cross_region_2pc` | ✅ 已落地 | 6 张表 + `dt_coordinator`、`api/v1/internal_dt.py`、job `dt_recovery`/`dt_outbox_relay`、9 个集成测试 |
 | `0116_ai_decision_provider` | ✅ 已落地 | `ai_decision_providers` + `ai_decisions` 审计字段、`ai_provider.LLMProvider`、管理端 provider 开关、7 个集成测试 |
+| `0117_court_recognition` | ✅ 已落地 | `court_recognition` 表 + `court_service` 承认流程（8 类拒绝理由/一次上诉/执行门控）、3 个集成测试 |
 
 `0110` 已实现的能力：
 

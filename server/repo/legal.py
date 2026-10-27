@@ -632,3 +632,63 @@ def insert_asset_sale(conn, *, case_id: str, asset_kind: str, asset_id: str, met
         """,
         (case_id, asset_kind, asset_id, method, price, status),
     ).fetchone()
+
+
+# ------------------------------------------------------------------ recognition
+RECOGNITION_COLUMNS = (
+    "id, judgment_id, case_id, region, status, reason_code, reason, requested_by, "
+    "decided_by, decided_at, created_at"
+)
+
+
+def insert_recognition(conn, *, judgment_id: str, case_id: str, region: str,
+                       requested_by: str) -> dict | None:
+    return conn.execute(
+        f"""
+        INSERT INTO court_recognition (judgment_id, case_id, region, requested_by)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (judgment_id, region) DO NOTHING
+        RETURNING {RECOGNITION_COLUMNS}
+        """,
+        (judgment_id, case_id, region, requested_by),
+    ).fetchone()
+
+
+def recognition_by_id(conn, recognition_id: str, *, for_update: bool = False) -> dict | None:
+    sql = f"SELECT {RECOGNITION_COLUMNS} FROM court_recognition WHERE id = %s"
+    if for_update:
+        sql += " FOR UPDATE"
+    return conn.execute(sql, (recognition_id,)).fetchone()
+
+
+def recognition_for(conn, judgment_id: str, region: str) -> dict | None:
+    return conn.execute(
+        f"SELECT {RECOGNITION_COLUMNS} FROM court_recognition "
+        "WHERE judgment_id = %s AND region = %s",
+        (judgment_id, region),
+    ).fetchone()
+
+
+def recognitions_of_case(conn, case_id: str) -> list[dict]:
+    return conn.execute(
+        f"SELECT {RECOGNITION_COLUMNS} FROM court_recognition "
+        "WHERE case_id = %s ORDER BY created_at DESC",
+        (case_id,),
+    ).fetchall()
+
+
+def decide_recognition(conn, recognition_id: str, *, status: str, reason_code: str | None,
+                       reason: str, decided_by: str) -> None:
+    conn.execute(
+        "UPDATE court_recognition SET status = %s, reason_code = %s, reason = %s, "
+        "decided_by = %s, decided_at = now() WHERE id = %s",
+        (status, reason_code, reason, decided_by, recognition_id),
+    )
+
+
+def judgment_by_id(conn, judgment_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT id, case_id, judgment, remedy, status, issued_at, enforced_at "
+        "FROM court_judgments WHERE id = %s",
+        (judgment_id,),
+    ).fetchone()

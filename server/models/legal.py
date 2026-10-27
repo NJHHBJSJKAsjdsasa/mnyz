@@ -78,3 +78,17 @@ class PlanVoteRequest(StrictModel):
     plan_id: str = Field(min_length=8, max_length=64)
     claim_class: str = Field(pattern="^(secured|priority|unsecured|equity)$")
     choice: str = Field(pattern="^(yes|no)$")
+
+
+class RecognitionRequest(StrictModel):
+    region: str = Field(min_length=2, max_length=32)
+
+
+class RecognitionDecisionRequest(StrictModel):
+    recognize: bool
+    reason_code: str | None = Field(default=None, max_length=32)
+    reason: str = Field(default="", max_length=500)
+
+
+class EnforceRequest(StrictModel):
+    region: str = Field(default="", max_length=32)

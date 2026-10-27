@@ -201,6 +201,9 @@ def case_detail(conn, case_id: str) -> dict:
             {"kind": row["asset_kind"], "asset_id": row["asset_id"], "status": row["status"]}
             for row in legal.freezes_of_case(conn, case_id)
         ],
+        "recognitions": [
+            _recognition_payload(row) for row in legal.recognitions_of_case(conn, case_id)
+        ],
     }
 
 
@@ -340,13 +343,14 @@ def appeal(conn, *, actor: dict, case_id: str) -> dict:
 
 
 # ------------------------------------------------------------------ enforcement
-def enforce(conn, *, actor: dict, case_id: str) -> dict:
+def enforce(conn, *, actor: dict, case_id: str, region: str = "") -> dict:
     case = legal.case_by_id(conn, case_id, for_update=True)
     if case is None:
         raise NotFound("案件不存在")
     judgment = legal.judgment_of_case(conn, case_id, for_update=True)
     if judgment is None:
         raise Unprocessable("尚未作出判决")
+    require_recognition(conn, str(judgment["id"]), region)
     if judgment["status"] == "enforced":
         raise Unprocessable("判决已执行")
     amount = Decimal(str(judgment["remedy"].get("pay", "0")))
@@ -420,3 +424,124 @@ def judge_due_cases(conn, limit: int = 100) -> dict:
         result = hold_hearing(conn, str(case["id"]))
         judged.append({"case_id": str(case["id"]), "verdict": result["judgment"]["verdict"]})
     return {"judged": len(judged), "cases": judged}
+
+
+# ------------------------------------------------------------------ recognition
+HOME_REGION = "core"
+REJECTION_CODES = {
+    "no_jurisdiction": "原法院无管辖权",
+    "no_notice": "未给被告正当通知或答辩机会",
+    "fraud": "判决通过欺诈取得",
+    "public_policy": "违反本区公共秩序",
+    "conflicting_judgment": "与本区已生效判决冲突",
+    "uncertain_remedy": "判决内容不确定或不可执行",
+    "punitive_not_final": "惩罚性赔偿或罚款未终局",
+    "third_party_harm": "承认会损害善意第三人",
+}
+APPEAL_OVERTURN = 0.35
+
+
+def _recognition_payload(row: dict) -> dict:
+    return {
+        "id": str(row["id"]),
+        "judgment_id": str(row["judgment_id"]),
+        "case_id": str(row["case_id"]),
+        "region": row["region"],
+        "status": row["status"],
+        "reason_code": row["reason_code"],
+        "reason_label": REJECTION_CODES.get(str(row["reason_code"] or ""), ""),
+        "reason": row["reason"],
+        "decided_by": row["decided_by"],
+        "decided_at": row["decided_at"].isoformat() if row["decided_at"] else None,
+        "created_at": row["created_at"].isoformat(),
+    }
+
+
+def request_recognition(conn, *, actor: dict, judgment_id: str, region: str) -> dict:
+    judgment = legal.judgment_by_id(conn, judgment_id)
+    if judgment is None:
+        raise NotFound("判决不存在")
+    case = legal.case_by_id(conn, str(judgment["case_id"]))
+    if case is None:
+        raise NotFound("案件不存在")
+    actor_id = str(actor["id"])
+    if actor_id not in (str(case["plaintiff_actor_id"]), str(case["defendant_actor_id"])):
+        raise Forbidden("只有当事人可以申请承认")
+    if judgment["status"] in ("draft",):
+        raise Unprocessable("判决尚未作出")
+    if judgment["status"] == "enforced":
+        raise Unprocessable("该判决已执行完毕")
+    target = (region or "").strip().lower()
+    if not target:
+        raise InvalidArgument("必须指定被请求承认的区域")
+    if target == HOME_REGION:
+        raise InvalidArgument("本区判决无需承认")
+    existing = legal.recognition_for(conn, judgment_id, target)
+    if existing is not None:
+        return {**_recognition_payload(existing), "duplicate": True}
+    row = legal.insert_recognition(
+        conn, judgment_id=judgment_id, case_id=str(case["id"]),
+        region=target, requested_by=actor_id,
+    )
+    if row is None:  # pragma: no cover - unique guard races
+        row = legal.recognition_for(conn, judgment_id, target)
+    return _recognition_payload(row)
+
+
+def decide_recognition(conn, recognition_id: str, *, recognize: bool, reason_code: str | None,
+                       reason: str, decided_by: str) -> dict:
+    row = legal.recognition_by_id(conn, recognition_id, for_update=True)
+    if row is None:
+        raise NotFound("承认申请不存在")
+    if row["status"] != "requested":
+        raise Unprocessable("该承认申请已处理")
+    if recognize:
+        legal.decide_recognition(conn, recognition_id, status="recognized", reason_code=None,
+                                 reason=reason[:500], decided_by=decided_by)
+    else:
+        code = (reason_code or "").strip()
+        if code not in REJECTION_CODES:
+            raise InvalidArgument("拒绝必须给出 08 §12.3 中的理由代码")
+        if not reason.strip():
+            raise InvalidArgument("拒绝必须给出书面理由")
+        legal.decide_recognition(conn, recognition_id, status="rejected", reason_code=code,
+                                 reason=reason[:500], decided_by=decided_by)
+    return _recognition_payload(legal.recognition_by_id(conn, recognition_id))
+
+
+def appeal_recognition(conn, *, actor: dict, recognition_id: str) -> dict:
+    row = legal.recognition_by_id(conn, recognition_id, for_update=True)
+    if row is None:
+        raise NotFound("承认申请不存在")
+    case = legal.case_by_id(conn, str(row["case_id"]))
+    if case is None:
+        raise NotFound("案件不存在")
+    if str(actor["id"]) not in (str(case["plaintiff_actor_id"]),
+                                str(case["defendant_actor_id"])):
+        raise Forbidden("只有当事人可以上诉")
+    if row["status"] != "rejected":
+        raise Unprocessable("只有被拒绝的承认可以上诉")
+    rng = stream(str(row["id"]), "recognition_appeal")
+    overturned = rng.next() < APPEAL_OVERTURN
+    legal.decide_recognition(
+        conn, recognition_id,
+        status="recognized" if overturned else "final",
+        reason_code=None if overturned else row["reason_code"],
+        reason=("上级法院撤销拒绝，予以承认" if overturned else "上级法院维持拒绝"),
+        decided_by="appeal-court",
+    )
+    return {**_recognition_payload(legal.recognition_by_id(conn, recognition_id)),
+            "appeal_result": "overturned" if overturned else "upheld"}
+
+
+def require_recognition(conn, judgment_id: str, region: str) -> dict | None:
+    """None means home-region enforcement (no recognition needed)."""
+    target = (region or "").strip().lower()
+    if not target or target == HOME_REGION:
+        return None
+    row = legal.recognition_for(conn, judgment_id, target)
+    if row is None:
+        raise Unprocessable(f"该判决尚未在 {target} 区获得承认（08 §8）")
+    if row["status"] not in ("recognized",):
+        raise Unprocessable(f"该判决在 {target} 区未被承认（{row['status']}）")
+    return row
