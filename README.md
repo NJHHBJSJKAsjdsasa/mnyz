@@ -1,5 +1,7 @@
 # Atlas · 宇宙探索与经济模拟（mnyz 分支）
 
+**简体中文** | [English](README.en.md)
+
 一个可探索的程序化宇宙，叠加了一套**权威服务端 + 多货币经济系统**：货币发行、银行、公司、产权、股票、
 AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一套规则。
 
@@ -19,7 +21,7 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 | 后端 | Flask 单体（`pymodules/`，无状态、以缓存为主） | 新增 `server/`：Flask + pydantic + psycopg3 + Alembic + PostgreSQL + Redis |
 | 存档 | 浏览器 localStorage / 本地缓存 | 服务端账户、JWT、幂等写接口、账本与持仓落库 |
 | 经济 | 无 | 九级货币、复式账本、银行、公司、产权、股票、AI 玩家、法院/破产 |
-| 许可 | Polyform Non-Commercial License 1.0.0 | 见文末「许可证与署名」 |
+| 许可 | PolyForm Noncommercial License 1.0.0 | 相同（见 [`LICENSE.md`](LICENSE.md)） |
 
 上游项目：<https://github.com/SurceBeats/Atlas>
 
@@ -159,8 +161,8 @@ python __main__.py                    # 上游单体入口（宇宙生成 + 游�
 
 ## 8. 许可证与署名
 
-- 上游 [SurceBeats/Atlas](https://github.com/SurceBeats/Atlas) 采用 **Polyform Non-Commercial License 1.0.0**
-  （见上游 `package.json`），版权归原作者所有，本仓库保留全部上游署名。
-- 本仓库根目录的 `LICENSE` 为 **GNU GPL-3.0**（随仓库初始化提交带入）。
-  两套许可对「商业使用 / 再分发」的约定并不一致，二次分发或商用前请先确认以哪一份为准。
-- 本分支新增的 `server/`、`tests/` 与 `docs/cosmic-economy/` 由本仓库维护者编写。
+- 本项目与上游 [SurceBeats/Atlas](https://github.com/SurceBeats/Atlas) 使用同一份许可：
+  **PolyForm Noncommercial License 1.0.0**，全文见 [`LICENSE.md`](LICENSE.md)（与上游完全一致）。
+- 该许可仅允许**非商业用途**：可以阅读、修改、分发，但不得用于商业目的；分发时需保留许可与署名。
+- 上游版权归原作者所有，本仓库保留全部上游署名；本分支新增的 `server/`、`tests/` 与
+  `docs/cosmic-economy/` 由本仓库维护者编写，同样按上述许可发布。
