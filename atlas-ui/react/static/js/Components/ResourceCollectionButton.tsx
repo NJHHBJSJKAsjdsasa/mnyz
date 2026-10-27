@@ -1,7 +1,9 @@
 // atlas-ui/react/static/js/Components/ResourceCollectionButton.tsx
 import React, { useState, useEffect } from "react";
 import { SpaceshipResourceCollectionManager } from "../Utils/SpaceshipResourceCollection.tsx";
+import { SpaceshipResourceManager } from "../Utils/SpaceshipResources.tsx";
 import { ResourceEventManager } from "../Utils/ResourceEventManager.tsx";
+import { ServerApi } from "../Utils/ServerApi.tsx";
 import { UnifiedSpaceshipStorage } from "../Utils/UnifiedSpaceshipStorage.tsx";
 import AntimatterIcon from "../Icons/AntimatterIcon.tsx";
 import DeuteriumIcon from "../Icons/DeuteriumIcon.tsx";
@@ -59,7 +61,26 @@ const ResourceCollectionButton: React.FC<ResourceCollectionButtonProps> = ({ loc
     const isFirstTime = collectionCount === 0;
 
     const planetData = planetElements ? { elements: planetElements } : undefined;
-    const reward = SpaceshipResourceCollectionManager.collectResources(fullLocationId, locationType, coordinates, planetData);
+    let reward: any = null;
+
+    if (ServerApi.mode() === "server") {
+      try {
+        const result = await ServerApi.collect(fullLocationId, coordinates);
+        reward = result?.gained || null;
+        if (reward) {
+          SpaceshipResourceManager.addResources(reward);
+          UnifiedSpaceshipStorage.markLocationCollected(fullLocationId);
+          ResourceEventManager.emit("resources_updated");
+        }
+      } catch (error) {
+        console.warn("[atlas-server] collect failed", error);
+        setIsCollecting(false);
+        return;
+      }
+    } else {
+      reward = SpaceshipResourceCollectionManager.collectResources(fullLocationId, locationType, coordinates, planetData);
+      if (ServerApi.mode() === "shadow") ServerApi.scheduleShadow("collect");
+    }
 
     if (reward) {
       const { UnifiedSpaceshipStorage } = await import("../Utils/UnifiedSpaceshipStorage");

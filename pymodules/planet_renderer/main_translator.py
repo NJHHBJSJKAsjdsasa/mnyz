@@ -18,6 +18,9 @@ from .shader_utils import ShaderUtils
 from .planet_type_translators import PlanetTypeTranslators
 
 
+ORBITAL_PERIOD_PLANET_TYPES = ("Gas Giant", "Frozen Gas Giant", "Nebulous", "Anomaly", "Exotic", "Carbon")
+
+
 class PlanetRenderingTranslator:
 
     def __init__(self):
@@ -28,44 +31,36 @@ class PlanetRenderingTranslator:
         self.planet_type_translators = PlanetTypeTranslators()
 
         self.planet_types = {
-            "气体巨行星": self.planet_type_translators.translate_gas_giant,
-            "异常行星": self.planet_type_translators.translate_anomaly,
-            "岩石行星": self.planet_type_translators.translate_rocky,
-            "冰冻行星": self.planet_type_translators.translate_icy,
-            "海洋行星": self.planet_type_translators.translate_oceanic,
-            "沙漠行星": self.planet_type_translators.translate_desert,
-            "熔岩行星": self.planet_type_translators.translate_lava,
-            "干旱行星": self.planet_type_translators.translate_arid,
-            "沼泽行星": self.planet_type_translators.translate_swamp,
-            "苔原行星": self.planet_type_translators.translate_tundra,
-            "森林行星": self.planet_type_translators.translate_forest,
-            "稀树草原行星": self.planet_type_translators.translate_savannah,
-            "洞穴行星": self.planet_type_translators.translate_cave,
-            "晶体行星": self.planet_type_translators.translate_crystalline,
-            "金属行星": self.planet_type_translators.translate_metallic,
-            "有毒行星": self.planet_type_translators.translate_toxic,
-            "放射性行星": self.planet_type_translators.translate_radioactive,
-            "岩浆行星": self.planet_type_translators.translate_magma,
-            "熔融核心行星": self.planet_type_translators.translate_molten_core,
-            "碳行星": self.planet_type_translators.translate_carbon,
-            "钻石行星": self.planet_type_translators.translate_diamond,
-            "超级地球": self.planet_type_translators.translate_super_earth,
-            "次地球": self.planet_type_translators.translate_sub_earth,
-            "冰冻气体巨行星": self.planet_type_translators.translate_frozen_gas_giant,
-            "星云行星": self.planet_type_translators.translate_nebulous,
-            "含水层行星": self.planet_type_translators.translate_aquifer,
-            "奇异行星": self.planet_type_translators.translate_exotic,
+            "Gas Giant": self.planet_type_translators.translate_gas_giant,
+            "Anomaly": self.planet_type_translators.translate_anomaly,
+            "Rocky": self.planet_type_translators.translate_rocky,
+            "Icy": self.planet_type_translators.translate_icy,
+            "Oceanic": self.planet_type_translators.translate_oceanic,
+            "Desert": self.planet_type_translators.translate_desert,
+            "Lava": self.planet_type_translators.translate_lava,
+            "Arid": self.planet_type_translators.translate_arid,
+            "Swamp": self.planet_type_translators.translate_swamp,
+            "Tundra": self.planet_type_translators.translate_tundra,
+            "Forest": self.planet_type_translators.translate_forest,
+            "Savannah": self.planet_type_translators.translate_savannah,
+            "Cave": self.planet_type_translators.translate_cave,
+            "Crystalline": self.planet_type_translators.translate_crystalline,
+            "Metallic": self.planet_type_translators.translate_metallic,
+            "Toxic": self.planet_type_translators.translate_toxic,
+            "Radioactive": self.planet_type_translators.translate_radioactive,
+            "Magma": self.planet_type_translators.translate_magma,
+            "Molten Core": self.planet_type_translators.translate_molten_core,
+            "Carbon": self.planet_type_translators.translate_carbon,
+            "Diamond": self.planet_type_translators.translate_diamond,
+            "Super Earth": self.planet_type_translators.translate_super_earth,
+            "Sub Earth": self.planet_type_translators.translate_sub_earth,
+            "Frozen Gas Giant": self.planet_type_translators.translate_frozen_gas_giant,
+            "Nebulous": self.planet_type_translators.translate_nebulous,
+            "Aquifer": self.planet_type_translators.translate_aquifer,
+            "Exotic": self.planet_type_translators.translate_exotic,
         }
 
     def translate_planet_rendering(self, planet) -> Dict[str, Any]:
-        print(f"DEBUG: translate_planet_rendering called with planet: {planet}")
-        print(f"DEBUG: planet type: {type(planet)}")
-        if planet:
-            print(f"DEBUG: planet name: {planet.name}")
-            print(f"DEBUG: planet has seed: {hasattr(planet, 'seed')}")
-            if hasattr(planet, 'seed'):
-                print(f"DEBUG: planet seed: {planet.seed}")
-
         spaced_planet_name = planet.name.replace("_", " ")
         planet_type = planet.planet_type.replace("_", " ")
 
@@ -83,7 +78,6 @@ class PlanetRenderingTranslator:
         
         # Get config seed or use a default value if None
         config_seed = config.seed or 123456789
-        print(f"DEBUG: config_seed: {config_seed}")
         shape_seed = consistent_hash(f"{config_seed}-{spaced_planet_name}-{planet_type}-{planet.diameter}-{planet.density}-{planet.gravity}-_safe_shaper")
 
         planet_radius = int(200 * (planet.diameter / max(planet.diameter, 1)))
@@ -92,20 +86,10 @@ class PlanetRenderingTranslator:
         planet_color_map = get_planet_color_map()
         base_color = planet_color_map.get(planet.planet_type, "#FFFFFF")
         planet_seed = getattr(planet, "seed", None)
-        print(f"DEBUG: planet_seed: {planet_seed}")
         if planet_seed:
-            print(f"DEBUG: calling get_procedural_planet_color with seed: {planet_seed}")
             base_color = get_procedural_planet_color(base_color, planet.planet_type, planet_seed)
 
-        planet_specific_data = {}
-        if planet_type in self.planet_types:
-            orbital_period_years = planet.orbital_period_seconds / (365.25 * 24 * 3600) if planet.orbital_period_seconds else 1.0
-
-            if planet_type in ["Gas Giant", "Frozen Gas Giant", "Nebulous", "Anomaly", "Exotic", "Carbon"]:
-                planet_specific_data = self.planet_types[planet_type](planet_radius, rng, config_seed, spaced_planet_name, orbital_period_years)
-            else:
-                planet_specific_data = self.planet_types[planet_type](planet_radius, rng, config_seed, spaced_planet_name)
-
+        planet_specific_data = self._translate_surface_type(planet, planet_type, planet_radius, rng, config_seed, spaced_planet_name)
         if not planet_specific_data:
             planet_specific_data = {"type": "basic"}
 
@@ -133,3 +117,19 @@ class PlanetRenderingTranslator:
             "life_forms": life_forms_data,
             "shader_uniforms": ShaderUtils.generate_shader_uniforms(planet_type, shape_seed, angle_rotation, base_color, planet_specific_data),
         }
+
+    def _translate_surface_type(self, planet, planet_type, planet_radius, rng, config_seed, spaced_planet_name):
+        """Dispatch to the per-type surface translator, degrading to "basic" on failure."""
+        translator = self.planet_types.get(planet_type)
+        if translator is None:
+            return {"type": "basic"}
+
+        orbital_period_years = planet.orbital_period_seconds / (365.25 * 24 * 3600) if planet.orbital_period_seconds else 1.0
+
+        try:
+            if planet_type in ORBITAL_PERIOD_PLANET_TYPES:
+                return translator(planet_radius, rng, config_seed, spaced_planet_name, orbital_period_years)
+            return translator(planet_radius, rng, config_seed, spaced_planet_name)
+        except Exception as e:
+            print(f"Surface translator failed for planet type {planet_type}: {e}")
+            return {"type": "basic"}

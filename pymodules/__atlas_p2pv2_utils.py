@@ -46,6 +46,13 @@ class FailureType(Enum):
         return descriptions[self]
 
 
+# Produced by the pre-2.0 rule "peer announced in DHT but HTTP timed out" which
+# escalated normal public-DHT noise to a 30-day ban. Kept as an exact string so
+# the migration above only touches entries created by that rule.
+LEGACY_FALSE_POSITIVE_REASON = "Suspicious timeout - potential intrusion attempt"
+LEGACY_FALSE_POSITIVE_COOLDOWN = 3600
+
+
 @dataclass
 class FailedPeer:
 
@@ -78,7 +85,7 @@ class FailedPeer:
         return cls(**data)
 
     def is_banned(self) -> bool:
-        return time.time() < self.ban_until
+        return self.ban_until is not None and time.time() < self.ban_until
 
     def time_until_unban(self) -> float:
         if not self.is_banned():
@@ -283,9 +290,33 @@ class FailedPeerManager:
         self.failed_peers: Dict[str, FailedPeer] = {}
         self.logger = get_p2p_logger(data_dir)
         self.load_failed_peers()
+        self._migrate_misclassified_bans()
+        self.cleanup_expired_bans()
 
     def _get_peer_key(self, address: str, port: int) -> str:
         return f"{address}:{port}"
+
+    def _migrate_misclassified_bans(self) -> int:
+        """Downgrade bans created by the old "DHT timeout == MALICIOUS" rule.
+
+        Public DHT swarms are full of non-Atlas endpoints; treating their HTTP
+        timeout as an intrusion attempt poisoned the ban list with 30-day entries
+        and blocked every later retry.
+        """
+        migrated = 0
+        for peer in self.failed_peers.values():
+            if peer.failure_type is not FailureType.MALICIOUS:
+                continue
+            if peer.failure_reason != LEGACY_FALSE_POSITIVE_REASON:
+                continue
+            peer.failure_type = FailureType.NETWORK
+            peer.ban_until = peer.last_failure + LEGACY_FALSE_POSITIVE_COOLDOWN
+            migrated += 1
+
+        if migrated:
+            self.logger.maintenance(f"Reclassified {migrated} timeout bans as network failures")
+            self.save_failed_peers()
+        return migrated
 
     def load_failed_peers(self):
 
@@ -386,10 +417,12 @@ class FailedPeerManager:
     def cleanup_expired_bans(self):
         current_time = time.time()
         to_remove = []
+        expired = 0
 
         for peer_key, peer in self.failed_peers.items():
             if peer.ban_until and current_time >= peer.ban_until:
                 peer.ban_until = None
+                expired += 1
 
             if current_time - peer.last_failure > (30 * 24 * 60 * 60):
                 to_remove.append(peer_key)
@@ -397,8 +430,8 @@ class FailedPeerManager:
         for peer_key in to_remove:
             del self.failed_peers[peer_key]
 
-        if to_remove:
-            self.logger.maintenance(f"Cleaned up {len(to_remove)} old failed peers")
+        if to_remove or expired:
+            self.logger.maintenance(f"Cleaned up {len(to_remove)} old and {expired} expired failed peers")
             self.save_failed_peers()
 
     def get_failed_peers_list(self) -> List[str]:

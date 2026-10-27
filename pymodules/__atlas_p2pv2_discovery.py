@@ -243,13 +243,15 @@ class AtlasP2PDiscovery:
             pass
 
     def _is_self_peer(self, ip: str, port: int) -> bool:
-        if ip == self.external_ip:
-            return True
+        """Only our own announced endpoint counts as self.
 
-        if ip in self.local_ips:
-            return True
+        Matching on IP alone hides every instance behind the same NAT, and made
+        two local instances on different ports invisible to each other.
+        """
+        if port != get_external_p2p_port():
+            return False
 
-        return False
+        return ip == self.external_ip or ip in self.local_ips
 
     async def start(self) -> bool:
         try:
@@ -257,7 +259,16 @@ class AtlasP2PDiscovery:
 
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind(("0.0.0.0", 0))
+
+            # Announce on a stable UDP port: an ephemeral port changes on every
+            # restart and is never reachable through NAT port forwarding.
+            preferred_port = get_external_p2p_port()
+            try:
+                self.socket.bind(("0.0.0.0", preferred_port))
+            except OSError:
+                self.logger.initialization("DHT", f"UDP {preferred_port} unavailable, using an ephemeral port")
+                self.socket.bind(("0.0.0.0", 0))
+
             self.port = self.socket.getsockname()[1]
             self.socket.setblocking(False)
 

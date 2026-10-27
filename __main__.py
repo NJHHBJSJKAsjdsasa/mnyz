@@ -6,6 +6,33 @@ import time
 import atexit
 import asyncio
 
+# Legacy Windows consoles (cp936/cp1252) cannot encode the boot banner glyphs and
+# would raise UnicodeEncodeError during import; degrade unknown glyphs instead.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
+
+
+def apply_cli_overrides(argv):
+    """Resolve --port/--p2p-port/--data-dir through env before pymodules import.
+
+    PORT and P2P_DATA_DIR are module-level constants, so they must be known before
+    `from pymodules...` runs; env is the only channel available at this point.
+    """
+    overrides = {
+        "--port": "ATLAS_PORT",
+        "--p2p-port": "EXTERNAL_P2P_OPEN_PORT",
+        "--data-dir": "ATLAS_P2P_DATA_DIR",
+    }
+    for flag, env_name in overrides.items():
+        if flag in argv:
+            index = argv.index(flag)
+            if index + 1 < len(argv):
+                os.environ[env_name] = argv[index + 1]
+
+
+apply_cli_overrides(sys.argv)
+
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 from hypercorn.middleware import AsyncioWSGIMiddleware
@@ -15,7 +42,7 @@ from flask_compress import Compress
 
 from vite_fusion import register_vite_assets
 
-from pymodules.__atlas_fixed_vars import PORT, RUN
+from pymodules.__atlas_fixed_vars import PORT, P2P_DATA_DIR, RUN
 from pymodules.__atlas_config import config
 from pymodules.__atlas_observer import observer
 from pymodules.__atlas_ssl import ssl_enabled, get_ssl_cert_info
@@ -87,7 +114,7 @@ def ensure_p2p_initialized():
                     print(f"\033[1m    BitTorrent DHT\033[0m         : \033[92mEnabled\033[0m")
 
                 print(f"\033[1m    Node ID\033[0m                : \033[93m{p2p_status['node_id']}\033[0m")
-                print(f"\033[1m    External IP\033[0m            : \033[93m{p2p_status.get('external_ip', 'Detecting...')}\033[0m")
+                print(f"\033[1m    External IP\033[0m            : \033[93m{p2p_status.get('external_ip') or 'Detecting...'}\033[0m")
                 print(f"\033[1m    P2P Port\033[0m               : \033[93m{p2p_status['port']}\033[0m")
 
                 known_peers = p2p_status.get("known_peers", {})
@@ -163,9 +190,9 @@ if "--no-p2p" not in sys.argv and enable_p2p:
         from pymodules.__atlas_p2pv2_integration import register_p2pv2_api
 
         os.makedirs("internal_data/logs", exist_ok=True)
-        os.makedirs("internal_data/p2p", exist_ok=True)
+        os.makedirs(P2P_DATA_DIR, exist_ok=True)
 
-        p2p_routes = AtlasP2PRoutes("internal_data/p2p")
+        p2p_routes = AtlasP2PRoutes(P2P_DATA_DIR)
         p2p_routes.register_routes(app)
         register_p2pv2_api(app)
 

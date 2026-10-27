@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { TaskSystem, Task } from "../Utils/TaskSystem.tsx";
 import { SpaceshipResourceManager } from "../Utils/SpaceshipResources.tsx";
+import { ServerApi } from "../Utils/ServerApi.tsx";
 
 interface TaskPanelProps {
   className?: string;
@@ -10,20 +11,7 @@ interface TaskPanelProps {
 const TaskPanel: React.FC<TaskPanelProps> = ({ className = "" }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    // 初始化任务系统
-    TaskSystem.initialize();
-    updateTasks();
-
-    // 注册事件监听器
-    TaskSystem.addListener(updateTasks);
-
-    // 清理函数
-    return () => {
-      TaskSystem.removeListener(updateTasks);
-    };
-  }, []);
+  const serverMode = ServerApi.mode() === "server";
 
   const updateTasks = (newTasks?: Task[]) => {
     if (newTasks) {
@@ -33,19 +21,60 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ className = "" }) => {
     }
   };
 
-  const completeTask = (taskId: string) => {
-    console.log('领取奖励按钮点击，任务ID:', taskId);
+  const refreshServer = async () => {
+    try {
+      const data = await ServerApi.tasks();
+      setTasks(
+        (data?.tasks || []).map((task: any) => ({
+          id: task.code,
+          title: task.title,
+          description: task.description,
+          type: task.metric === "antimatterCollected" ? "mining" : "exploration",
+          status:
+            task.status === "claimed" ? "claimed" : task.progress >= task.target ? "completed" : "active",
+          requirements: { [task.metric]: Number(task.target || 1) },
+          progress: { [task.metric]: Number(task.progress || 0) },
+          rewards: task.reward || {},
+          createdAt: 0,
+        })) as Task[],
+      );
+    } catch (error) {
+      console.warn("[atlas-server] tasks load failed", error);
+    }
+  };
+
+  useEffect(() => {
+    if (serverMode) {
+      void refreshServer();
+      return;
+    }
+    TaskSystem.initialize();
+    updateTasks();
+    TaskSystem.addListener(updateTasks);
+    return () => {
+      TaskSystem.removeListener(updateTasks);
+    };
+  }, [serverMode]);
+
+  useEffect(() => {
+    if (serverMode && isOpen) void refreshServer();
+  }, [isOpen]);
+
+  const completeTask = async (taskId: string) => {
+    if (serverMode) {
+      try {
+        const result = await ServerApi.claimTask(taskId);
+        SpaceshipResourceManager.addResources(result?.reward || {});
+        await refreshServer();
+      } catch (error) {
+        console.warn("[atlas-server] task claim failed", error);
+      }
+      return;
+    }
     const completedTask = TaskSystem.claimTaskReward(taskId);
-    console.log('claimTaskReward返回:', completedTask);
     if (completedTask) {
-      console.log('领取任务奖励:', completedTask.rewards);
-      // 领取任务奖励
       SpaceshipResourceManager.addResources(completedTask.rewards);
-      // 标记任务为已领取（可以添加一个新状态，或者保持原样）
       updateTasks();
-      console.log('奖励领取成功');
-    } else {
-      console.log('领取奖励失败：任务不存在或状态不正确');
     }
   };
 
@@ -217,7 +246,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ className = "" }) => {
                   {/* 操作按钮 */}
                   {task.status === "completed" && (
                     <button
-                      onClick={() => completeTask(task.id)}
+                      onClick={() => void completeTask(task.id)}
                       className="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-medium transition-colors"
                     >
                       领取奖励

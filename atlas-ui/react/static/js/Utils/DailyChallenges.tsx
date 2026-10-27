@@ -2,6 +2,7 @@
 
 import React from "react";
 import { getItem, setItem } from "./b64.tsx";
+import { dayKey } from "./Deterministic.tsx";
 import * as pako from "pako";
 
 export interface DailyChallenge {
@@ -30,7 +31,8 @@ export class DailyChallengesManager {
   };
 
   public static getTodaysChallenges(): DailyChallenges {
-    const today = new Date().toISOString().split("T")[0];
+    // Local day: daily goals reset at local midnight, not 08:00 for UTC+8 players.
+    const today = dayKey();
     const stored = this.getStoredChallenges();
 
     if (!stored || stored.date !== today) {
@@ -205,6 +207,11 @@ export class DailyChallengesManager {
 
     this.saveChallenges(challenges);
     return challenges;
+  }
+
+  /** Public read of the archive-derived totals (used by the residents leaderboard). */
+  public static getExplorationStats(): { galaxies: number; systems: number; planets: number } {
+    return this.getCurrentStats();
   }
 
   public static getCompletedDaysCount(): number {

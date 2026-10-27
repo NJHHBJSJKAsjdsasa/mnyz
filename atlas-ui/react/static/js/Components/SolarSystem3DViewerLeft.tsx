@@ -300,6 +300,11 @@ const SolarSystem3DViewerLeft = forwardRef<{ captureScreenshot: () => void; isGe
         purple: "#8844FF",
       };
 
+      // 确定要使用的数据（必须在创建恒星之前声明）
+      const useSystemData = systemData && systemData.planets && systemData.stars;
+      const displayPlanets = useSystemData ? systemData.planets : planets;
+      const displayStars = useSystemData ? systemData.stars : stars;
+
       const starGroup = new THREE.Group();
       displayStars.forEach((star, index) => {
         const starRadius = parseFloat(star.Size) * 1.75;
@@ -340,11 +345,6 @@ const SolarSystem3DViewerLeft = forwardRef<{ captureScreenshot: () => void; isGe
       });
       scene.add(starGroup);
 
-      // 确定要使用的数据
-      const useSystemData = systemData && systemData.planets && systemData.stars;
-      const displayPlanets = useSystemData ? systemData.planets : planets;
-      const displayStars = useSystemData ? systemData.stars : stars;
-      
       // 计算最大轨道半径
       let maxOrbitalRadius = 1;
       if (useSystemData && systemData.timing) {

@@ -3,6 +3,8 @@ __pycache__
 *.pyo
 *.pyd
 .env
+.env.server
+.env.server.docker
 *.git
 *.gitignore
 atlas.ini
@@ -11,3 +13,6 @@ node_modules
 .DS_Store
 internal_data
 p2p_data
+.secrets
+tests
+atlas-ui/react/dist

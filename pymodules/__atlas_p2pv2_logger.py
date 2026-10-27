@@ -39,10 +39,12 @@ class AtlasP2PLogger:
         if self.logger.handlers:
             return
 
+        default_data_dir = os.getenv("ATLAS_P2P_DATA_DIR", os.path.join("internal_data", "p2p"))
         internal_logs = os.path.join("internal_data", "logs")
-        if os.path.exists(internal_logs):
+        if os.path.normpath(data_dir) == os.path.normpath(default_data_dir) and os.path.exists(internal_logs):
             log_file = os.path.join(internal_logs, "p2p.log")
         else:
+            # Separate data dir (e.g. a second instance) keeps its own log.
             log_file = os.path.join(data_dir, "atlas_p2p.log")
 
         file_handler = logging.FileHandler(log_file)
@@ -88,13 +90,18 @@ class AtlasP2PLogger:
         self.logger.debug(f"[DEBUG] {message}")
 
     def technical_info(self, message: str):
-        self.logger.log(15, f"[TECH] {message}")
+        # INFO: level 15 sat below the file handler's INFO threshold, so every
+        # handshake decision (peer skipped, connection outcome) was invisible.
+        self.logger.info(f"[TECH] {message}")
 
     def maintenance(self, message: str):
-        self.logger.debug(f"[MAINT] {message}")
+        # INFO: ban migrations/cleanups must be visible in the default log file.
+        self.logger.info(f"[MAINT] {message}")
 
     def security_alert(self, message: str):
-        self.logger.log(15, f"[SECURITY] {message}")
+        # WARNING: the previous level 15 sat below the file handler's INFO threshold,
+        # so security incidents were never written to p2p.log.
+        self.logger.warning(f"[SECURITY] {message}")
 
     def handshake_detail(self, request_id: str, peer_key: str, message: str):
         self.logger.debug(f"[{request_id}] {peer_key}: {message}")

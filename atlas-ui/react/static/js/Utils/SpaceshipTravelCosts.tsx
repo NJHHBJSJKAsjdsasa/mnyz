@@ -4,12 +4,22 @@ import React from "react";
 import { SpaceshipResourceManager, TravelCost } from "./SpaceshipResources.tsx";
 
 export class SpaceshipTravelManager {
+  /** Galaxy jumps above 1000 units are long jumps and share the contract formula. */
   static getTravelCost(locationType: "galaxy" | "system" | "planet", distance: number = 0): TravelCost {
+    if (locationType === "galaxy" && distance >= 1000) return SpaceshipResourceManager.calculateJumpCost(distance);
     return SpaceshipResourceManager.calculateTravelCost(locationType, distance);
   }
 
   static canAffordTravel(locationType: "galaxy" | "system" | "planet", distance: number = 0): boolean {
-    return true;
+    const cost = SpaceshipTravelManager.getTravelCost(locationType, distance);
+    const resources = SpaceshipResourceManager.getResources();
+    const efficiency = SpaceshipResourceManager.getUpgrade().efficiency;
+
+    return (
+      resources.antimatter >= Math.floor(cost.antimatter / efficiency) &&
+      resources.element115 >= Math.floor(cost.element115 / efficiency) &&
+      resources.deuterium >= Math.floor(cost.deuterium / efficiency)
+    );
   }
 
   static executeTravel(locationType: "galaxy" | "system" | "planet", distance: number = 0): "success" | "partial" | "emergency" {

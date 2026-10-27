@@ -9,7 +9,7 @@ from pathlib import Path
 
 from flask import jsonify, request, redirect, url_for, session, render_template
 
-from pymodules.__atlas_fixed_vars import RUN
+from pymodules.__atlas_fixed_vars import P2P_DATA_DIR, RUN
 from pymodules.__atlas_redis_cache import redis_cache
 
 
@@ -19,20 +19,13 @@ def register_universe_routes(app, universe, config):
     @app.route("/api/universe/config")
     def get_universe_config():
         try:
-            # Try to get from cache
-            cache_key = "universe:config"
-            cached_data = redis_cache.get(cache_key)
-            if cached_data:
-                return jsonify(cached_data)
-
             if not config.is_initialized:
                 if not config.initialize():
                     return jsonify({"error": "配置未初始化"})
 
+            # Deliberately not cached: config.seed/cosmic_origin_time change per
+            # session in remote mode, so a shared key would leak another universe.
             response_data = {"success": True, "config_seed": config.seed, "seed_str": config.seed_str, "seed_hash": config.seed_hash, "seed_decimal": str(config.seed), "cosmic_origin_time": config.cosmic_origin_time, "cosmic_origin_datetime": str(config.cosmic_origin_datetime)}
-
-            # Cache the result for 24 hours
-            redis_cache.set(cache_key, response_data, 86400)
 
             return jsonify(response_data)
         except Exception as e:
@@ -89,7 +82,7 @@ def register_universe_routes(app, universe, config):
                             system = universe.get_galaxy(x, y, z).get_solar_system(random_system)
                             system_data = {
                                 "name": system.name,
-                                "planets": ["name" for planet in system.planets.values()]
+                                "planets": [planet.name for planet in system.planets.values()]
                             }
                             # Cache system data for 1 hour
                             redis_cache.set(system_cache_key, system_data, 3600)
@@ -119,6 +112,54 @@ def register_universe_routes(app, universe, config):
             y = random.randint(0, 10000000)
             z = random.randint(0, 10000000)
             return jsonify({"success": True, "coordinates": {"x": x, "y": y, "z": z}, "galaxy_name": f"Galaxy {x},{y},{z}", "galaxy_type": "Unknown", "num_systems": 0, "navigation_data": {"x": x, "y": y, "z": z}})
+
+    @app.route("/api/system-intel", methods=["GET"])
+    def system_intel():
+        """Real planet composition for a coordinate + system index.
+
+        Used by the in-game intel purchase: the client asks about a nearby system
+        and shows actual planet types/elements, so the hint is never fabricated.
+        """
+        try:
+            x = int(request.args.get("x", 0))
+            y = int(request.args.get("y", 0))
+            z = int(request.args.get("z", 0))
+            wanted = int(request.args.get("system", 0))
+
+            universe = get_universe()
+            if not universe:
+                return jsonify({"success": False, "error": "universe unavailable"})
+
+            galaxy = universe.get_galaxy(x, y, z)
+            total = int(getattr(galaxy, "num_systems", 0) or 0)
+            if total <= 0:
+                return jsonify({"success": True, "empty": True, "galaxy": {"name": galaxy.name, "num_systems": 0}, "planets": []})
+
+            index = max(0, min(total - 1, wanted))
+            system = galaxy.get_solar_system(index)
+
+            planets = []
+            for planet in list(system.planets.values())[:8]:
+                planets.append(
+                    {
+                        "name": planet.name,
+                        "planet_type": getattr(planet, "planet_type", "Unknown"),
+                        "elements": list(getattr(planet, "elements", []))[:6],
+                        "life_forms": getattr(planet, "life_forms", "None"),
+                    }
+                )
+
+            return jsonify(
+                {
+                    "success": True,
+                    "coordinates": {"x": x, "y": y, "z": z},
+                    "galaxy": {"name": galaxy.name, "num_systems": total},
+                    "system": {"index": index, "name": system.name},
+                    "planets": planets,
+                }
+            )
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
 
     @app.route("/api/random-jump", methods=["POST"])
     def handle_random_jump():
@@ -203,12 +244,12 @@ def register_universe_routes(app, universe, config):
             if cached_data:
                 return jsonify(cached_data)
 
-            peers_file = Path("internal_data/p2p/known_peers.json")
+            # Follows --data-dir so a second instance reports its own peer list.
+            peers_file = Path(P2P_DATA_DIR) / "known_peers.json"
 
             if not peers_file.exists():
+                # Not cached: the file appears as soon as P2P discovers a peer.
                 response_data = {"success": False, "error": "Peers data not available", "peers": []}
-                # Cache error response for 5 minutes
-                redis_cache.set(cache_key, response_data, 300)
                 return jsonify(response_data), 404
 
             with open(peers_file, "r") as f:

@@ -71,10 +71,7 @@ PROCEDURAL_COLOR_TYPES = {
 
 def _seeded_random(seed):
     """Simple seeded random generator for deterministic results."""
-    print(f"DEBUG: _seeded_random called with seed: {seed}")
-    print(f"DEBUG: seed type: {type(seed)}")
     s = abs(seed) if seed is not None else 1
-    print(f"DEBUG: initialized s with: {s}")
     def next_random():
         nonlocal s
         s = (s * 1664525 + 1013904223) % 4294967296
@@ -100,36 +97,23 @@ DEFAULT_COLOR_VARIATION = {"hue_range": 0.05, "sat_range": 0.15, "light_range": 
 
 
 def get_procedural_planet_color(base_color, planet_type, seed):
-    print(f"DEBUG: get_procedural_planet_color called with:")
-    print(f"DEBUG:   base_color: {base_color}")
-    print(f"DEBUG:   planet_type: {planet_type}")
-    print(f"DEBUG:   seed: {seed}")
-    print(f"DEBUG:   seed type: {type(seed)}")
-    
     config = PROCEDURAL_COLOR_TYPES.get(planet_type, DEFAULT_COLOR_VARIATION)
-    print(f"DEBUG:   config: {config}")
 
     random = _seeded_random(seed)
     h, s, l = _hex_to_hsl(base_color)
-    print(f"DEBUG:   hsl: {h}, {s}, {l}")
 
     hue_shift = (random() - 0.5) * 2 * config["hue_range"]
     new_hue = (h + hue_shift) % 1.0
     if new_hue < 0:
         new_hue += 1.0
-    print(f"DEBUG:   new_hue: {new_hue}")
 
     sat_shift = (random() - 0.5) * 2 * config["sat_range"]
     new_sat = max(0.05, min(1.0, s + sat_shift))
-    print(f"DEBUG:   new_sat: {new_sat}")
 
     light_shift = (random() - 0.5) * 2 * config["light_range"]
     new_light = max(0.1, min(0.9, l + light_shift))
-    print(f"DEBUG:   new_light: {new_light}")
 
-    result = _hsl_to_hex(new_hue, new_sat, new_light)
-    print(f"DEBUG:   result: {result}")
-    return result
+    return _hsl_to_hex(new_hue, new_sat, new_light)
 
 
 def draw_gas_giant_elements(draw, center_x, center_y, planet_radius, rng, seed, spaced_planet_name):

@@ -1,0 +1,138 @@
+# Atlas server stack (docs/server/02 §1): pg15 + redis + pgbouncer + api + worker + beat.
+# Usage:
+#   cp .env.server.docker.example .env.server.docker
+#   docker compose -f docker-compose.server.yml up -d --build
+#
+# The app connects through pgbouncer (transaction pooling). Migrations use a
+# direct PostgreSQL DSN because DDL through transaction pooling is unsafe.
+
+name: atlas-server
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: atlas
+      POSTGRES_USER: atlas_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - statement_timeout=5s
+      - -c
+      - lock_timeout=1s
+      - -c
+      - idle_in_transaction_session_timeout=10s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas_migrator -d atlas"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: atlas_migrator
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POOL_MODE: transaction
+      DEFAULT_POOL_SIZE: "25"
+      MAX_CLIENT_CONN: "300"
+      SERVER_RESET_QUERY: DISCARD ALL
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:6432:6432"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      ATLAS_ENV: ${ATLAS_ENV:-staging}
+      ATLAS_DATABASE_URL: postgresql://atlas_migrator:${POSTGRES_PASSWORD}@db:5432/atlas
+      ATLAS_SECRET_KEY: ${ATLAS_SECRET_KEY:?set ATLAS_SECRET_KEY}
+      ATLAS_JWT_PRIVATE_KEY: ${ATLAS_JWT_PRIVATE_KEY:-/run/secrets/dev_jwt_private.pem}
+      ATLAS_JWT_PUBLIC_KEY: ${ATLAS_JWT_PUBLIC_KEY:-/run/secrets/dev_jwt_public.pem}
+      ATLAS_JWT_KID: ${ATLAS_JWT_KID:-2026-10}
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    env_file:
+      - .env.server.docker
+    environment:
+      ATLAS_DATABASE_URL: postgresql://atlas_migrator:${POSTGRES_PASSWORD}@pgbouncer:6432/atlas
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: ["celery", "-A", "server.jobs.celery_app", "worker", "-c", "2", "--max-tasks-per-child", "500", "--prefetch-multiplier", "1"]
+    env_file:
+      - .env.server.docker
+    environment:
+      ATLAS_DATABASE_URL: postgresql://atlas_migrator:${POSTGRES_PASSWORD}@pgbouncer:6432/atlas
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: ["celery", "-A", "server.jobs.celery_app", "beat"]
+    env_file:
+      - .env.server.docker
+    environment:
+      ATLAS_DATABASE_URL: postgresql://atlas_migrator:${POSTGRES_PASSWORD}@pgbouncer:6432/atlas
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

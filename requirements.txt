@@ -9,3 +9,5 @@ bencodepy==0.9.5
 requests==2.32.4
 psutil==7.1.0
 redis==5.0.1
+# Only needed when the planet cache runs on PostgreSQL (ATLAS_CACHE_BACKEND=pg)
+psycopg[binary,pool]==3.3.6

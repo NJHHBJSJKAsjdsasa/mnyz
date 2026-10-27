@@ -9,6 +9,7 @@ import { UnifiedSpaceshipStorage } from "../Utils/UnifiedSpaceshipStorage.tsx";
 import { ResourceEventManager } from "../Utils/ResourceEventManager.tsx";
 import { getItem, setItem } from "../Utils/b64.tsx";
 import { DataExportImport } from "../Utils/DataExportImport.tsx";
+import { ServerApi } from "../Utils/ServerApi.tsx";
 import ProgressBar from "./ProgressBar.tsx";
 import AntimatterIcon from "../Icons/AntimatterIcon.tsx";
 import DeuteriumIcon from "../Icons/DeuteriumIcon.tsx";
@@ -26,6 +27,7 @@ interface SpaceshipPanelProps {
 }
 
 const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
+  const serverMode = ServerApi.mode() === "server";
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [activeTab, setActiveTab] = useState<"stats" | "ship" | "saved">("stats");
@@ -33,7 +35,7 @@ const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [locationStats, setLocationStats] = useState<any>(null);
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenges | null>(null);
-  const [spaceshipResources, setSpaceshipResources] = useState<SpaceshipResource>({ antimatter: 0, element115: 0, deuterium: 0 });
+  const [spaceshipResources, setSpaceshipResources] = useState<SpaceshipResource>(() => SpaceshipResourceManager.getResources());
   const [spaceshipUpgrade, setSpaceshipUpgrade] = useState<SpaceshipUpgrade>({ level: 1, efficiency: 1.0, range: 300, storage: 500, multiplier: 1.0 });
   const [upgradeCost, setUpgradeCost] = useState<TravelCost>({ antimatter: 0, element115: 0, deuterium: 0 });
   const [passiveGeneration, setPassiveGeneration] = useState<any>({ antimatter: 0, element115: 0, deuterium: 0, sources: { planets: 0, systems: 0, galaxies: 0 } });
@@ -122,6 +124,53 @@ const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
       setIsOpen(false);
       setIsClosing(false);
     }, 300);
+  };
+
+  const upgradeShip = async () => {
+    if (serverMode) {
+      try {
+        const result = await ServerApi.upgradeShip();
+        UnifiedSpaceshipStorage.applyServerLevel(Number(result?.applied?.level || 1));
+        const balances = result?.balances || {};
+        const current = SpaceshipResourceManager.getResources();
+        const next = { ...current };
+        Object.entries(balances).forEach(([code, amount]) => {
+          if (code in next) (next as any)[code] = Number(amount);
+        });
+        UnifiedSpaceshipStorage.setResources(next);
+        setSpaceshipResources(SpaceshipResourceManager.getResources());
+        const upgrade = SpaceshipResourceManager.getUpgrade();
+        setSpaceshipUpgrade(upgrade);
+        setUpgradeCost(SpaceshipResourceManager.getUpgradeCost(upgrade.level));
+        setPassiveGeneration(SpaceshipResourceManager.getAccumulatedResourcesWithLimit());
+        ResourceEventManager.emit("resources_updated");
+      } catch (error) {
+        console.warn("[atlas-server] ship upgrade failed", error);
+      }
+      return;
+    }
+
+    if (SpaceshipResourceManager.upgradeShip()) {
+      setSpaceshipResources(SpaceshipResourceManager.getResources());
+      setSpaceshipUpgrade(SpaceshipResourceManager.getUpgrade());
+      const upgrade = SpaceshipResourceManager.getUpgrade();
+      setUpgradeCost(SpaceshipResourceManager.getUpgradeCost(upgrade.level));
+      setPassiveGeneration(SpaceshipResourceManager.getAccumulatedResourcesWithLimit());
+      ResourceEventManager.emit("resources_updated");
+    }
+  };
+
+  const handleServerImport = async () => {
+    if (!window.confirm("将本地存档导入服务端？每个角色只能导入一次，导入后本地仍保留副本。")) return;
+    try {
+      const result = await ServerApi.importLocalSave();
+      setImportSuccess(true);
+      console.info("[atlas-server] imported", result?.imported);
+      setTimeout(() => setImportSuccess(false), 3000);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Server import failed");
+      setTimeout(() => setImportError(null), 5000);
+    }
   };
 
   const handleExport = async () => {
@@ -375,8 +424,7 @@ const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
                           <span className="text-[9px] text-blue-400">
                             {(() => {
                               const summary = DataExportImport.getDataSummary();
-                              const count = [summary.hasSpaceship, summary.hasArchive, summary.hasDailyChallenges, summary.hasLocations].filter(Boolean).length;
-                              return `${count}/4 keys`;
+                              return `${summary.totalKeys} keys · ${Math.round(summary.totalSize / 1024)} KB`;
                             })()}
                           </span>
                         </div>
@@ -398,6 +446,11 @@ const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
                             </svg>
                             <span>导入</span>
                           </button>
+                          {ServerApi.mode() === "shadow" && (
+                            <button onClick={handleServerImport} className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-[10px] px-2 py-1.5 rounded border border-purple-500/50 transition-colors duration-200 flex items-center justify-center gap-1">
+                              <span>服务器</span>
+                            </button>
+                          )}
                         </div>
 
                         <input ref={fileInputRef} type="file" accept=".atl" onChange={handleImport} className="hidden" />
@@ -481,7 +534,7 @@ const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
                       </div>
                     </div>
 
-                    {spaceshipUpgrade.level < 100 && !SpaceshipResourceManager.canAffordUpgrade() && (
+                    {spaceshipUpgrade.level < 999 && !SpaceshipResourceManager.canAffordUpgrade() && (
                       <div className="bg-red-500/10 border border-red-500/30 rounded p-1.5 mb-2">
                         <div className="text-[10px] text-red-300 font-semibold mb-0.5">缺少资源：</div>
                         <div className="text-[9px] text-red-200 space-y-0.5">
@@ -505,24 +558,12 @@ const SpaceshipPanel: React.FC<SpaceshipPanelProps> = ({ currentLocation }) => {
                     )}
 
                     <button
-                      onClick={() => {
-                        if (SpaceshipResourceManager.upgradeShip()) {
-                          setSpaceshipResources(SpaceshipResourceManager.getResources());
-                          setSpaceshipUpgrade(SpaceshipResourceManager.getUpgrade());
-                          const upgrade = SpaceshipResourceManager.getUpgrade();
-                          setUpgradeCost(SpaceshipResourceManager.getUpgradeCost(upgrade.level));
-
-                          const passiveInfo = SpaceshipResourceManager.getAccumulatedResourcesWithLimit();
-                          setPassiveGeneration(passiveInfo);
-
-                          ResourceEventManager.emit("resources_updated");
-                        }
-                      }}
-                      disabled={!SpaceshipResourceManager.canAffordUpgrade()}
-                      className={`w-full px-2 py-1.5 rounded text-[10px] font-medium transition-all duration-200 ${SpaceshipResourceManager.canAffordUpgrade() ? "bg-gradient-to-r from-green-600/30 to-blue-600/30 hover:from-green-600/40 hover:to-blue-600/40 text-green-300 border border-green-500/50 hover:border-green-400/70 cursor-pointer" : "bg-gray-700/30 text-gray-500 border border-gray-600/30 cursor-not-allowed"}`}
+                      onClick={() => void upgradeShip()}
+                      disabled={!serverMode && !SpaceshipResourceManager.canAffordUpgrade()}
+                      className={`w-full px-2 py-1.5 rounded text-[10px] font-medium transition-all duration-200 ${serverMode || SpaceshipResourceManager.canAffordUpgrade() ? "bg-gradient-to-r from-green-600/30 to-blue-600/30 hover:from-green-600/40 hover:to-blue-600/40 text-green-300 border border-green-500/50 hover:border-green-400/70 cursor-pointer" : "bg-gray-700/30 text-gray-500 border border-gray-600/30 cursor-not-allowed"}`}
                     >
-                      {spaceshipUpgrade.level >= 100 ? (
-                        <div className="text-yellow-400">🌟 最高等级 - 终极飞船！</div>
+                      {spaceshipUpgrade.level >= 999 ? (
+                        <div className="text-yellow-400">🌟 已达等级上限 999</div>
                       ) : (
                         <div>
                           <div className="font-bold">升级到等级 {spaceshipUpgrade.level + 1}</div>

@@ -4,8 +4,17 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { calculatePlanetResources } from "./ElementResourceValues.tsx";
 import { UnifiedSpaceshipStorage } from "./UnifiedSpaceshipStorage.tsx";
+import { SpaceshipResourceManager } from "./SpaceshipResources.tsx";
 import { ResourceReward } from "./SpaceshipTypes.tsx";
 import { TaskSystem } from "./TaskSystem.tsx";
+import { PlanetScanSystem } from "./PlanetScanSystem.tsx";
+import { ShipModuleSystem } from "./ShipModules.tsx";
+import { ContractSystem } from "./ContractSystem.tsx";
+import { SectorSystem } from "./SectorSystem.tsx";
+import { CosmicEvents } from "./CosmicEvents.tsx";
+import { Rival } from "./Rival.tsx";
+import { TechSystem } from "./TechSystem.tsx";
+import { AllySystem } from "./AllySystem.tsx";
 import AntimatterIcon from "../Icons/AntimatterIcon.tsx";
 import DeuteriumIcon from "../Icons/DeuteriumIcon.tsx";
 import Element115Icon from "../Icons/Element115Icon.tsx";
@@ -148,6 +157,13 @@ export class SpaceshipResourceCollectionManager {
     const discoveryBonus = this.getDiscoveryBonus(streakInfo.dailyCollections);
     finalMultiplier *= discoveryBonus;
     finalMultiplier *= shipMultiplier;
+    finalMultiplier *= ShipModuleSystem.miningMultiplier();
+    finalMultiplier *= SectorSystem.multiplierFor(coordinates);
+    finalMultiplier *= CosmicEvents.multiplier("mining", coordinates);
+    finalMultiplier *= TechSystem.multiplier("mining");
+    finalMultiplier *= AllySystem.bonus();
+    // A rival captain staking the same planet takes a cut.
+    if (type === "planet") finalMultiplier *= Rival.multiplier(locationId);
 
     if (finalMultiplier > 1.0) {
       reward = {
@@ -156,12 +172,27 @@ export class SpaceshipResourceCollectionManager {
         deuterium: Math.floor(reward.deuterium * finalMultiplier),
       };
     }
-    UnifiedSpaceshipStorage.addResources(reward);
+
+    // Survey bonus: an enriched stratum boosts exactly one collection.
+    const surveyBonus = type === "planet" ? PlanetScanSystem.pendingBonus(locationId) : 1;
+    if (surveyBonus > 1) {
+      reward = {
+        antimatter: Math.floor(reward.antimatter * surveyBonus),
+        element115: Math.floor(reward.element115 * surveyBonus),
+        deuterium: Math.floor(reward.deuterium * surveyBonus),
+      };
+      PlanetScanSystem.consumeBonus(locationId);
+    }
+
+    // Must go through the manager: it fills every resource key, while a bare
+    // three-key reward would write NaN into the rare-resource slots.
+    SpaceshipResourceManager.addResources(reward);
 
     // 更新任务进度
     if (type === "planet") {
       TaskSystem.incrementProgress("planetsDiscovered", 1);
       TaskSystem.incrementProgress("antimatterCollected", reward.antimatter);
+      ContractSystem.increment("collections", 1, coordinates);
     } else if (type === "galaxy") {
       TaskSystem.incrementProgress("galaxiesVisited", 1);
     }

@@ -14,9 +14,8 @@ interface SystemProps {
       Size: string;
       Color: string;
     }>;
-    planets: Array<{
-      name: string;
-    }>;
+    // Planets arrive from the server payload; the layout consumes the full shape.
+    planets: any[];
   };
   galaxy: {
     name: string;

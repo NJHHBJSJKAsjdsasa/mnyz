@@ -1,6 +1,12 @@
 # pymodules/__atlas_redis_cache.py
 
-import redis
+try:
+    import redis
+except ImportError:
+    # Redis is an optional accelerator: Atlas runs without it.
+    redis = None
+
+import os
 import json
 import time
 from typing import Optional, Any
@@ -10,19 +16,29 @@ class RedisCacheManager:
         self.redis_client = None
         self._connect()
 
+    def _build_client(self):
+        """Honour ATLAS_REDIS_URL (or REDIS_URL), else the usual host/port vars."""
+        url = os.getenv("ATLAS_REDIS_URL") or os.getenv("REDIS_URL")
+        if url:
+            return redis.Redis.from_url(url, decode_responses=True)
+
+        return redis.Redis(
+            host=os.getenv("ATLAS_REDIS_HOST", "localhost"),
+            port=int(os.getenv("ATLAS_REDIS_PORT", "6379")),
+            db=int(os.getenv("ATLAS_REDIS_DB", "0")),
+            password=os.getenv("ATLAS_REDIS_PASSWORD") or None,
+            decode_responses=True,
+        )
+
     def _connect(self):
+        if redis is None:
+            return
         try:
-            self.redis_client = redis.Redis(
-                host='localhost',
-                port=6379,
-                db=0,
-                decode_responses=True
-            )
+            self.redis_client = self._build_client()
             # Test connection
             self.redis_client.ping()
-            print("Redis connection established successfully")
-        except redis.RedisError as e:
-            print(f"Redis connection failed: {e}")
+        except Exception as e:
+            print(f"Redis cache unavailable: {e}")
             self.redis_client = None
 
     def is_available(self) -> bool:

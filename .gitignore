@@ -15,3 +15,9 @@
 
 # Estupideces de macOS es pa reventarlos maemia
 .DS_Store
+
+# Atlas server secrets
+.env.server
+.env.server.docker
+.secrets/
+.pytest_cache/

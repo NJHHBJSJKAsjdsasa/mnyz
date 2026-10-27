@@ -11,6 +11,15 @@ from pymodules.__universe_base import Universe
 from pymodules.__universe_constants import PhysicalConstants
 
 
+def _as_index(value):
+    """Coerce a session value into a non-negative int index, or None."""
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        return None
+    return index if index >= 0 else None
+
+
 class PlanetRendererAPI:
 
     def __init__(self, planet_translator):
@@ -37,7 +46,7 @@ class PlanetRendererAPI:
                     return jsonify({"error": "Failed to initialize config"})
 
             constants = PhysicalConstants()
-            universe = Universe(config.seed, constants)
+            universe = Universe(config.seed, constants, config.cosmic_origin_time)
 
             galaxy_data = session.get("galaxy")
             system_index = session.get("system")
@@ -61,7 +70,7 @@ class PlanetRendererAPI:
 
             rendering_data = self.planet_translator.translate_planet_rendering(planet)
 
-            max_orbital_radius = max(p.orbital_radius for p in system.planets.values())
+            max_orbital_radius = max((p.orbital_radius for p in system.planets.values()), default=1.0)
 
             if "timing" not in rendering_data:
                 rendering_data["timing"] = {}
@@ -84,7 +93,7 @@ class PlanetRendererAPI:
                     return jsonify({"error": "Failed to initialize config"})
 
             constants = PhysicalConstants()
-            universe = Universe(config.seed, constants)
+            universe = Universe(config.seed, constants, config.cosmic_origin_time)
 
             galaxy_data = session.get("galaxy")
             system_index = session.get("system")
@@ -98,7 +107,7 @@ class PlanetRendererAPI:
             cosmic_origin_time = config.cosmic_origin_time
             current_time = int(time.time())
 
-            max_orbital_radius = max(p.orbital_radius for p in system.planets.values())
+            max_orbital_radius = max((p.orbital_radius for p in system.planets.values()), default=1.0)
 
             system_data = {"name": system.name, "star_system_type": system.star_system_type, "num_planets": system.num_planets, "stars": [{"Type": star["Type"], "Size": str(star.get("Radius Factor", 1.0)), "Color": star["Color"]} for star in system.stars], "planets": [], "timing": {"cosmic_origin_time": cosmic_origin_time, "current_time": current_time, "max_orbital_radius": max_orbital_radius, "system_planets_count": len(system.planets)}}
 
@@ -127,36 +136,29 @@ class PlanetRendererAPI:
                     return jsonify({"error": "Failed to initialize config"})
 
             constants = PhysicalConstants()
-            universe = Universe(config.seed, constants)
+            universe = Universe(config.seed, constants, config.cosmic_origin_time)
 
             galaxy_data = session.get("galaxy")
             system_index = session.get("system")
-            planet_index = session.get("planet")
+            planet_index = _as_index(session.get("planet"))
 
             if not galaxy_data or system_index is None or planet_index is None:
                 return jsonify({"error": "No galaxy, system, or planet data in session"})
 
             galaxy = universe.get_galaxy(*galaxy_data["coordinates"])
             system = galaxy.get_solar_system(system_index)
-            
-            # 检查索引是否有效
+
             planet = system.get_planet(planet_index)
-            
+
             if planet is None:
-                # 索引无效，自动选择第一个可用行星
-                planet_keys = list(system.planets.keys())
+                # Stale session index: fall back to the first planet of the system.
+                planet_keys = sorted(system.planets.keys())
                 if not planet_keys:
                     return jsonify({"error": "No planets available in this system"})
-                
-                # 选择第一个行星
-                new_planet_index = planet_keys[0]
-                planet = system.get_planet(new_planet_index)
-                
-                # 更新会话中的索引
-                session["planet"] = new_planet_index
-                
-                # 记录日志
-                print(f"Planet index {planet_index} was invalid, automatically switched to index {new_planet_index}")
+
+                planet_index = planet_keys[0]
+                planet = system.get_planet(planet_index)
+                session["planet"] = planet_index
 
             cosmic_origin_time = config.cosmic_origin_time
             current_time_seconds = math.floor(time.time())

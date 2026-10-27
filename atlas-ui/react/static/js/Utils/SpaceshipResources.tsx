@@ -1,6 +1,9 @@
 // atlas-ui/react/static/js/Utils/SpaceshipResources.tsx
 import { createRoot } from "react-dom/client";
 import { UnifiedSpaceshipStorage } from "./UnifiedSpaceshipStorage.tsx";
+import { HullSystem } from "./HullSystem.tsx";
+import { CosmicEvents } from "./CosmicEvents.tsx";
+import { TechSystem } from "./TechSystem.tsx";
 import { getItem } from "./b64.tsx";
 import AntimatterIcon from "../Icons/AntimatterIcon.tsx";
 import DeuteriumIcon from "../Icons/DeuteriumIcon.tsx";
@@ -123,11 +126,28 @@ export class SpaceshipResourceManager {
 
     const base = baseCosts[locationType];
     const distanceMultiplier = Math.max(1, distance / 100);
+    // A damaged hull costs more to push through warp; cosmic weather moves the
+    // price either way (fuel-leak events cost more, gravity waves less).
+    const hullFactor = HullSystem.travelFactor() * CosmicEvents.multiplier("fuel");
 
     return {
-      antimatter: Math.floor(base.antimatter * distanceMultiplier),
-      element115: Math.floor(base.element115 * distanceMultiplier),
-      deuterium: Math.floor(base.deuterium * distanceMultiplier),
+      antimatter: Math.floor(base.antimatter * distanceMultiplier * hullFactor),
+      element115: Math.floor(base.element115 * distanceMultiplier * hullFactor),
+      deuterium: Math.floor(base.deuterium * distanceMultiplier * hullFactor),
+    };
+  }
+
+  /**
+   * Canonical inter-galaxy jump price, in raw coordinate units. Both the manual
+   * navigator and expedition contracts go through here, so neither path can
+   * undercut the other.
+   */
+  static calculateJumpCost(distance: number): TravelCost {
+    const factor = HullSystem.travelFactor() * CosmicEvents.multiplier("fuel") * TechSystem.multiplier("travel");
+    return {
+      antimatter: Math.max(20, Math.round((distance / 15000) * factor)),
+      element115: Math.max(10, Math.round((distance / 30000) * factor)),
+      deuterium: Math.max(15, Math.round((distance / 22000) * factor)),
     };
   }
 
@@ -155,7 +175,8 @@ export class SpaceshipResourceManager {
 
     const baseCostRatio = 0.4;
     const baseResourceCost = Math.floor((currentStorage * baseCostRatio) / 1.3);
-    const levelScaling = 1 + (currentLevel - 1) * 0.01;
+    // Linear up to 100 (unchanged pacing), then exponential so 999 stays a long haul.
+    const levelScaling = currentLevel <= 100 ? 1 + (currentLevel - 1) * 0.01 : 2 * Math.pow(1.03, currentLevel - 100);
     const scaledCost = Math.floor(baseResourceCost * levelScaling);
 
     return {
@@ -167,7 +188,7 @@ export class SpaceshipResourceManager {
 
   static canAffordUpgrade(): boolean {
     const upgrade = this.getUpgrade();
-    const MAX_LEVEL = 100;
+    const MAX_LEVEL = 999;
     if (upgrade.level >= MAX_LEVEL) {
       return false;
     }

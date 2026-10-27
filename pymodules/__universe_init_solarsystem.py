@@ -7,6 +7,23 @@ from pymodules.__atlas_seedmaster import seedmaster
 from pymodules.__universe_name_generator import generate_name
 
 
+EXTRA_PLANET_PROBABILITIES = {
+    6: 0.35,
+    7: 0.25,
+    8: 0.10,
+    9: 0.05,
+}
+
+STAR_MASS_FACTORS = {
+    "Red Dwarf": 0.2,
+    "Yellow Dwarf": 1.0,
+    "Blue Giant": 10.0,
+    "Red Giant": 1.2,
+    "White Dwarf": 0.6,
+    "Neutron Star": 1.4,
+}
+
+
 class SolarSystem:
     def __init__(self, seed, index, constants):
         self.seed = seed
@@ -20,67 +37,54 @@ class SolarSystem:
         self.star_system_type = self.determine_star_system_type()
         self.stars = self.generate_stars()
 
-        for i in range(self.num_planets):
-            from pymodules.__universe_init_planet import Planet
+        self._build_planets(self.num_planets)
+        self._maybe_add_extra_planets()
 
-            planet_seed = int(
-                hashlib.sha256(f"{self.seed}-{seedmaster(4)}-{i}".encode()).hexdigest(),
-                16,
-            )
-            planet_name = generate_name(planet_seed, "planet")
+    def _build_planets(self, count):
+        """Materialize planets 0..count-1 from their seeds (order-independent of RNG state)."""
+        for planet_index in range(count):
+            self.planets[planet_index] = self._create_planet(planet_index)
 
-            star_mass = self.constants.M_SUN
-            if self.stars:
-                star_type = self.stars[0]["Type"]
-                mass_factors = {"Red Dwarf": 0.2, "Yellow Dwarf": 1.0, "Blue Giant": 10.0, "Red Giant": 1.2, "White Dwarf": 0.6, "Neutron Star": 1.4}  # 0.08-0.45 solar masses  # ~1 solar mass (like our Sun)  # 2-50+ solar masses  # 0.3-8 solar masses (evolved stars)  # 0.5-1.4 solar masses  # 1.1-2.2 solar masses
-                star_mass *= mass_factors.get(star_type, 1.0)
+    def _create_planet(self, index):
+        """Build one planet; the seed formula is shared by normal and extra planets.
 
-            self.planets[i] = Planet(planet_seed, planet_name, self.constants, star_mass)
+        ``index >= 6`` is exactly the extra-planet range (base count is 1..6), so
+        deriving ``is_extra`` from the index keeps cache-hit rebuilds identical
+        to fresh generation. Passing the flag explicitly used to differ and gave
+        a cached system different names for its 7th..10th planets.
+        """
+        from pymodules.__universe_init_planet import Planet
 
-        extra_planet_probabilities = {
-            6: 0.35,
-            7: 0.25,
-            8: 0.10,
-            9: 0.05,
-        }
+        planet_seed = int(
+            hashlib.sha256(f"{self.seed}-{seedmaster(4)}-{index}".encode()).hexdigest(),
+            16,
+        )
+        planet_name = generate_name(planet_seed, "planet", is_extra=index >= 6)
+        return Planet(planet_seed, planet_name, self.constants, self.get_star_mass())
 
-        for extra_planet_index, probability in extra_planet_probabilities.items():
-            if self.num_planets != extra_planet_index:
+    def _maybe_add_extra_planets(self):
+        """Append the optional 7th..10th planet when the roll succeeds."""
+        for extra_index, probability in EXTRA_PLANET_PROBABILITIES.items():
+            if self.num_planets != extra_index:
                 break
 
             extra_seed = int(
-                hashlib.sha256(f"{self.seed}-extra-planet-{extra_planet_index}".encode()).hexdigest(),
+                hashlib.sha256(f"{self.seed}-extra-planet-{extra_index}".encode()).hexdigest(),
                 16,
             )
-
             random.seed(extra_seed)
 
-            if random.random() < probability:
-                from pymodules.__universe_init_planet import Planet
-
-                planet_seed = int(
-                    hashlib.sha256(f"{self.seed}-{seedmaster(4)}-{extra_planet_index}".encode()).hexdigest(),
-                    16,
-                )
-                planet_name = generate_name(planet_seed, "planet", is_extra=True)
-
-                star_mass = self.constants.M_SUN
-                if self.stars:
-                    star_type = self.stars[0]["Type"]
-                    mass_factors = {
-                        "Red Dwarf": 0.2,
-                        "Yellow Dwarf": 1.0,
-                        "Blue Giant": 10.0,
-                        "Red Giant": 1.2,
-                        "White Dwarf": 0.6,
-                        "Neutron Star": 1.4,
-                    }
-                    star_mass *= mass_factors.get(star_type, 1.0)
-
-                self.planets[extra_planet_index] = Planet(planet_seed, planet_name, self.constants, star_mass)
-                self.num_planets = extra_planet_index + 1
-            else:
+            if random.random() >= probability:
                 break
+
+            self.planets[extra_index] = self._create_planet(extra_index)
+            self.num_planets = extra_index + 1
+
+    def get_star_mass(self):
+        """Primary star mass in solar masses, used by every orbital calculation."""
+        if not self.stars:
+            return self.constants.M_SUN
+        return self.constants.M_SUN * STAR_MASS_FACTORS.get(self.stars[0]["Type"], 1.0)
 
     def determine_star_system_type(self):
         system_type = random.choices(
@@ -123,39 +127,7 @@ class SolarSystem:
         }
 
     def get_planet(self, index):
-        # 检查行星是否已存在
-        if index in self.planets:
-            return self.planets.get(index, None)
-        
-        # 如果行星不存在，根据系统种子生成新行星
-        # 使用索引和系统种子来生成可重复的行星
-        planet_seed = int(
-            hashlib.sha256(f"{self.seed}-extended-planet-{index}".encode()).hexdigest(),
-            16,
-        )
-        
-        # 导入 Planet 类
-        from pymodules.__universe_init_planet import Planet
-        
-        # 生成新行星名称
-        random.seed(planet_seed)
-        planet_name = generate_name(planet_seed, "planet", is_extra=True)
-        
-        # 获取恒星质量
-        star_mass = self.constants.M_SUN
-        if hasattr(self, 'stars') and self.stars:
-            star_type = self.stars[0]["Type"]
-            mass_factors = {"Red Dwarf": 0.2, "Yellow Dwarf": 1.0, "Blue Giant": 10.0, "Red Giant": 1.2, "White Dwarf": 0.6, "Neutron Star": 1.4}
-            star_mass *= mass_factors.get(star_type, 1.0)
-        
-        # 生成新行星
-        new_planet = Planet(planet_seed, planet_name, self.constants, star_mass)
-        
-        # 保存新行星
-        self.planets[index] = new_planet
-        
-        # 更新行星数量（如果索引大于当前数量）
-        if index >= self.num_planets:
-            self.num_planets = index + 1
-        
-        return new_planet
+        """Return the planet at index, or None when the index does not exist."""
+        if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+            return None
+        return self.planets.get(index)

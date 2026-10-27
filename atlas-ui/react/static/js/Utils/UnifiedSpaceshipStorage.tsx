@@ -38,6 +38,8 @@ export interface SpaceshipData {
     sk: { [key: string]: number }; // 技能
   };
   c: { [locationId: string]: number };
+  /** Lifetime collection count per location; drives the diminishing-return curve. */
+  n?: { [locationId: string]: number };
   t: {
     lp?: number;
     ld?: number;
@@ -97,6 +99,7 @@ export class UnifiedSpaceshipStorage {
       sk: {} // 默认无技能
     },
     c: {},
+    n: {},
     t: {},
     s: { 
       tc: 0, 
@@ -123,6 +126,7 @@ export class UnifiedSpaceshipStorage {
         r: data.r || { ...this.DEFAULT_DATA.r },
         u: data.u || { ...this.DEFAULT_DATA.u },
         c: data.c || {},
+        n: data.n || {},
         t: data.t || {},
         s: data.s || { ...this.DEFAULT_DATA.s },
       };
@@ -163,8 +167,24 @@ export class UnifiedSpaceshipStorage {
   private static performEmergencyCleanup(): void {
     const data = this.getData();
     data.c = {};
-    data.s = { tc: 0, tr: { a: 0, e: 0, d: 0 }, tt: 0 };
+    data.n = {};
+    data.s = this.emptyStats();
     this.saveData(data);
+  }
+
+  /** Zeroed statistics block; every counter the storage interface knows about. */
+  private static emptyStats(today = new Date().toDateString()): NonNullable<SpaceshipData["s"]> {
+    return {
+      tc: 0,
+      tr: { a: 0, e: 0, d: 0, q: 0, p: 0, n: 0, ex: 0, nd: 0, bh: 0, ar: 0, aa: 0, ds: 0 },
+      tt: 0,
+      cs: 0,
+      dc: 0,
+      dcp: 0,
+      dcs: 0,
+      dcg: 0,
+      lcd: today,
+    };
   }
   static getResources(): { 
     antimatter: number; 
@@ -338,9 +358,31 @@ export class UnifiedSpaceshipStorage {
     };
   }
 
+  static getShipModules(): Array<{ id: string; level: number; oc?: number }> {
+    return this.getData().u.mds || [];
+  }
+
+  static setShipModules(modules: Array<{ id: string; level: number; oc?: number }>): void {
+    const data = this.getData();
+    data.u.mds = modules;
+    this.saveData(data);
+  }
+
+  /** Mirror a server-authoritative ship level without touching resources. */
+  static applyServerLevel(level: number): void {
+    const data = this.getData();
+    const next = Math.max(1, Math.min(999, Math.round(level)));
+    data.u.l = next;
+    data.u.ef = next <= 16 ? 1 + (next - 1) * 0.2 : 4.0 + (next - 16) * 0.02;
+    data.u.rn = Math.floor(next <= 25 ? 500 + (next - 1) * 200 : 5300 + (next - 25) * 12);
+    data.u.st = Math.floor(next <= 20 ? 1000 + (next - 1) * 400 : 8600 + (next - 20) * 45);
+    data.u.m = next <= 100 ? 1.0 + (next - 1) * 0.242 : 24.958 + (next - 100) * 0.02;
+    this.saveData(data);
+  }
+
   static upgradeShip(cost: { antimatter: number; element115: number; deuterium: number }): boolean {
     const data = this.getData();
-    const MAX_LEVEL = 100;
+    const MAX_LEVEL = 999;
     if (data.u.l >= MAX_LEVEL) {
       return false;
     }
@@ -349,21 +391,16 @@ export class UnifiedSpaceshipStorage {
       data.r.e -= cost.element115;
       data.r.d -= cost.deuterium;
       data.u.l += 1;
-      let efficiency = Math.min(4.0, 1 + (data.u.l - 1) * 0.2); // Higher cap, faster growth
+      // Every level grants a little of each stat; nothing plateaus before 999.
+      // The early segments keep the original pacing, the tail is linear so the
+      // numbers stay predictable instead of exploding.
+      let efficiency = data.u.l <= 16 ? 1 + (data.u.l - 1) * 0.2 : 4.0 + (data.u.l - 16) * 0.02;
 
-      let range =
-        data.u.l <= 25
-          ? 500 + (data.u.l - 1) * 200 // Better base and growth
-          : 500 + 25 * 200 + Math.floor(Math.log(data.u.l - 25 + 1) * 800);
-      range = Math.min(range, 25000); // Higher cap for exploration
+      let range = data.u.l <= 25 ? 500 + (data.u.l - 1) * 200 : 5300 + (data.u.l - 25) * 12;
 
-      let storage =
-        data.u.l <= 20
-          ? 1000 + (data.u.l - 1) * 400 // Much better base and growth
-          : 1000 + 20 * 400 + Math.floor(Math.log(data.u.l - 20 + 1) * 1200);
-      storage = Math.min(storage, 50000); // Double the cap
+      let storage = data.u.l <= 20 ? 1000 + (data.u.l - 1) * 400 : 8600 + (data.u.l - 20) * 45;
 
-      let multiplier = 1.0 + (data.u.l - 1) * 0.242; // Calculated to reach exactly 25x at level 100
+      let multiplier = data.u.l <= 100 ? 1.0 + (data.u.l - 1) * 0.242 : 24.958 + (data.u.l - 100) * 0.02;
 
       // 保留飞船类型和定制信息
       const shipType = data.u.t || "explorer";
@@ -371,10 +408,10 @@ export class UnifiedSpaceshipStorage {
       const appearance = data.u.app || { c: "#0070f3", p: "none", d: "none" };
       const skills = data.u.sk || {};
 
-      data.u.ef = Math.min(6.0, efficiency); // Higher efficiency cap
+      data.u.ef = efficiency;
       data.u.rn = Math.floor(range);
       data.u.st = Math.floor(storage);
-      data.u.m = Math.min(25.0, multiplier); // New 25x multiplier cap
+      data.u.m = multiplier;
       data.u.t = shipType;
       data.u.mds = modules;
       data.u.app = appearance;
@@ -452,6 +489,8 @@ export class UnifiedSpaceshipStorage {
   static markLocationCollected(locationId: string): void {
     const data = this.getData();
     data.c[locationId] = Date.now();
+    data.n = data.n || {};
+    data.n[locationId] = (data.n[locationId] ?? 0) + 1;
 
     const locationType = this.getLocationTypeFromId(locationId);
     this.updateDailyCollectionCounters(data, locationType);
@@ -465,7 +504,7 @@ export class UnifiedSpaceshipStorage {
     const today = new Date().toDateString();
 
     if (!data.s) {
-      data.s = { tc: 0, tr: { a: 0, e: 0, d: 0 }, tt: 0, cs: 0, dc: 0, dcp: 0, dcs: 0, dcg: 0, lcd: today };
+      data.s = this.emptyStats(today);
     }
 
     if (data.s.lcd !== today) {
@@ -490,7 +529,7 @@ export class UnifiedSpaceshipStorage {
     const lastCollectionDay = data.t.lc ? new Date(data.t.lc).toDateString() : null;
 
     if (!data.s) {
-      data.s = { tc: 0, tr: { a: 0, e: 0, d: 0 }, tt: 0, cs: 0, dc: 0 };
+      data.s = this.emptyStats();
     }
 
     data.s.tc = (data.s.tc || 0) + 1;
@@ -528,7 +567,8 @@ export class UnifiedSpaceshipStorage {
     const currentStreak = data.s?.cs || 0;
     const dailyCollections = data.s?.dc || 0;
 
-    const streakMultiplier = 1.0;
+    // Consecutive collection days pay 3% each, capped at +30%.
+    const streakMultiplier = 1 + Math.min(0.3, 0.03 * Math.max(0, currentStreak - 1));
 
     return {
       currentStreak,
@@ -539,8 +579,9 @@ export class UnifiedSpaceshipStorage {
 
   static getCollectionCount(locationId: string): number {
     const data = this.getData();
-    const collections = Object.keys(data.c).filter((key) => key.startsWith(locationId.split("_")[0]));
-    return collections.length;
+    const counted = data.n?.[locationId] ?? 0;
+    // Older saves only kept a timestamp; count those as one collection.
+    return counted > 0 ? counted : data.c[locationId] ? 1 : 0;
   }
 
   static shouldProcessPassive(): boolean {
@@ -675,6 +716,7 @@ export class UnifiedSpaceshipStorage {
       r: data.r,
       u: data.u,
       c: data.c,
+      n: data.n,
       s: data.s,
       t: data.t,
     };
@@ -712,6 +754,7 @@ export class UnifiedSpaceshipStorage {
       r: compactData.r || { a: 300, e: 200, d: 250 },
       u: compactData.u || { l: 1, ef: 1.0, rn: 500, st: 1000, m: 1.0 },
       c: expandedCollections,
+      n: compactData.n || {},
       t: compactData.t || {},
       s: compactData.s || { tc: 0, tr: { a: 0, e: 0, d: 0 }, tt: 0, cs: 0, dc: 0, dcp: 0, dcs: 0, dcg: 0, lcd: new Date().toDateString() },
     };
@@ -750,7 +793,7 @@ export class UnifiedSpaceshipStorage {
     const today = new Date().toDateString();
 
     if (!data.s) {
-      data.s = { tc: 0, tr: { a: 0, e: 0, d: 0 }, tt: 0, cs: 0, dc: 0, dcp: 0, dcs: 0, dcg: 0, lcd: today };
+      data.s = this.emptyStats(today);
       this.saveData(data);
     }
 

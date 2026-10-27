@@ -15,6 +15,7 @@ import { markPlanetAsVisited, markSystemAsVisited } from "../Utils/VisitHistory.
 import { debugConfig } from "../Utils/DebugConfig.tsx";
 import { useAtlasKeySequence } from "../Hooks/useAtlasKeySequence.tsx";
 import DidYouKnow from "../Components/DidYouKnow.tsx";
+import ExplorationLab from "../Components/ExplorationLab.tsx";
 import SystemIcon from "../Icons/SystemIcon.tsx";
 import GalaxyIcon from "../Icons/GalaxyIcon.tsx";
 import CoordinatesIcon from "../Icons/CoordinatesIcon.tsx";
@@ -165,6 +166,8 @@ const PlanetLayout: React.FC<PlanetLayoutProps> = ({ planet, system, galaxy, pla
                 </div>
               </div>
             </div>
+
+            <ExplorationLab planetName={planet.name} planetType={planet.planet_type} systemIndex={system.index} coordinates={coordinates} />
 
             <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 mb-8 shadow-2xl p-4 sm:p-6 text-center">
               <button onClick={() => (window.location.href = `/system/${system.index}`)} className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-gray-600 via-gray-700 to-gray-600 hover:from-gray-700 hover:via-gray-800 hover:to-gray-700 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg backdrop-blur-sm">

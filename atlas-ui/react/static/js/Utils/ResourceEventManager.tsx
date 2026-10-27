@@ -1,6 +1,6 @@
 // atlas-ui/react/static/js/Utils/ResourceEventManager.tsx
 
-export type ResourceEventType = "resources_updated" | "mining_completed";
+export type ResourceEventType = "resources_updated" | "mining_completed" | "codex_completed";
 
 export interface ResourceEvent {
   type: ResourceEventType;

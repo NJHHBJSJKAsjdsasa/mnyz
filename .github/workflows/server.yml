@@ -1,0 +1,54 @@
+name: server
+
+on:
+  push:
+    paths:
+      - "server/**"
+      - "pymodules/**"
+      - "tests/**"
+      - "requirements-server.txt"
+      - ".github/workflows/server.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - "tests/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: atlas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ATLAS_DATABASE_URL: postgresql://postgres:atlas@127.0.0.1:5432/atlas
+      ATLAS_TEST_DATABASE_URL: postgresql://postgres:atlas@127.0.0.1:5432/atlas_test
+      ATLAS_REDIS_URL: memory://
+      ATLAS_RATE_LIMIT: "off"
+      ATLAS_SKIP_SELF_CHECK: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements-server.txt pytest
+      - name: Create databases
+        run: |
+          psql postgresql://postgres:atlas@127.0.0.1:5432/postgres -c "CREATE DATABASE atlas"
+          psql postgresql://postgres:atlas@127.0.0.1:5432/postgres -c "CREATE DATABASE atlas_test"
+      - name: Migrate
+        run: python -m server.cli migrate
+      - name: Compile
+        run: python -m compileall -q server tests pymodules
+      - name: Tests
+        run: python -m pytest tests -q

@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import json
+from contextlib import contextmanager
 from typing import Optional, Dict, Any
 
 class SQLiteCacheManager:
@@ -14,10 +15,19 @@ class SQLiteCacheManager:
         
         # Initialize database
         self._init_db()
+
+    @contextmanager
+    def _connection(self):
+        """Open a connection and always close it (sqlite3's `with` only commits)."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            yield conn
+        finally:
+            conn.close()
     
     def _init_db(self):
         """Initialize the SQLite database"""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connection() as conn:
             cursor = conn.cursor()
             
             # Create galaxies table
@@ -69,7 +79,7 @@ class SQLiteCacheManager:
     def save_galaxy(self, x: int, y: int, z: int, galaxy_data: Dict[str, Any]) -> bool:
         """Save galaxy data to SQLite cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 data_json = json.dumps(galaxy_data)
                 
@@ -88,7 +98,7 @@ class SQLiteCacheManager:
     def get_galaxy(self, x: int, y: int, z: int) -> Optional[Dict[str, Any]]:
         """Get galaxy data from SQLite cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -106,7 +116,7 @@ class SQLiteCacheManager:
     def save_system(self, x: int, y: int, z: int, system_index: int, system_data: Dict[str, Any]) -> bool:
         """Save system data to SQLite cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 data_json = json.dumps(system_data)
                 
@@ -125,7 +135,7 @@ class SQLiteCacheManager:
     def get_system(self, x: int, y: int, z: int, system_index: int) -> Optional[Dict[str, Any]]:
         """Get system data from SQLite cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -143,7 +153,7 @@ class SQLiteCacheManager:
     def save_planet(self, x: int, y: int, z: int, system_index: int, planet_name: str, planet_data: Dict[str, Any]) -> bool:
         """Save planet data to SQLite cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 data_json = json.dumps(planet_data)
                 
@@ -162,7 +172,7 @@ class SQLiteCacheManager:
     def get_planet(self, x: int, y: int, z: int, system_index: int, planet_name: str) -> Optional[Dict[str, Any]]:
         """Get planet data from SQLite cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -180,7 +190,7 @@ class SQLiteCacheManager:
     def galaxy_exists(self, x: int, y: int, z: int) -> bool:
         """Check if galaxy exists in cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -196,7 +206,7 @@ class SQLiteCacheManager:
     def system_exists(self, x: int, y: int, z: int, system_index: int) -> bool:
         """Check if system exists in cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -212,7 +222,7 @@ class SQLiteCacheManager:
     def planet_exists(self, x: int, y: int, z: int, system_index: int, planet_name: str) -> bool:
         """Check if planet exists in cache"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -228,7 +238,7 @@ class SQLiteCacheManager:
     def get_cache_stats(self) -> Dict[str, int]:
         """Get cache statistics"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connection() as conn:
                 cursor = conn.cursor()
                 
                 # Get galaxy count

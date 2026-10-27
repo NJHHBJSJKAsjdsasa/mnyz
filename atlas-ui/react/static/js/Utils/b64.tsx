@@ -64,6 +64,27 @@ const base64ToUint8Array = (base64: string): Uint8Array => {
   return uint8Array;
 };
 
+export const decodeStoredValue = (encodedValue: string | null): string | null => {
+  if (encodedValue === null) return null;
+  try {
+    let uint8Array: Uint8Array;
+    if (encodedValue.startsWith("c:")) {
+      const compressed = base64ToUint8Array(encodedValue.slice(2));
+      uint8Array = pako.ungzip(compressed);
+    } else if (encodedValue.startsWith("u:")) {
+      uint8Array = base64ToUint8Array(encodedValue.slice(2));
+    } else {
+      const binary = atob(encodedValue);
+      const compressed = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) compressed[i] = binary.charCodeAt(i);
+      uint8Array = pako.ungzip(compressed);
+    }
+    return new TextDecoder().decode(uint8Array);
+  } catch {
+    return encodedValue;
+  }
+};
+
 export const setItem = (key: string, value: string): void => {
   const universeKey = getUniverseSpecificKey(key);
 
@@ -117,23 +138,7 @@ export const getItem = (key: string): string | null => {
   try {
     const encodedKey = btoa(encodeURIComponent(universeKey));
     const encodedValue = localStorage.getItem(encodedKey);
-    if (encodedValue === null) return null;
-
-    let uint8Array: Uint8Array;
-
-    if (encodedValue.startsWith("c:")) {
-      const compressed = base64ToUint8Array(encodedValue.slice(2));
-      uint8Array = pako.ungzip(compressed);
-    } else if (encodedValue.startsWith("u:")) {
-      uint8Array = base64ToUint8Array(encodedValue.slice(2));
-    } else {
-      const compressedString = atob(encodedValue);
-      const compressed = new Uint8Array(compressedString.split("").map((char) => char.charCodeAt(0)));
-      uint8Array = pako.ungzip(compressed);
-    }
-
-    const textDecoder = new TextDecoder();
-    return textDecoder.decode(uint8Array);
+    return decodeStoredValue(encodedValue) ?? localStorage.getItem(universeKey);
   } catch (error) {
     return localStorage.getItem(universeKey);
   }

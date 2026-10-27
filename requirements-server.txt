@@ -1,0 +1,17 @@
+# Atlas server runtime (docs/server/20 §4)
+# Local dev: pip install -r requirements-server.txt
+Flask==3.1.3
+pydantic==2.12.5
+psycopg[binary,pool]==3.3.6
+alembic==1.20.1
+SQLAlchemy==2.1.6
+PyJWT==2.15.1
+argon2-cffi==25.1.0
+redis==8.1.0
+cryptography==46.0.5
+
+# Production process manager (Linux containers only)
+gunicorn>=23.0,<24
+
+# Background jobs; the API runs without them via `python -m server.jobs.cli`
+celery[redis]>=5.4,<6

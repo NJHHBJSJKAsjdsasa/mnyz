@@ -87,6 +87,13 @@ class Galaxy:
             min(base_num_systems + growth_systems, self.base_max_systems), 0
         )
 
+    def get_solar_system_seed(self, index):
+        """Deterministic seed for the solar system at index."""
+        return int(
+            hashlib.sha256(f"{self.seed}-{seedmaster(8)}-{index}".encode()).hexdigest(),
+            16,
+        )
+
     def get_solar_system(self, index):
         self.calculate_num_systems()
         if index < 0 or index >= self.num_systems:
@@ -97,11 +104,6 @@ class Galaxy:
             # Import here to avoid circular imports
             from pymodules.__universe_init_solarsystem import SolarSystem
 
-            system_seed = int(
-                hashlib.sha256(
-                    f"{self.seed}-{seedmaster(8)}-{index}".encode()
-                ).hexdigest(),
-                16,
-            )
+            system_seed = self.get_solar_system_seed(index)
             self.solar_systems[index] = SolarSystem(system_seed, index, self.constants)
         return self.solar_systems[index]

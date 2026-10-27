@@ -8,7 +8,7 @@ import threading
 from typing import Optional, Dict, Any
 from flask import Flask, request, jsonify
 
-from pymodules.__atlas_fixed_vars import PORT, get_external_p2p_port
+from pymodules.__atlas_fixed_vars import PORT, P2P_DATA_DIR, get_external_p2p_port
 from pymodules.__atlas_p2pv2_routes import initialize_p2p_routes, get_p2p_routes, start_p2p_discovery, stop_p2p_discovery
 
 p2p_routes = None
@@ -29,14 +29,14 @@ def initialize_p2pv2_system(app: Flask):
         import os
 
         os.makedirs("internal_data/logs", exist_ok=True)
-        os.makedirs("internal_data/p2p", exist_ok=True)
+        os.makedirs(P2P_DATA_DIR, exist_ok=True)
 
         from pymodules.__atlas_p2pv2_routes import get_p2p_routes
 
         p2p_routes = get_p2p_routes()
 
         if p2p_routes is None:
-            p2p_routes = initialize_p2p_routes(app, "internal_data/p2p")
+            p2p_routes = initialize_p2p_routes(app, P2P_DATA_DIR)
             register_p2pv2_api(app)
 
         discovery_ready = threading.Event()

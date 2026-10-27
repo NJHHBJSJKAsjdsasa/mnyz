@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import Header from "../Components/Header.tsx";
 import CoordinateSelector from "../Components/CoordinateSelector.tsx";
 import VersionFooter from "../Components/VersionFooter.tsx";
+import ServerAuthPanel from "../Components/ServerAuthPanel.tsx";
 
 const CoordinateViewer3D = lazy(() => import("../Components/CoordinateViewer3D.tsx"));
 const SpaceshipPanel = lazy(() => import("../Components/SpaceshipPanel.tsx"));
@@ -16,6 +17,7 @@ import { SpaceshipTravelManager } from "../Utils/SpaceshipTravelCosts.tsx";
 import { SpaceshipResourceManager } from "../Utils/SpaceshipResources.tsx";
 import { UniverseDetection } from "../Utils/UniverseDetection.tsx";
 import { SeedSanitizer } from "../Utils/SeedSanitizer.tsx";
+import { ServerBridge } from "../Utils/ServerBridge.tsx";
 import NodeIdIcon from "../Icons/NodeIdIcon.tsx";
 import SeedIcon from "../Icons/SeedIcon.tsx";
 import BitBangIcon from "../Icons/BitBangIcon.tsx";
@@ -69,6 +71,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ error, version }) => {
 
   useEffect(() => {
     UnifiedSpaceshipStorage.migrateFromOldStorage();
+    ServerBridge.start();
 
     const checkUniverseType = () => {
       const remote = UniverseDetection.isRemoteUniverse();
@@ -182,21 +185,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ error, version }) => {
   }, []);
 
   const calculateTravelCost = React.useCallback((coordinates: Coordinates) => {
-    const distance = Math.floor(Math.sqrt(Math.pow(coordinates.x - 1000000, 2) + Math.pow(coordinates.y - 1000000, 2) + Math.pow(coordinates.z - 1000000, 2)) / 10000);
+    const distance = Math.floor(Math.sqrt(Math.pow(coordinates.x - 1000000, 2) + Math.pow(coordinates.y - 1000000, 2) + Math.pow(coordinates.z - 1000000, 2)));
 
-    const cost = SpaceshipResourceManager.calculateTravelCost("galaxy", distance);
-    const upgrade = SpaceshipResourceManager.getUpgrade();
+    const cost = SpaceshipTravelManager.getTravelCost("galaxy", distance);
+    const efficiency = SpaceshipResourceManager.getUpgrade().efficiency;
 
-    const firstPass = {
-      antimatter: Math.floor(cost.antimatter / upgrade.efficiency),
-      element115: Math.floor(cost.element115 / upgrade.efficiency),
-      deuterium: Math.floor(cost.deuterium / upgrade.efficiency),
-    };
-
+    // Efficiency is applied exactly once, in the same place executeTravel does it.
     const actualConsumption = {
-      antimatter: Math.floor(firstPass.antimatter / upgrade.efficiency),
-      element115: Math.floor(firstPass.element115 / upgrade.efficiency),
-      deuterium: Math.floor(firstPass.deuterium / upgrade.efficiency),
+      antimatter: Math.max(1, Math.floor(cost.antimatter / efficiency)),
+      element115: Math.max(1, Math.floor(cost.element115 / efficiency)),
+      deuterium: Math.max(1, Math.floor(cost.deuterium / efficiency)),
     };
 
     setTravelCost(actualConsumption);
@@ -291,16 +289,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ error, version }) => {
   }, [universeConfig?.cosmic_origin_time, calculateUniverseAge]);
 
   const handleSubmit = React.useCallback(() => {
-    const distance = Math.floor(Math.sqrt(Math.pow(currentCoordinates.x - 1000000, 2) + Math.pow(currentCoordinates.y - 1000000, 2) + Math.pow(currentCoordinates.z - 1000000, 2)) / 10000);
+    const distance = Math.floor(Math.sqrt(Math.pow(currentCoordinates.x - 1000000, 2) + Math.pow(currentCoordinates.y - 1000000, 2) + Math.pow(currentCoordinates.z - 1000000, 2)));
 
-    if (!SpaceshipTravelManager.canAffordTravel("galaxy", distance)) {
-      SpaceshipTravelManager.executeTravel("galaxy", distance);
-      return;
-    }
-
-    if (!SpaceshipTravelManager.executeTravel("galaxy", distance)) {
-      return;
-    }
+    // One call, one charge: "partial" still departs, "emergency" does not.
+    if (SpaceshipTravelManager.executeTravel("galaxy", distance) === "emergency") return;
 
     const form = document.createElement("form");
     form.method = "POST";
@@ -455,6 +447,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ error, version }) => {
             <VersionFooter version={version} showBadge />
           </div>
 
+          <ServerAuthPanel />
           <SpaceshipPanel />
           <TaskPanel />
         </div>

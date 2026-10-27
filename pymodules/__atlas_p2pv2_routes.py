@@ -11,7 +11,7 @@ from flask import Flask, request, jsonify, Response
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
-from pymodules.__atlas_fixed_vars import PORT, get_external_p2p_port
+from pymodules.__atlas_fixed_vars import PORT, VERSION, VERSION_HASH, get_external_p2p_port
 from pymodules.__atlas_p2pv2_discovery import AtlasP2PDiscovery, DiscoveredPeer
 from pymodules.__atlas_p2pv2_utils import KnownPeerManager, FailedPeerManager, NetworkUtils, SelfConnectionDetector, FailureType, PeerStatus
 from pymodules.__atlas_p2pv2_logger import get_p2p_logger
@@ -60,6 +60,16 @@ def smart_request(ip: str, port: str, endpoint: str, preferred_protocol: str = N
     raise last_exception
 
 
+def _strict_integrity() -> bool:
+    """ATLAS_STRICT_INTEGRITY=1 restores exact-hash peer verification.
+
+    Default is permissive: the integrity hash only has to *match the protocol
+    version* to federate, otherwise every fork or local patch becomes a separate
+    network (upstream peers still hash their own __main__.py).
+    """
+    return os.getenv("ATLAS_STRICT_INTEGRITY", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 class AtlasP2PRoutes:
 
     def __init__(self, data_dir: str = "p2p_data"):
@@ -80,7 +90,7 @@ class AtlasP2PRoutes:
             self.crypto_manager = None
             self.node_id = self._generate_node_id()
 
-        self.main_file_hash = self._calculate_main_file_hash()
+        self.integrity_hash = self._calculate_integrity_hash()
 
         self.discovery: Optional[AtlasP2PDiscovery] = None
         self.known_peer_manager = KnownPeerManager(data_dir)
@@ -100,16 +110,32 @@ class AtlasP2PRoutes:
         random_data = os.urandom(16)
         return hashlib.sha256(random_data).hexdigest()
 
-    def _calculate_main_file_hash(self) -> str:
+    @staticmethod
+    def _parse_peer_port(value, default: int = PORT) -> int:
+        """Normalize a peer-declared port; the peer may listen on a non-default port."""
         try:
-            main_path = os.path.join(os.getcwd(), "__main__.py")
-            with open(main_path, "rb") as f:
-                file_content = f.read()
-            file_hash = hashlib.sha256(file_content).hexdigest()
-            self.logger.initialization("P2P", f"Atlas integrity hash: {file_hash[:16]}...")
-            return file_hash
-        except Exception as e:
-            return "unknown"
+            port = int(value)
+        except (TypeError, ValueError):
+            return default
+        return port if 1 <= port <= 65535 else default
+
+    def _calculate_integrity_hash(self) -> str:
+        """Protocol fingerprint shared by every node running this Atlas version.
+
+        Hashing `__main__.py` (the old behaviour) made any local edit - even a
+        comment - look like a tampered client, so every peer answered 403 and the
+        node banned them for 30 days. Set ATLAS_INTEGRITY_HASH to pin a private
+        network or to enforce an exact-file policy again.
+        """
+        override = os.getenv("ATLAS_INTEGRITY_HASH")
+        if override:
+            integrity_hash = override
+        else:
+            payload = f"ATLAS_P2P_V2|2.0|{VERSION}|{VERSION_HASH}"
+            integrity_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+        self.logger.initialization("P2P", f"Atlas integrity hash: {integrity_hash[:16]}...")
+        return integrity_hash
 
     async def start_discovery(self) -> bool:
         try:
@@ -199,8 +225,15 @@ class AtlasP2PRoutes:
         import uuid
 
         request_id = str(uuid.uuid4())[:8]
+
+        # A second instance on this machine announces our public IP, which hairpin
+        # NAT usually cannot reach; fall back to loopback for our own address.
+        if self.external_ip and ip == self.external_ip and port != get_external_p2p_port():
+            ip = "127.0.0.1"
+
         peer_key = f"{ip}:{port}"
 
+        self.stats["connections_attempted"] += 1
         self.logger.handshake_detail(request_id, peer_key, "Starting handshake attempt")
 
         if self.known_peer_manager.is_known_peer(ip, port):
@@ -233,7 +266,7 @@ class AtlasP2PRoutes:
             except Exception as e:
                 self.logger.technical_info(f"P2P Handshake: Config loading failed - {e}")
 
-            handshake_data = {"type": "atlas_handshake_hello", "sender_id": self.node_id, "magic": "ATLAS_P2P_V2", "protocol_version": "2.0", "node_capabilities": ["gossip", "discovery", "messaging"], "timestamp": time.time(), "external_ip": self.external_ip, "listen_port": get_external_p2p_port(), "universe_data": universe_data, "integrity_hash": self.main_file_hash}
+            handshake_data = {"type": "atlas_handshake_hello", "sender_id": self.node_id, "magic": "ATLAS_P2P_V2", "protocol_version": "2.0", "node_capabilities": ["gossip", "discovery", "messaging"], "timestamp": time.time(), "external_ip": self.external_ip, "listen_port": get_external_p2p_port(), "universe_data": universe_data, "integrity_hash": self.integrity_hash}
 
             preferred_protocol = self.known_peer_manager.get_preferred_protocol(ip, port)
 
@@ -300,14 +333,13 @@ class AtlasP2PRoutes:
             if self.known_peer_manager.is_known_peer(current_ip, current_port):
                 self.known_peer_manager.mark_peer_check_failed(current_ip, current_port)
             else:
-                self.logger.security_alert(f"SUSPICIOUS: Unknown peer {peer_key} discovered in DHT but times out on handshake")
-                self.logger.security_alert(f"This could be port scanning, replay attacks, or malicious behavior")
-                self.logger.security_alert(f"Pattern: DHT announce without proper Atlas handshake response")
+                # Public DHT swarms are mostly non-Atlas endpoints, so a timeout is
+                # expected noise rather than an intrusion: apply a short network
+                # cooldown and retry later instead of a 30-day malicious ban.
+                self.logger.handshake_detail(request_id, peer_key, "Not an Atlas endpoint (timeout) - short cooldown, will retry")
                 from pymodules.__atlas_p2pv2_utils import FailureType
 
-                self._mark_peer_failed(current_ip, current_port, "Suspicious timeout - potential intrusion attempt", FailureType.MALICIOUS)
-
-                self._log_security_incident(current_ip, current_port, "DHT_TIMEOUT_INTRUSION", f"Peer in DHT but timeouts on Atlas handshake - possible scanning/replay attack")
+                self._mark_peer_failed(current_ip, current_port, "Handshake timeout", FailureType.NETWORK)
 
         except requests.exceptions.ConnectionError as e:
             peer_key = f"{current_ip}:{current_port}"
@@ -335,17 +367,21 @@ class AtlasP2PRoutes:
                 return False
 
         received_hash = response_data.get("integrity_hash")
-        expected_hash = self.main_file_hash
+        expected_hash = self.integrity_hash
 
         if received_hash != expected_hash:
-            self.logger.security_alert("INTEGRITY VERIFICATION FAILED!")
-            self.logger.security_alert(f"Expected: {expected_hash[:16]}...")
-            self.logger.security_alert(f"Received: {received_hash[:16] if received_hash else 'None'}...")
-            self.logger.security_alert("This peer is running modified/different Atlas code!")
             remote_ip = getattr(self, "_current_handshake_ip", "unknown")
             remote_port = getattr(self, "_current_handshake_port", "unknown")
-            self._log_security_incident(remote_ip, remote_port, "INTEGRITY_MISMATCH", f"Received hash {received_hash[:16] if received_hash else 'None'}... vs expected {expected_hash[:16]}...")
-            return False
+            mismatch = f"received {received_hash[:16] if received_hash else 'None'}... vs expected {expected_hash[:16]}..."
+
+            if _strict_integrity():
+                self.logger.security_alert(f"INTEGRITY VERIFICATION FAILED! {mismatch}")
+                self._log_security_incident(remote_ip, remote_port, "INTEGRITY_MISMATCH", mismatch)
+                return False
+
+            # Permissive mode: magic/protocol/timestamp are still enforced below, so
+            # a fork keeps federating with upstream nodes running the stock file.
+            self.logger.handshake_detail("", f"{remote_ip}:{remote_port}", f"Integrity hash differs ({mismatch}) - accepted in permissive mode")
 
         received_timestamp = response_data.get("timestamp")
         if received_timestamp:
@@ -450,8 +486,14 @@ class AtlasP2PRoutes:
         except Exception as e:
             self.logger.technical_info(f"Failed to log security incident: {e}")
 
-    def _classify_failure_type(self, reason: str) -> FailureType:
+    @staticmethod
+    def _classify_failure_type(reason: str) -> FailureType:
         reason_lower = reason.lower()
+
+        # Network symptoms take precedence: a timeout towards a public DHT entry is
+        # not evidence of malice, whatever the wording of the message.
+        if "timeout" in reason_lower or "connection refused" in reason_lower or "unreachable" in reason_lower:
+            return FailureType.NETWORK
 
         if "malicious" in reason_lower or "integrity" in reason_lower or "intrusion" in reason_lower or "suspicious" in reason_lower or "replay" in reason_lower or "scanning" in reason_lower:
             return FailureType.MALICIOUS
@@ -575,6 +617,7 @@ class AtlasP2PRoutes:
                 remote_ip = request.remote_addr
                 remote_node_id = data.get("sender_id", "unknown")
                 remote_hash = data.get("integrity_hash", "unknown")
+                remote_port = self._parse_peer_port(data.get("listen_port"))
 
                 incoming_protocol = "https" if request.is_secure else "http"
 
@@ -583,23 +626,23 @@ class AtlasP2PRoutes:
                 self.logger.handshake_detail(incoming_id, remote_ip, f"Remote hash: {remote_hash[:16]}...")
                 self.logger.handshake_detail(incoming_id, remote_ip, f"Protocol: {incoming_protocol}")
 
-                is_known = self.known_peer_manager.is_known_peer(remote_ip, PORT)
+                is_known = self.known_peer_manager.is_known_peer(remote_ip, remote_port)
 
                 if is_known:
-                    self.known_peer_manager.mark_peer_seen(remote_ip, get_external_p2p_port())
+                    self.known_peer_manager.mark_peer_seen(remote_ip, remote_port)
 
                 self.logger.handshake_detail(incoming_id, remote_ip, f"Processing handshake (known={is_known})")
 
                 validation_result = self._validate_handshake_request(data)
                 if not validation_result["valid"]:
                     if validation_result["reason"] == "integrity_mismatch":
-                        self._mark_peer_failed(remote_ip, PORT, "Malicious agent")
+                        self._mark_peer_failed(remote_ip, remote_port, "Malicious agent")
                         return jsonify({"error": "Integrity verification failed"}), 403
                     return jsonify({"error": "Invalid handshake request"}), 400
 
                 self.stats["messages_received"] += 1
 
-                if self.failed_peer_manager.is_peer_banned(remote_ip, PORT):
+                if self.failed_peer_manager.is_peer_banned(remote_ip, remote_port):
                     return jsonify({"error": "Peer is banned"}), 403
 
                 received_universe = data.get("universe_data", {})
@@ -621,7 +664,7 @@ class AtlasP2PRoutes:
                 except Exception as e:
                     self.logger.technical_info(f"P2P Response: Config loading failed - {e}")
 
-                response_data = {"type": "atlas_handshake_welcome", "sender_id": self.node_id, "magic": "ATLAS_P2P_V2", "protocol_version": "2.0", "node_capabilities": ["gossip", "discovery", "messaging"], "handshake_accepted": True, "timestamp": time.time(), "external_ip": self.external_ip, "listen_port": get_external_p2p_port(), "universe_data": universe_data, "integrity_hash": self.main_file_hash}
+                response_data = {"type": "atlas_handshake_welcome", "sender_id": self.node_id, "magic": "ATLAS_P2P_V2", "protocol_version": "2.0", "node_capabilities": ["gossip", "discovery", "messaging"], "handshake_accepted": True, "timestamp": time.time(), "external_ip": self.external_ip, "listen_port": get_external_p2p_port(), "universe_data": universe_data, "integrity_hash": self.integrity_hash}
 
                 remote_node_id = data.get("sender_id", "unknown")
                 received_universe = data.get("universe_data", {})
@@ -629,15 +672,13 @@ class AtlasP2PRoutes:
                 seed = received_universe.get("seed")
                 integrity_hash = data.get("integrity_hash")
 
-                remote_port = data.get("listen_port", PORT)
-
                 self.known_peer_manager.add_known_peer(remote_ip, remote_port, remote_node_id, data.get("protocol_version", "2.0"), data.get("node_capabilities", []), preferred_protocol=incoming_protocol, cosmic_origin_time=cosmic_origin, seed=seed, integrity_hash=integrity_hash)
-                self.known_peer_manager.mark_peer_seen(remote_ip, get_external_p2p_port())
+                self.known_peer_manager.mark_peer_seen(remote_ip, remote_port)
 
                 self.stats["messages_sent"] += 1
                 self.stats["handshakes_completed"] += 1
 
-                self.logger.peer_connected(f"{remote_ip}:{PORT}", remote_node_id)
+                self.logger.peer_connected(f"{remote_ip}:{remote_port}", remote_node_id)
 
                 self.logger.handshake_detail(incoming_id, remote_ip, "Handshake COMPLETED")
                 self.logger.handshake_detail(incoming_id, remote_ip, f"Integrity verified: {remote_hash[:16]}...")
@@ -692,11 +733,15 @@ class AtlasP2PRoutes:
                 return {"valid": False, "reason": f"missing_field_{field}"}
 
         received_hash = data.get("integrity_hash")
-        if received_hash != self.main_file_hash:
-            self.logger.security_alert(f"SECURITY: Integrity verification failed from {data.get('sender_id', 'unknown')[:16]}...")
-            self.logger.security_alert(f"Expected: {self.main_file_hash[:16]}...")
-            self.logger.security_alert(f"Received: {received_hash[:16] if received_hash else 'None'}...")
-            return {"valid": False, "reason": "integrity_mismatch"}
+        if received_hash != self.integrity_hash:
+            sender = data.get("sender_id", "unknown")[:16]
+            mismatch = f"expected {self.integrity_hash[:16]}..., received {received_hash[:16] if received_hash else 'None'}..."
+
+            if _strict_integrity():
+                self.logger.security_alert(f"SECURITY: Integrity verification failed from {sender}... ({mismatch})")
+                return {"valid": False, "reason": "integrity_mismatch"}
+
+            self.logger.technical_info(f"Integrity hash differs from {sender}... ({mismatch}) - accepted in permissive mode")
 
         is_valid = data.get("type") == "atlas_handshake_hello" and data.get("magic") == "ATLAS_P2P_V2" and data.get("protocol_version") == "2.0"
 
