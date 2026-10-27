@@ -95,7 +95,8 @@ def _truncate(dsn: str) -> None:
                      shareholder_meetings, resolutions, resolution_votes,
                      related_party_transactions, commercial_courts, court_cases,
                      court_evidence, court_hearings, court_judgments, court_appeals,
-                     court_recognition, asset_freezes, insolvency_cases, insolvency_claims,
+                     court_recognition, court_panels, court_panel_members,
+                     asset_freezes, insolvency_cases, insolvency_claims,
                      restructuring_plans, plan_votes, asset_sales CASCADE
             """
         )

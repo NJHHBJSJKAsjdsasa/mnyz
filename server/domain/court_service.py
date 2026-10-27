@@ -285,7 +285,7 @@ def hold_hearing(conn, case_id: str) -> dict:
 
 
 # ------------------------------------------------------------------ appeal
-def appeal(conn, *, actor: dict, case_id: str) -> dict:
+def appeal(conn, *, actor: dict, case_id: str, panel: bool = False) -> dict:
     case = legal.case_by_id(conn, case_id, for_update=True)
     if case is None:
         raise NotFound("案件不存在")
@@ -316,6 +316,19 @@ def appeal(conn, *, actor: dict, case_id: str) -> dict:
     row = legal.insert_appeal(
         conn, case_id=case_id, judgment_id=str(judgment["id"]), appellant_actor_id=actor_id
     )
+    if panel:
+        # 08 §12.1: a player panel hears it; the verdict arrives with the votes
+        from . import court_panel
+
+        drawn = court_panel.draw(conn, case_id=case_id, appeal_id=str(row["id"]))
+        legal.set_case_status(conn, case_id, "appealed")
+        return {
+            "case_id": case_id,
+            "appeal_id": str(row["id"]),
+            "fee": str(fee),
+            "panel": drawn,
+            "outcome": {"result": "pending_panel", "reason": "合议庭审理中"},
+        }
     # one-shot appellate review, deterministic per case
     rng = stream(case_id, "appeal", actor_id)
     overturned = rng.next() < 0.30

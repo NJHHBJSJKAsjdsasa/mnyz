@@ -541,13 +541,13 @@ def insert_claim(conn, *, case_id: str, claimant_actor_id: str, kind: str,
 def claims_of(conn, case_id: str, *, status: str | None = None) -> list[dict]:
     if status:
         return conn.execute(
-            "SELECT id, case_id, claimant_actor_id, kind, amount, paid, status "
+            "SELECT id, case_id, claimant_actor_id, kind, amount, paid, paid_q1, status "
             "FROM insolvency_claims WHERE case_id = %s AND status = %s "
             "ORDER BY amount DESC",
             (case_id, status),
         ).fetchall()
     return conn.execute(
-        "SELECT id, case_id, claimant_actor_id, kind, amount, paid, status "
+        "SELECT id, case_id, claimant_actor_id, kind, amount, paid, paid_q1, status "
         "FROM insolvency_claims WHERE case_id = %s ORDER BY amount DESC",
         (case_id,),
     ).fetchall()
@@ -555,6 +555,14 @@ def claims_of(conn, case_id: str, *, status: str | None = None) -> list[dict]:
 
 def admit_claim(conn, claim_id: str) -> None:
     conn.execute("UPDATE insolvency_claims SET status = 'admitted' WHERE id = %s", (claim_id,))
+
+
+def pay_claim_q1(conn, claim_id: str, *, paid_q1: Decimal, paid: Decimal,
+                 fully: bool) -> None:
+    conn.execute(
+        "UPDATE insolvency_claims SET paid = %s, paid_q1 = %s, status = %s WHERE id = %s",
+        (paid, paid_q1, "paid" if fully else "admitted", claim_id),
+    )
 
 
 def pay_claim(conn, claim_id: str, amount: Decimal, *, fully: bool) -> None:
@@ -733,3 +741,92 @@ def conflicting_recognition(conn, judgment_id: str, region: str) -> dict | None:
         """,
         (judgment_id, region, judgment_id),
     ).fetchone()
+
+
+# ------------------------------------------------------------------ panels
+PANEL_COLUMNS = "id, case_id, appeal_id, status, verdict, dissent, created_at, decided_at"
+
+
+def insert_panel(conn, *, case_id: str, appeal_id: str | None) -> dict:
+    return conn.execute(
+        f"""
+        INSERT INTO court_panels (case_id, appeal_id)
+        VALUES (%s, %s)
+        RETURNING {PANEL_COLUMNS}
+        """,
+        (case_id, appeal_id),
+    ).fetchone()
+
+
+def panel_by_id(conn, panel_id: str, *, for_update: bool = False) -> dict | None:
+    sql = f"SELECT {PANEL_COLUMNS} FROM court_panels WHERE id = %s"
+    if for_update:
+        sql += " FOR UPDATE"
+    return conn.execute(sql, (panel_id,)).fetchone()
+
+
+def panel_of_case(conn, case_id: str) -> dict | None:
+    return conn.execute(
+        f"SELECT {PANEL_COLUMNS} FROM court_panels WHERE case_id = %s "
+        "ORDER BY created_at DESC LIMIT 1",
+        (case_id,),
+    ).fetchone()
+
+
+def insert_panel_member(conn, *, panel_id: str, actor_id: str, slot: int, role: str,
+                        status: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO court_panel_members (panel_id, actor_id, slot, role, status)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (panel_id, actor_id) DO NOTHING
+        """,
+        (panel_id, actor_id, slot, role, status),
+    )
+
+
+def panel_members(conn, panel_id: str) -> list[dict]:
+    return conn.execute(
+        """
+        SELECT m.panel_id, m.actor_id, m.slot, m.role, m.status, m.vote, m.reason,
+               m.voted_at, a.code, a.display_name, p.controller
+          FROM court_panel_members m
+          JOIN economic_actors a ON a.id = m.actor_id
+          LEFT JOIN players p ON p.id = a.player_id
+         WHERE m.panel_id = %s
+         ORDER BY m.slot
+        """,
+        (panel_id,),
+    ).fetchall()
+
+
+def set_panel_member(conn, panel_id: str, actor_id: str, *, status: str,
+                     role: str | None = None, vote: str | None = None,
+                     reason: str | None = None) -> None:
+    sets = ["status = %s"]
+    params: list = [status]
+    if role is not None:
+        sets.append("role = %s")
+        params.append(role)
+    if vote is not None:
+        sets.append("vote = %s")
+        params.append(vote)
+    if reason is not None:
+        sets.append("reason = %s")
+        params.append(reason)
+    if status == "voted":
+        sets.append("voted_at = now()")
+    params.extend([panel_id, actor_id])
+    conn.execute(
+        f"UPDATE court_panel_members SET {', '.join(sets)} "
+        "WHERE panel_id = %s AND actor_id = %s",
+        params,
+    )
+
+
+def finish_panel(conn, panel_id: str, *, verdict: str, dissent: list[dict]) -> None:
+    conn.execute(
+        "UPDATE court_panels SET status = 'decided', verdict = %s, dissent = %s::jsonb, "
+        "decided_at = now() WHERE id = %s",
+        (verdict, json.dumps(dissent, default=str), panel_id),
+    )

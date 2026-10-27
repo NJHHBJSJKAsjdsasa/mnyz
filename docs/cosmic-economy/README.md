@@ -120,6 +120,8 @@ python sim/simulate.py --only low # 单场景
 | `0118_court_enforcement_2pc` | ✅ 已落地 | 承认后执行走 2PC、冲突判决自动驳回、2 个集成测试 |
 | `0119_revenue_split` | ✅ 已落地 | `revenue_collections`/`revenue_split_rules`/`revenue_split_runs`、`revenue_service`、job `revenue_split_tick`、3 个集成测试 |
 | `0120_price_index` | ✅ 已落地 | `price_indices`/`price_index_points`/`mm_quotes`、`market_index`（指数+报价）、`api/v1/market.py`、job `price_index_tick`、前端 `StockMarketPanel`、5 个集成测试 |
+| `0121_court_panel` | ✅ 已落地 | `court_panels`/`court_panel_members`、`court_panel`（抽签/回避/表决/异议）、`api/v1/court.py` 端点、3 个集成测试 |
+| `0122_liquidation_fx` | ✅ 已落地 | `insolvency_claims.paid_q1`、`insolvency_service` 多币种按 Q1 等值分配、1 个集成测试 |
 
 `0110` 已实现的能力：
 

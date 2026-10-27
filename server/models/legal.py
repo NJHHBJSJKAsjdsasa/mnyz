@@ -92,3 +92,17 @@ class RecognitionDecisionRequest(StrictModel):
 
 class EnforceRequest(StrictModel):
     region: str = Field(default="", max_length=32)
+
+
+class AppealRequest(StrictModel):
+    panel: bool = False
+
+
+class StrikeRequest(StrictModel):
+    member_actor_id: str = Field(min_length=8, max_length=64)
+    for_cause: bool = False
+
+
+class PanelVoteRequest(StrictModel):
+    choice: str = Field(pattern="^(upheld|overturned)$")
+    reason: str = Field(default="", max_length=300)

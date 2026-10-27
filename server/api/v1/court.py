@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from flask import Blueprint, g
 
-from ...domain import court_service, currency_service
+from ...domain import court_panel, court_service, currency_service
 from ...infra.context import db
 from ...infra.errors import Forbidden
 from ...models.legal import (
+    AppealRequest,
     CourtCaseRequest,
     EnforceRequest,
     EvidenceRequest,
     FreezeRequest,
+    PanelVoteRequest,
     RecognitionDecisionRequest,
     RecognitionRequest,
+    StrikeRequest,
 )
 from ...repo import players as player_repo
 from ..deps import (
@@ -112,12 +115,61 @@ def add_evidence(case_id: str):
 @require_auth(write=True)
 @rate_limit("court_appeal", 10, 3600)
 def appeal(case_id: str):
+    body = parse_model(AppealRequest)
+
     def action(conn, player):
         return court_service.appeal(
-            conn, actor=currency_service.actor_for_player(conn, player), case_id=case_id
+            conn,
+            actor=currency_service.actor_for_player(conn, player),
+            case_id=case_id,
+            panel=body.panel,
         )
 
-    return _write({"case": case_id, "appeal": True}, action)
+    return _write({"case": case_id, "appeal": True, "panel": body.panel}, action)
+
+
+@bp.get("/court/panels/<panel_id>")
+@require_auth()
+@rate_limit("court_panel", 120, 60)
+def panel_detail(panel_id: str):
+    with db().connection() as conn:
+        return success(court_panel.detail(conn, panel_id))
+
+
+@bp.post("/court/panels/<panel_id>/strike")
+@require_auth(write=True)
+@rate_limit("court_panel_strike", 20, 3600)
+def panel_strike(panel_id: str):
+    body = parse_model(StrikeRequest)
+
+    def action(conn, player):
+        return court_panel.strike(
+            conn,
+            panel_id=panel_id,
+            actor=currency_service.actor_for_player(conn, player),
+            member_actor_id=body.member_actor_id,
+            for_cause=body.for_cause,
+        )
+
+    return _write({"panel": panel_id, "strike": body.member_actor_id}, action)
+
+
+@bp.post("/court/panels/<panel_id>/vote")
+@require_auth(write=True)
+@rate_limit("court_panel_vote", 20, 3600)
+def panel_vote(panel_id: str):
+    body = parse_model(PanelVoteRequest)
+
+    def action(conn, player):
+        return court_panel.vote(
+            conn,
+            panel_id=panel_id,
+            actor=currency_service.actor_for_player(conn, player),
+            choice=body.choice,
+            reason=body.reason,
+        )
+
+    return _write({"panel": panel_id, "vote": body.choice}, action)
 
 
 @bp.post("/court/cases/<case_id>/enforce")

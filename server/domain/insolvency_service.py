@@ -36,6 +36,56 @@ def _company(conn, ticker: str, *, for_update: bool = False) -> dict:
     return company
 
 
+# ------------------------------------------------------------------ money helpers
+def _holdings(conn, actor_id: str) -> dict[str, Decimal]:
+    rows = conn.execute(
+        "SELECT currency_code, balance FROM currency_accounts "
+        "WHERE actor_id = %s AND balance > 0 ORDER BY currency_code",
+        (actor_id,),
+    ).fetchall()
+    return {row["currency_code"]: Decimal(row["balance"]) for row in rows}
+
+
+def _base_values(conn) -> dict[str, Decimal]:
+    rows = conn.execute("SELECT code, base_value FROM currencies").fetchall()
+    return {row["code"]: Decimal(row["base_value"]) for row in rows}
+
+
+def _q1(holdings: dict[str, Decimal], base: dict[str, Decimal]) -> Decimal:
+    return sum((balance * base.get(code, Decimal(1)) for code, balance in holdings.items()),
+               Decimal(0))
+
+
+def _pay_q1(conn, *, treasury: str, claimant: str, want_q1: Decimal,
+            holdings: dict[str, Decimal], base: dict[str, Decimal], kind: str,
+            case_id: str, memo: str) -> Decimal:
+    """Pay ``want_q1`` out of every currency proportionally to its Q1 share."""
+    total_q1 = _q1(holdings, base)
+    if want_q1 <= 0 or total_q1 <= 0:
+        return Decimal(0)
+    paid_q1 = Decimal(0)
+    for code in list(holdings):
+        balance = holdings[code]
+        if balance <= 0:
+            continue
+        unit = base.get(code, Decimal(1))
+        share_q1 = balance * unit
+        take = min(balance, q4(want_q1 * share_q1 / total_q1 / unit))
+        if take <= 0:
+            continue
+        currency_service.post(
+            conn,
+            kind=kind,
+            moves=[Move(treasury, code, -take), Move(claimant, code, take)],
+            ref_type="insolvency",
+            ref_id=case_id,
+            memo=f"{memo} ({code})",
+        )
+        holdings[code] = balance - take
+        paid_q1 += take * unit
+    return paid_q1
+
+
 def _balance(conn, actor_id: str, currency_code: str = SETTLEMENT_CURRENCY) -> Decimal:
     row = currency_repo.account(conn, actor_id, currency_code)
     return Decimal(row["balance"]) if row else Decimal(0)
@@ -270,25 +320,26 @@ def liquidate(conn, *, actor: dict, case_id: str) -> dict:
     if company is None:
         raise NotFound("公司不存在")
     treasury = str(company["treasury_actor_id"])
-    estate = _balance(conn, treasury)
-    if estate <= 0:
+    holdings = _holdings(conn, treasury)
+    base = _base_values(conn)
+    unit = base[SETTLEMENT_CURRENCY]
+    estate_q1 = _q1(holdings, base)
+    if estate_q1 <= 0:
         raise Unprocessable("公司没有可分配财产")
 
     admin = str(case["administrator_actor_id"]) if case["administrator_actor_id"] else None
-    fee = min(estate, max(ADMIN_FEE_MIN, q4(estate * ADMIN_FEE_BPS / Decimal(10_000))))
-    fee = min(fee, ADMIN_FEE_MAX, estate)
+    estate_cc4 = estate_q1 / unit
+    fee = min(estate_cc4, max(ADMIN_FEE_MIN, q4(estate_cc4 * ADMIN_FEE_BPS / Decimal(10_000))))
+    fee = min(fee, ADMIN_FEE_MAX, estate_cc4)
     payments: list[dict] = []
     if fee > 0 and admin:
-        currency_service.post(
-            conn,
-            kind="insolvency_admin_fee",
-            moves=[Move(treasury, SETTLEMENT_CURRENCY, -fee), Move(admin, SETTLEMENT_CURRENCY, fee)],
-            ref_type="insolvency",
-            ref_id=case_id,
-            memo="administrator fee",
+        paid_fee = _pay_q1(
+            conn, treasury=treasury, claimant=admin, want_q1=fee * unit,
+            holdings=holdings, base=base, kind="insolvency_admin_fee",
+            case_id=case_id, memo="administrator fee",
         )
-        estate -= fee
-        payments.append({"claimant": "administrator", "amount": str(fee)})
+        payments.append({"claimant": "administrator",
+                         "amount": str(q4(paid_fee / unit)), "q1": str(q4(paid_fee))})
 
     claims = [
         row for row in legal.claims_of(conn, case_id)
@@ -296,56 +347,52 @@ def liquidate(conn, *, actor: dict, case_id: str) -> dict:
     ]
     for cls in CLAIM_CLASSES:
         group = [row for row in claims if row["kind"] == cls]
-        total = sum((Decimal(row["amount"]) - Decimal(row["paid"]) for row in group), Decimal(0))
-        if total <= 0 or estate <= 0:
+        outstanding = {
+            str(row["id"]): Decimal(row["amount"]) * unit - Decimal(row["paid_q1"] or 0)
+            for row in group
+        }
+        total_q1 = sum(outstanding.values(), Decimal(0))
+        remaining_q1 = _q1(holdings, base)
+        if total_q1 <= 0 or remaining_q1 <= 0:
             continue
-        ratio = min(Decimal(1), estate / total)
+        ratio = min(Decimal(1), remaining_q1 / total_q1)
         for row in group:
-            outstanding = Decimal(row["amount"]) - Decimal(row["paid"])
-            pay = q4(outstanding * ratio)
-            if pay <= 0:
-                continue
-            currency_service.post(
-                conn,
-                kind="insolvency_distribution",
-                moves=[
-                    Move(treasury, SETTLEMENT_CURRENCY, -pay),
-                    Move(str(row["claimant_actor_id"]), SETTLEMENT_CURRENCY, pay),
-                ],
-                ref_type="insolvency",
-                ref_id=case_id,
-                memo=f"{cls} distribution",
+            want = outstanding[str(row["id"])] * ratio
+            paid = _pay_q1(
+                conn, treasury=treasury, claimant=str(row["claimant_actor_id"]),
+                want_q1=want, holdings=holdings, base=base, kind="insolvency_distribution",
+                case_id=case_id, memo=f"{cls} distribution",
             )
-            legal.pay_claim(conn, str(row["id"]), pay,
-                            fully=Decimal(row["paid"]) + pay >= Decimal(row["amount"]))
-            estate -= pay
+            if paid <= 0:
+                continue
+            new_paid_q1 = Decimal(row["paid_q1"] or 0) + paid
+            new_paid = q4(new_paid_q1 / unit)
+            legal.pay_claim_q1(
+                conn, str(row["id"]), paid_q1=new_paid_q1, paid=new_paid,
+                fully=new_paid_q1 >= Decimal(row["amount"]) * unit,
+            )
             payments.append({"claimant": str(row["claimant_actor_id"]), "class": cls,
-                             "amount": str(pay)})
+                             "amount": str(new_paid), "q1": str(q4(new_paid_q1))})
 
     # residual goes to shareholders pro rata (equity is last in the order)
-    if estate > 0:
+    remaining_q1 = _q1(holdings, base)
+    if remaining_q1 > 0:
         rows = conn.execute(
             "SELECT actor_id, shares FROM share_holdings WHERE company_id = %s AND shares > 0",
             (str(company["id"]),),
         ).fetchall()
         total_shares = sum(int(row["shares"]) for row in rows) or 1
         for row in rows:
-            pay = q4(estate * Decimal(int(row["shares"])) / Decimal(total_shares))
-            if pay <= 0:
-                continue
-            currency_service.post(
-                conn,
-                kind="insolvency_residual",
-                moves=[
-                    Move(treasury, SETTLEMENT_CURRENCY, -pay),
-                    Move(str(row["actor_id"]), SETTLEMENT_CURRENCY, pay),
-                ],
-                ref_type="insolvency",
-                ref_id=case_id,
-                memo="residual to shareholders",
+            want = remaining_q1 * Decimal(int(row["shares"])) / Decimal(total_shares)
+            paid = _pay_q1(
+                conn, treasury=treasury, claimant=str(row["actor_id"]), want_q1=want,
+                holdings=holdings, base=base, kind="insolvency_residual",
+                case_id=case_id, memo="residual to shareholders",
             )
+            if paid <= 0:
+                continue
             payments.append({"claimant": str(row["actor_id"]), "class": "equity",
-                             "amount": str(pay)})
+                             "amount": str(q4(paid / unit)), "q1": str(q4(paid))})
 
     for row in claims:
         if row["status"] == "admitted" and Decimal(row["paid"]) < Decimal(row["amount"]):

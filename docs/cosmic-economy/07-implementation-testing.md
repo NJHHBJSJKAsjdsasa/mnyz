@@ -8,7 +8,7 @@
 
 ## 1. 迁移拆分
 
-> 进度（2026-10-27）：`0110`–`0120` 已落地，`DEFAULT_REVISION = 0120_price_index`。
+> 进度（2026-10-27）：`0110`–`0122` 已落地，`DEFAULT_REVISION = 0122_liquidation_fx`。
 > 落地范围与未接服务项见 [README · 实现进度](README.md#实现进度)。
 
 ### `0110_currency_bank`

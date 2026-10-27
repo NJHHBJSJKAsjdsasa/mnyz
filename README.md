@@ -53,9 +53,11 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 | `0117_court_recognition` | 跨区判决承认：他区不自动承认，需被请求区裁定（8 类拒绝理由 + 书面理由），拒绝可上诉一次，未获承认不得在他区执行 | 3 |
 | `0118_court_enforcement_2pc` | 他区执行走 2PC（`court_enforcement`，承认记录带 `dt_tx_id`）；同一对当事人的相反裁决在同区自动判为 `conflicting_judgment` 并记录冲突来源 | 2 |
 | `0119_revenue_split` | 费用/税费归集与分账：股票手续费 50/30/20（交易所/券商/投资者保护）、持有税 70/30（中央留存/地方），规则化分账 + 每小时 job + 管理端触发 | 3 |
-| `0120_price_index` | 市值加权指数（`price_indices`/`price_index_points`，每分钟一个点，可复算）+ 做市商报价（`mm_quotes` 存档，mid/波动率/库存偏移），公开 `/market/indices`、`/stocks/{ticker}/quote` | 5 |
+| `0120_price_index` | 市值加权指数（`price_indices`/`price_index_points`，每分钟一个点，可复算）+ 做市商报价（`mm_quotes` 存档，mid/波动率/库存偏移），公开 `/market/indices`、`/stocks/{ticker}/quote`；`POST /stocks/{ticker}/quotes` 双边挂单（点差按波动率、库存偏移平移整条带、不穿价、单侧 ≤ 盘口 25%） | 8 |
+| `0121_court_panel` | 玩家合议庭上诉：抽 5 人（3 审理 + 2 替补，AI 与真人同池同规则），每方一次无理由回避，多数裁决，异议写入判决 | 3 |
+| `0122_liquidation_fx` | 多币种清算：按 Q1 等值计量 estate，按顺位与比例从各币种余额中按 Q1 占比划付，`paid_q1` 记录实际受偿 | 1 |
 
-当前迁移 head：`0120_price_index`（与 `server/config.py::DEFAULT_REVISION` 同步）。
+当前迁移 head：`0122_liquidation_fx`（与 `server/config.py::DEFAULT_REVISION` 同步）。
 
 ### 2.3 测试
 
@@ -64,7 +66,7 @@ AI 回放与同权、股东会与法院流程、破产清算顺位等。
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 177 passed，约 22 分钟
+  python -m pytest tests -q      # 184 passed，约 25 分钟
 ```
 
 ---
@@ -160,7 +162,8 @@ python __main__.py                    # 上游单体入口（宇宙生成 + 游�
 - 已完成：0110–0119（货币银行、商业产权、股票、AI 玩家、公司法/法院/破产、跨区 2PC、AI provider、
   跨区判决承认与 2PC 执行、费用分账），172 个集成测试通过。
 - 前端：新增「星际股市」面板（盘口 / K 线 / 持仓，涨红跌绿），挂在星舰实验舱；`vite build` 与前端冒烟测试通过。
-- 待办：多币种清算折算、玩家合议庭、子交易所接入撮合、做市商双边挂单的自动执行。
+- 待办：子交易所接入撮合（`exchanges`/`securities_firms` 表已有，未接撮合）、做市商报价的自动刷新任务
+  （当前由调用方触发）、拆股/并股复权、K 线冷归档。
 - 各迁移的已知缺口记录在对应分册的「落地状态」小节（如股票子交易所接入、玩家合议庭、清算多币种折算）。
 
 ---

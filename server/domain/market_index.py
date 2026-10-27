@@ -204,6 +204,16 @@ def quote(conn, ticker: str, *, actor_id: str | None = None, target_pct: Decimal
     quoted_mid = q4(mid * (1 - skew))
     bid = max(MIN_QUOTE, q4(quoted_mid * (1 - half)))
     ask = max(MIN_QUOTE, q4(quoted_mid * (1 + half)))
+    # never cross the resting book: a maker that quotes through it just self-fills
+    tick = Decimal("0.0001")
+    if asks:
+        best_ask = Decimal(asks[0]["price"])
+        if bid >= best_ask:
+            bid = max(MIN_QUOTE, q4(best_ask - tick))
+    if bids:
+        best_bid = Decimal(bids[0]["price"])
+        if ask <= best_bid:
+            ask = q4(best_bid + tick)
     if ask <= bid:
         ask = q4(bid + MIN_QUOTE)
 

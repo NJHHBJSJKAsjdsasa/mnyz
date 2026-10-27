@@ -546,3 +546,28 @@ job `court_deadlines`、`insolvency_plan_tick`；`companies.status` 增加 `bank
 - **冲突判决自动驳回**：同一当事人对、在同区已承认的相反裁决视为冲突；`decide_recognition(recognize=True)`
   会改判为 `rejected / conflicting_judgment`，并写 `conflict_with` 指向已承认的那条记录（08 §12.3 第 5 条）。
 - **未做**：冲突的人工协调流程（当前直接驳回）、跨区并行承认的批量申请接口。
+
+
+---
+
+## 16. 玩家合议庭（`0121_court_panel`）
+
+- 上诉人可要求 **玩家合议庭** 审理（`appeal {panel:true}`）：从合格池抽 5 人，3 人审理 + 2 人替补。
+- 抽签用 `md5(actor_id || case_id)` 排序，**可复现**；当事人与涉案公司高管自动排除；
+  AI 玩家与真人同池、同规则（08 §7）。
+- **回避**：每方 1 次无理由回避，回避审理成员时自动替补；法院可「有因回避」不限次数。
+- **裁决**：3 名审理成员全部投票后计票，多数决定；**平票维持原判**；异议写入 `court_panels.dissent`。
+- 改判（overturned）时判决赔偿归零、判决置 final、案件关闭；上诉记录 `source=player_panel`。
+- 未做：合议庭薪酬（08 §12.1 的 Q2 200/日 + 500/案）、有因回避的书面理由审核、缺席成员超时补位。
+
+
+---
+
+## 17. 多币种清算（`0122_liquidation_fx`）
+
+- `insolvency_claims.paid_q1` 记录实际受偿的 Q1 等值；`paid` 仍以索赔币种（cc4）显示。
+- estate 用 `Σ(balance × base_value)` 计量；管理人费仍以 cc4 计价（500–100,000 区间），
+  但按各币种 Q1 占比从所有余额中划付。
+- 顺位与同类按比例不变；每一笔支付按「某币种 Q1 占比」拆分到该币种，逐币种 `currency_service.post`。
+- 各币种 q4 取整会留下极少量 dust（< 0.1 Q1），保留在公司账上，不再二次分配。
+- 未做：清算前的外汇兑换（当前不做换汇，直接按 Q1 等值分配原币种）、资产拍卖与不动产处置。

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from flask import Blueprint, g, request
 
-from ...domain import market_index
+from ...domain import market_index, market_maker
 from ...infra.context import db
-from ...infra.errors import Forbidden, InvalidArgument
+from ...infra.errors import Forbidden, InvalidArgument, NotFound
 from ...repo import currency as currency_repo
 from ...repo import players as player_repo
+from ...repo import stocks as stock_repo
 from ..deps import rate_limit, require_auth, success
 
 bp = Blueprint("market", __name__)
@@ -64,3 +65,25 @@ def publish_index():
         raise Forbidden("需要运维/管理员权限")
     with db().transaction() as conn:
         return success(market_index.tick(conn))
+
+
+@bp.post("/stocks/<ticker>/quotes")
+@require_auth(write=True)
+@rate_limit("stock_quotes", 60, 3600)
+def place_quotes(ticker: str):
+    """Two-sided quote: refresh my own resting orders and re-price both sides."""
+    body = request.get_json(silent=True) or {}
+    quantity = body.get("quantity")
+    refresh = bool(body.get("refresh", True))
+    if quantity is not None and (not isinstance(quantity, int) or quantity <= 0):
+        raise InvalidArgument("quantity 必须是正整数")
+    with db().transaction() as conn:
+        if stock_repo.listing_by_ticker(conn, ticker.strip().upper()) is None:
+            raise NotFound("该股票未上市")   # 404 before the actor check, so a typo reads as a typo
+        player = player_repo.get(conn, g.player_id)
+        actor = currency_repo.actor_for_player(conn, str(player["id"]))
+        if actor is None:
+            raise Forbidden("需要经济主体才能报价")
+        return success(market_maker.place_quotes(
+            conn, actor=actor, ticker=ticker, quantity=quantity, refresh=refresh
+        ))
