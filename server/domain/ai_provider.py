@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from .currency_service import q4
 from .rng import stream
@@ -245,3 +248,182 @@ PROVIDERS = {"deterministic": DeterministicProvider()}
 
 def provider_for(name: str | None = None):
     return PROVIDERS.get((name or "deterministic").strip().lower(), PROVIDERS["deterministic"])
+
+
+# ------------------------------------------------------------------ validation
+ACTION_WHITELIST = ("stock.order", "bank.deposit")
+MAX_NOTIONAL = Decimal("1000000000")
+MAX_PRICE = Decimal("1000000")
+
+
+class PlanValidationError(ValueError):
+    """A provider returned something the whitelist cannot accept (10 §4.5)."""
+
+
+def prompt_payload(ctx: DecisionContext, max_actions: int = 5) -> dict:
+    """Minimal, public-only payload. Never includes ids, emails or other players'
+    private state (10 §4.4); the prompt template is fixed and never concatenates
+    player-authored text."""
+    return {
+        "schema": "atlas.ai.plan.v1",
+        "max_actions": max_actions,
+        "agent": {"code": ctx.code, "persona": ctx.persona},
+        "market": [
+            {
+                "ticker": row["ticker"],
+                "last_price": row["last_price"],
+                "prev_close": row["prev_close"],
+                "best_bid": row["best_bid"],
+                "best_ask": row["best_ask"],
+            }
+            for row in ctx.market
+        ],
+        "banks": [{"bank_id": row["id"], "code": row["code"]} for row in ctx.banks],
+        "self": {"cash_cc4": ctx.cash.get("cc4", "0"), "holdings": dict(ctx.holdings)},
+    }
+
+
+def prompt_hash(payload: dict) -> str:
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return "sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
+
+
+def validate_plan(raw: dict, ctx: DecisionContext, max_actions: int = 5) -> ActionPlan:
+    if not isinstance(raw, dict):
+        raise PlanValidationError("response_not_object")
+    actions_raw = raw.get("actions")
+    if not isinstance(actions_raw, list):
+        raise PlanValidationError("actions_not_list")
+    if len(actions_raw) > max_actions:
+        raise PlanValidationError("too_many_actions")
+    tickers = {str(row["ticker"]) for row in ctx.market}
+    banks = {str(row["id"]) for row in ctx.banks}
+    actions: list[Action] = []
+    for item in actions_raw:
+        if not isinstance(item, dict):
+            raise PlanValidationError("action_not_object")
+        kind = str(item.get("type") or "")
+        if kind not in ACTION_WHITELIST:
+            raise PlanValidationError(f"action_not_allowed:{kind}")
+        payload = item.get("payload") if isinstance(item.get("payload"), dict) else item
+        try:
+            if kind == "stock.order":
+                ticker = str(payload.get("ticker") or "").upper()
+                side = str(payload.get("side") or "")
+                price = Decimal(str(payload.get("price")))
+                quantity = int(payload.get("quantity"))
+                if ticker not in tickers:
+                    raise PlanValidationError(f"unknown_ticker:{ticker}")
+                if side not in ("buy", "sell"):
+                    raise PlanValidationError(f"bad_side:{side}")
+                if not Decimal(0) < price <= MAX_PRICE:
+                    raise PlanValidationError("price_out_of_range")
+                if not 0 < quantity <= MAX_NOTIONAL:
+                    raise PlanValidationError("quantity_out_of_range")
+                actions.append(Action("stock.order", {
+                    "ticker": ticker, "side": side, "price": str(q4(price)),
+                    "quantity": quantity,
+                }))
+            else:  # bank.deposit
+                bank_id = str(payload.get("bank_id") or "")
+                amount = Decimal(str(payload.get("amount")))
+                if bank_id not in banks:
+                    raise PlanValidationError(f"unknown_bank:{bank_id}")
+                if not Decimal(0) < amount <= MAX_NOTIONAL:
+                    raise PlanValidationError("amount_out_of_range")
+                actions.append(Action("bank.deposit", {
+                    "bank_id": bank_id, "currency": "cc4", "amount": str(q4(amount)),
+                }))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            if isinstance(exc, PlanValidationError):
+                raise
+            raise PlanValidationError(f"bad_number:{exc}") from None
+    try:
+        confidence = min(Decimal(1), max(Decimal(0), Decimal(str(raw.get("confidence", 0)))))
+    except (InvalidOperation, TypeError, ValueError):
+        confidence = Decimal(0)
+    reason = str(raw.get("reason") or "模型返回的动作计划")[:280]
+    return ActionPlan(tuple(actions), q4(confidence), reason)
+
+
+# ------------------------------------------------------------------ llm adapter
+_transport = None
+
+
+def set_transport(fn) -> None:
+    """Test/ops hook: ``fn(spec, payload) -> dict``. ``None`` restores the default."""
+    global _transport
+    _transport = fn
+
+
+def _default_transport(spec: dict, payload: dict) -> dict:
+    """Real HTTP call, only when an endpoint is configured and a key is present.
+
+    Deliberately strict: without both, it refuses instead of guessing, so a
+    half-configured deployment falls back to deterministic rather than hanging.
+    """
+    endpoint = (spec.get("endpoint") or "").strip()
+    api_key = os.getenv("ATLAS_AI_LLM_API_KEY", "").strip()
+    if not endpoint:
+        raise PlanValidationError("endpoint_not_configured")
+    if not api_key:
+        raise PlanValidationError("api_key_missing")
+    import urllib.error
+    import urllib.request
+
+    body = json.dumps({"model": spec.get("model"), "input": payload}).encode("utf-8")
+    request = urllib.request.Request(
+        endpoint,
+        data=body,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=int(spec.get("timeout_ms", 800)) / 1000) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise PlanValidationError(f"transport_error:{type(exc).__name__}") from None
+
+
+def _call_with_timeout(fn, timeout_ms: int):
+    pool = ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(fn)
+    try:
+        return future.result(timeout=max(0.05, timeout_ms / 1000))
+    except FutureTimeout:
+        raise PlanValidationError("timeout") from None
+    finally:
+        pool.shutdown(wait=False)
+
+
+class LLMProvider:
+    """Internal adapter (10 §4). Never decides legality; only proposes actions."""
+
+    name = "llm"
+
+    def __init__(self, spec: dict) -> None:
+        self.spec = spec
+        self.version = str(spec.get("version") or "1")
+        self.last_meta: dict = {}
+
+    def decide(self, ctx: DecisionContext) -> ActionPlan:
+        plan, _ = self.decide_with_meta(ctx)
+        return plan
+
+    def decide_with_meta(self, ctx: DecisionContext) -> tuple[ActionPlan, dict]:
+        payload = prompt_payload(ctx, int(self.spec.get("max_actions") or 5))
+        transport = _transport or _default_transport
+        started = time.perf_counter()
+        raw = _call_with_timeout(lambda: transport(self.spec, payload),
+                                 int(self.spec.get("timeout_ms") or 800))
+        latency = int((time.perf_counter() - started) * 1000)
+        plan = validate_plan(raw, ctx, int(self.spec.get("max_actions") or 5))
+        usage = raw.get("usage") if isinstance(raw.get("usage"), dict) else {}
+        self.last_meta = {
+            "latency_ms": latency,
+            "token_in": int(usage.get("input", 0) or 0),
+            "token_out": int(usage.get("output", 0) or 0),
+            "prompt_hash": prompt_hash(payload),
+            "model": self.spec.get("model"),
+        }
+        return plan, self.last_meta

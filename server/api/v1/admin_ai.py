@@ -9,9 +9,10 @@ from __future__ import annotations
 from flask import Blueprint, g, request
 
 from ...domain import ai_economy
+from ...repo import ai as ai_repo
 from ...infra.context import db
-from ...infra.errors import Forbidden
-from ...models.ai import AiTickRequest, RuntimePauseRequest
+from ...infra.errors import Forbidden, NotFound
+from ...models.ai import AiTickRequest, ProviderUpdateRequest, RuntimePauseRequest
 from ..deps import parse_model, rate_limit, require_auth, success
 
 bp = Blueprint("ai_admin", __name__)
@@ -64,3 +65,59 @@ def runtime_pause():
     body = parse_model(RuntimePauseRequest)
     with db().transaction() as conn:
         return success(ai_economy.set_pause(conn, body.paused))
+
+
+@bp.get("/admin/ai/providers")
+@require_auth()
+@rate_limit("admin_ai_providers", 60, 60)
+def providers():
+    """Ops-only view: modes and audit knobs, never exposed to players (10 §4.2)."""
+    _require_admin()
+    with db().connection() as conn:
+        rows = ai_repo.providers(conn)
+    return success({
+        "providers": [
+            {
+                "name": row["name"],
+                "kind": row["kind"],
+                "version": row["version"],
+                "status": row["status"],
+                "model": row["model"],
+                "timeout_ms": int(row["timeout_ms"]),
+                "max_actions": int(row["max_actions"]),
+                "allowlist": row["allowlist"],
+                "has_endpoint": bool(row["endpoint"]),
+                "updated_at": row["updated_at"].isoformat(),
+            }
+            for row in rows.values()
+        ]
+    })
+
+
+@bp.post("/admin/ai/providers/<name>")
+@require_auth(write=True)
+@rate_limit("admin_ai_provider_update", 30, 60)
+def update_provider(name: str):
+    _require_admin()
+    body = parse_model(ProviderUpdateRequest)
+    with db().transaction() as conn:
+        row = ai_repo.set_provider(
+            conn,
+            name,
+            status=body.status,
+            model=body.model,
+            endpoint=body.endpoint,
+            timeout_ms=body.timeout_ms,
+            max_actions=body.max_actions,
+            allowlist=body.allowlist,
+        )
+    if row is None:
+        raise NotFound("provider 不存在")
+    return success({
+        "name": row["name"],
+        "status": row["status"],
+        "model": row["model"],
+        "timeout_ms": int(row["timeout_ms"]),
+        "max_actions": int(row["max_actions"]),
+        "allowlist": row["allowlist"],
+    })

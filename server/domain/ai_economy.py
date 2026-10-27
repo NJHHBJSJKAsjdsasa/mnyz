@@ -271,18 +271,73 @@ def _execute(conn, agent: dict, action, tick: int, index: int) -> dict:
 WHITELIST = ("stock.order", "bank.deposit")
 
 
+def _decide(conn, agent: dict, ctx, specs: dict, forced: str | None) -> tuple[ActionPlan, dict]:
+    """Pick the provider for this agent, validate, and never let the model decide legality."""
+    deterministic = ai_provider.PROVIDERS["deterministic"]
+    det_spec = specs.get("deterministic")
+    base = deterministic.decide(ctx)
+    meta = {
+        "provider": "deterministic",
+        "provider_version": deterministic.version,
+        "provider_id": str(det_spec["id"]) if det_spec else None,
+        "model": None,
+        "prompt_hash": None,
+        "token_in": None,
+        "token_out": None,
+        "latency_ms": None,
+        "fallback": False,
+        "shadow": False,
+        "shadow_plan": None,
+        "llm_error": None,
+    }
+    if forced and forced != "llm":
+        return base, meta
+    spec = specs.get("llm")
+    mode = str(spec["status"]) if spec else "disabled"
+    if forced == "llm" and mode == "disabled":
+        meta["llm_error"] = "provider_disabled"
+        return base, meta
+    if mode == "disabled" or spec is None:
+        return base, meta
+    allowlist = spec.get("allowlist") or []
+    if mode == "canary" and str(agent["code"]) not in {str(item) for item in allowlist}:
+        return base, meta
+    adapter = ai_provider.LLMProvider(spec)
+    try:
+        plan, llm_meta = adapter.decide_with_meta(ctx)
+    except ai_provider.PlanValidationError as exc:
+        meta.update({"fallback": True, "llm_error": str(exc)})
+        return base, meta
+    meta.update({
+        "provider": "llm",
+        "provider_version": adapter.version,
+        "provider_id": str(spec["id"]),
+        "model": llm_meta.get("model"),
+        "prompt_hash": llm_meta.get("prompt_hash"),
+        "token_in": llm_meta.get("token_in"),
+        "token_out": llm_meta.get("token_out"),
+        "latency_ms": llm_meta.get("latency_ms"),
+    })
+    if mode == "shadow":
+        # shadow plans are audited but never executed (10 §6)
+        meta.update({"shadow": True, "provider": "deterministic",
+                     "shadow_plan": [action.as_dict() for action in plan.actions]})
+        return base, meta
+    return plan, meta
+
+
 def tick(conn, *, limit: int | None = None, provider_name: str | None = None) -> dict:
     """One economy heartbeat: snapshot → decide → validate → execute → audit."""
     if ai_repo.is_paused(conn):
         return {"paused": True, "agents": 0, "executed": 0, "failed": 0}
-    provider = ai_provider.provider_for(provider_name)
+    specs = ai_repo.providers(conn)
     tick_no = ai_repo.last_tick(conn) + 1
     executed = failed = skipped = 0
     agents = ai_repo.agents(conn, status="active", limit=limit or 500)
     for agent in agents:
         started = time.perf_counter()
         ctx = build_context(conn, agent, tick_no)
-        plan: ActionPlan = provider.decide(ctx)
+        plan, meta = _decide(conn, agent, ctx, specs, provider_name)
         results: list[dict] = []
         status = "skipped"
         for index, action in enumerate(plan.actions):
@@ -312,14 +367,31 @@ def tick(conn, *, limit: int | None = None, provider_name: str | None = None) ->
             agent_id=str(agent["id"]),
             tick=tick_no,
             action=",".join(action.type for action in plan.actions) or "idle",
-            inputs={"context": ctx.to_dict(), "plan": [a.as_dict() for a in plan.actions]},
+            inputs={
+                "context": ctx.to_dict(),
+                "plan": [a.as_dict() for a in plan.actions],
+                "shadow_plan": meta.get("shadow_plan"),
+            },
             score=plan.confidence,
             reason=plan.reason,
-            result={"actions": results, "provider": provider.name},
+            result={
+                "actions": results,
+                "provider": meta["provider"],
+                "fallback": meta["fallback"],
+                "llm_error": meta.get("llm_error"),
+                "shadow": meta["shadow"],
+            },
             status=status,
-            provider=provider.name,
-            provider_version=provider.version,
-            latency_ms=latency,
+            provider=meta["provider"],
+            provider_version=meta["provider_version"],
+            latency_ms=meta.get("latency_ms") if meta.get("latency_ms") is not None else latency,
+            fallback=bool(meta["fallback"]),
+            provider_id=meta.get("provider_id"),
+            token_in=meta.get("token_in"),
+            token_out=meta.get("token_out"),
+            shadow=bool(meta["shadow"]),
+            model=meta.get("model"),
+            prompt_hash=meta.get("prompt_hash"),
         )
         ai_repo.touch_agent(conn, str(agent["id"]), datetime.now(timezone.utc))
     return {"tick": tick_no, "agents": len(agents), "executed": executed,

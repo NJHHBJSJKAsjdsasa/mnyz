@@ -106,13 +106,21 @@ def insert_decision(
     provider_version: str,
     latency_ms: int,
     fallback: bool = False,
+    provider_id: str | None = None,
+    token_in: int | None = None,
+    token_out: int | None = None,
+    shadow: bool = False,
+    model: str | None = None,
+    prompt_hash: str | None = None,
 ) -> dict:
     return conn.execute(
         """
         INSERT INTO ai_decisions
                (agent_id, tick, action, inputs, score, reason, result, status,
-                provider, provider_version, latency_ms, fallback)
-        VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
+                provider, provider_version, latency_ms, fallback,
+                provider_id, token_in, token_out, shadow, model, prompt_hash)
+        VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s)
         RETURNING id, agent_id, tick, tick_at, action, score, reason, status
         """,
         (
@@ -128,6 +136,12 @@ def insert_decision(
             provider_version,
             latency_ms,
             fallback,
+            provider_id,
+            token_in,
+            token_out,
+            shadow,
+            model,
+            prompt_hash,
         ),
     ).fetchone()
 
@@ -216,3 +230,46 @@ def player_directory_row(conn, player_id: str) -> dict | None:
         """,
         (player_id,),
     ).fetchone()
+
+
+# ------------------------------------------------------------------ providers
+PROVIDER_COLUMNS = (
+    "id, name, kind, version, status, endpoint, model, timeout_ms, max_actions, "
+    "allowlist, config, updated_at"
+)
+
+
+def providers(conn) -> dict[str, dict]:
+    rows = conn.execute(
+        f"SELECT {PROVIDER_COLUMNS} FROM ai_decision_providers ORDER BY name"
+    ).fetchall()
+    return {row["name"]: row for row in rows}
+
+
+def provider(conn, name: str) -> dict | None:
+    return conn.execute(
+        f"SELECT {PROVIDER_COLUMNS} FROM ai_decision_providers WHERE name = %s",
+        (name,),
+    ).fetchone()
+
+
+def set_provider(conn, name: str, **fields) -> dict | None:
+    allowed = {"status", "endpoint", "model", "timeout_ms", "max_actions", "allowlist", "config"}
+    sets, params = [], []
+    for key, value in fields.items():
+        if key not in allowed or value is None:
+            continue
+        if key in ("allowlist", "config"):
+            sets.append(f"{key} = %s::jsonb")
+            params.append(json.dumps(value, default=str))
+        else:
+            sets.append(f"{key} = %s")
+            params.append(value)
+    if not sets:
+        return provider(conn, name)
+    params.append(name)
+    conn.execute(
+        f"UPDATE ai_decision_providers SET {', '.join(sets)}, updated_at = now() WHERE name = %s",
+        params,
+    )
+    return provider(conn, name)

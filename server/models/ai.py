@@ -17,3 +17,12 @@ class AiTickRequest(StrictModel):
 
 class RuntimePauseRequest(StrictModel):
     paused: bool
+
+
+class ProviderUpdateRequest(StrictModel):
+    status: str | None = Field(default=None, pattern="^(disabled|shadow|canary|live)$")
+    model: str | None = Field(default=None, max_length=64)
+    endpoint: str | None = Field(default=None, max_length=255)
+    timeout_ms: int | None = Field(default=None, ge=50, le=10000)
+    max_actions: int | None = Field(default=None, ge=1, le=20)
+    allowlist: list[str] | None = Field(default=None, max_length=200)

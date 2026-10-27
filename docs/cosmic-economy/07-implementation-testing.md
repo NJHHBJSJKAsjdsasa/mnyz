@@ -8,7 +8,7 @@
 
 ## 1. 迁移拆分
 
-> 进度（2026-10-27）：`0110`–`0115` 已落地，`DEFAULT_REVISION = 0115_cross_region_2pc`。
+> 进度（2026-10-27）：`0110`–`0116` 已落地，`DEFAULT_REVISION = 0116_ai_decision_provider`。
 > 落地范围与未接服务项见 [README · 实现进度](README.md#实现进度)。
 
 ### `0110_currency_bank`
@@ -438,6 +438,12 @@ reward_share = 0.70
 - 数据最小化、schema/白名单/超时回退；
 - 公开 API/客户端无 provider 泄漏；
 - 审计/密钥/出网 allowlist 通过。
+
+> 当前状态（`0116`）：`ai_decision_providers` 四档模式（disabled/shadow/canary/live），默认 `llm=disabled`；
+> 输出经 schema + 动作白名单 + 数值范围校验，超时/非法输出一律回退 deterministic 并记 `fallback`；
+> 影子模式只写 `shadow_plan` 不执行；灰度按 AI 白名单；token/model/prompt_hash 落 `ai_decisions`；
+> 公开 `/players` 与目录不含 provider/model。**出网 allowlist 与真实网关联调未做**（密钥走
+> `ATLAS_AI_LLM_API_KEY`，endpoint 存在库里，未配置时适配器直接拒绝）。
 
 ---
 

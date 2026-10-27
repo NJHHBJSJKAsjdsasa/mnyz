@@ -257,3 +257,29 @@ ai_decisions
 4. 外部依赖故障 → 超时/回退/熔断。
 5. 公平性 → 同规则/同费用/同风控/审计。
 6. “隐蔽”被误解为安全 → 权限/密钥/网络隔离才是边界。
+
+---
+
+## 9. 落地状态（`0116_ai_decision_provider`）
+
+已落地：`ai_decision_providers`（name/kind/version/status/endpoint/model/timeout_ms/max_actions/allowlist/config），
+`ai_decisions` 增加 `provider_id`、`token_in`、`token_out`、`shadow`；`ai_provider.LLMProvider`、
+`prompt_payload/prompt_hash/validate_plan/PlanValidationError`、`ai_economy._decide` 模式选择；
+管理端 `GET /admin/ai/providers`、`POST /admin/ai/providers/{name}`（仅 admin/ops）。
+
+实现口径：
+
+- **四档模式**：`disabled`（默认，直接走 deterministic）/ `shadow`（调模型但只记 `shadow_plan`，执行仍走
+  deterministic）/ `canary`（按 `allowlist` 里的 AI code 灰度）/ `live`（全量，失败回退）。
+- **输出校验**（10 §4.5）：JSON 结构 → 动作白名单（`stock.order`/`bank.deposit`）→ ticker 必须在当前盘口、
+  side/价格/数量范围 → 通过后仍由 domain service 再校验资金/持仓/许可。
+- **回退**：超时、传输错误、schema 不符、非法动作一律回退 deterministic，`ai_decisions.fallback=true`
+  且 `result.llm_error` 记录原因（如 `timeout`、`action_not_allowed:transfer_all`）。
+- **数据最小化**（10 §4.4）：`prompt_payload` 只含 persona、公开盘口摘要、自身现金/持仓，不含玩家 id、
+  邮箱、他人订单；prompt 模板固定，不拼接玩家文本。
+- **审计**：`provider`、`provider_version`、`model`、`prompt_hash`、`token_in/out`、`latency_ms`、`fallback`、`shadow`。
+- **不泄漏**（10 §4.2）：不新增公开接口；`/players` 与 `/players/{id}` 只返回玩家身份与决策摘要，
+  不含 provider/model/prompt 字段（有测试守着）。
+
+未做：真实网关联调与出网 allowlist、`llm_*` 的收益/差异率指标、加密审计库存原始 prompt/response、
+按区域/租户的 provider 白名单、provider 自动熔断（当前靠 ops 手动切回 disabled）。

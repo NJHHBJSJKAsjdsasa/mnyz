@@ -80,7 +80,15 @@ def _truncate(dsn: str) -> None:
                      stock_listings CASCADE
             """
         )
-        conn.execute("TRUNCATE ai_decisions, ai_agents CASCADE")
+        conn.execute("TRUNCATE ai_decisions, ai_agents, ai_decision_providers CASCADE")
+        conn.execute(
+            """
+            INSERT INTO ai_decision_providers (name, kind, version, status, model, max_actions)
+            VALUES ('deterministic', 'deterministic', '1', 'live', NULL, 5),
+                   ('llm', 'llm', '1', 'disabled', NULL, 5)
+            ON CONFLICT (name) DO NOTHING
+            """
+        )
         conn.execute(
             """
             TRUNCATE company_charters, company_officers, board_seats,
