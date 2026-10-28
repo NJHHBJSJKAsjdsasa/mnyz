@@ -56,8 +56,10 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 | `0120_price_index` | 市值加权指数（`price_indices`/`price_index_points`，每分钟一个点，可复算）+ 做市商报价（`mm_quotes` 存档，mid/波动率/库存偏移），公开 `/market/indices`、`/stocks/{ticker}/quote`；`POST /stocks/{ticker}/quotes` 双边挂单（点差按波动率、库存偏移平移整条带、不穿价、单侧 ≤ 盘口 25%） | 8 |
 | `0121_court_panel` | 玩家合议庭上诉：抽 5 人（3 审理 + 2 替补，AI 与真人同池同规则），每方一次无理由回避，多数裁决，异议写入判决 | 3 |
 | `0122_liquidation_fx` | 多币种清算：按 Q1 等值计量 estate，按顺位与比例从各币种余额中按 Q1 占比划付，`paid_q1` 记录实际受偿 | 1 |
+| `0123_exchange_matching` | 子交易所：牌照费 5,000 cc4、自定义手续费与上市费、`exchange_code` 挂牌后撮合按该所费率结算；`mm_programs` 让做市程序常驻，job `mm_refresh_tick`（60s）自动重挂双边 | 5 |
+| `0124_split_archive` | 拆股复权（价格/持仓/成本/K 线同比调整、挂单撤销、`stock_splits` 留痕）+ K 线冷归档（`stock_candle_archive`，job 每日搬 30 天前的 1m/5m） | 4 |
 
-当前迁移 head：`0122_liquidation_fx`（与 `server/config.py::DEFAULT_REVISION` 同步）。
+当前迁移 head：`0124_split_archive`（与 `server/config.py::DEFAULT_REVISION` 同步）。
 
 ### 2.3 测试
 
@@ -66,7 +68,7 @@ AI 回放与同权、股东会与法院流程、破产清算顺位等。
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 184 passed，约 25 分钟
+  python -m pytest tests -q      # 190 passed，约 28 分钟
 ```
 
 ---
@@ -162,8 +164,7 @@ python __main__.py                    # 上游单体入口（宇宙生成 + 游�
 - 已完成：0110–0119（货币银行、商业产权、股票、AI 玩家、公司法/法院/破产、跨区 2PC、AI provider、
   跨区判决承认与 2PC 执行、费用分账），172 个集成测试通过。
 - 前端：新增「星际股市」面板（盘口 / K 线 / 持仓，涨红跌绿），挂在星舰实验舱；`vite build` 与前端冒烟测试通过。
-- 待办：子交易所接入撮合（`exchanges`/`securities_firms` 表已有，未接撮合）、做市商报价的自动刷新任务
-  （当前由调用方触发）、拆股/并股复权、K 线冷归档。
+- 待办：券商会籍与经纪佣金、交易所之间的跨所撮合、并股（ratio<1）的客户端提示、归档数据的分区与备份策略。
 - 各迁移的已知缺口记录在对应分册的「落地状态」小节（如股票子交易所接入、玩家合议庭、清算多币种折算）。
 
 ---

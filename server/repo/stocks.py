@@ -21,7 +21,8 @@ LISTING_COLUMNS = (
 # ------------------------------------------------------------------ exchange
 def exchange_by_code(conn, code: str) -> dict | None:
     return conn.execute(
-        "SELECT id, code, name, kind, operator_actor_id, currency_code, status "
+        "SELECT id, code, name, kind, operator_actor_id, currency_code, status, "
+        "       fee_bps, listing_fee, max_listings "
         "FROM exchanges WHERE code = %s",
         (code,),
     ).fetchone()
@@ -29,7 +30,8 @@ def exchange_by_code(conn, code: str) -> dict | None:
 
 def official_exchange(conn) -> dict | None:
     return conn.execute(
-        "SELECT id, code, name, kind, currency_code, status FROM exchanges "
+        "SELECT id, code, name, kind, currency_code, status, fee_bps, listing_fee, "
+        "       max_listings FROM exchanges "
         "WHERE kind = 'official' AND status = 'active' ORDER BY created_at LIMIT 1"
     ).fetchone()
 

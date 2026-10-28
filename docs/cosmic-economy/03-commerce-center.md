@@ -457,3 +457,17 @@ cap = clamp(8% + traffic_index × 2% + strategic_factor × 3%, 5%, 15%)
 - `quote` 增加**不穿价**约束：bid 不得 ≥ 卖一、ask 不得 ≤ 买一，否则做市报价会立刻自吃对手盘。
 - IPO 时按 `price × offer_shares` 增加 `price_indices.base_cap`（除数修正），
   新成分股上市不再让 CSX 跳空（真实指数的成分股调整口径）。
+
+
+---
+
+## 15. 子交易所与做市程序（`0123_exchange_matching`）
+
+- 任何人都可以申请开子交易所：一次性牌照费 **5,000 cc4** 进 treasury，登记 `code/name/fee_bps/listing_fee`。
+- 挂牌时用 `exchange_code` 指定交易所（默认官方 CUEX）；`listing_fee` 从**公司金库**付给交易所运营方
+  （无运营方则进 treasury）。
+- **撮合按挂牌交易所的 `fee_bps`** 计算（订单预算、成交结算、卖空收益三处一致），
+  所以子交易所可以打价格战（更低费率）或做高端（更高费率 + 上市费）。
+- `mm_programs`：登记 (actor, listing, quantity) 即为常驻做市程序；`mm_refresh_tick`（60s）
+  对 60 秒未刷新的 active 程序重挂双边，失败写 `last_error` 而不中断其他程序。
+- 未做：券商会籍与经纪佣金、跨所路由（同一标的在多个交易所挂牌）、交易所自有撮合引擎与清算所。

@@ -74,7 +74,8 @@ def _truncate(dsn: str) -> None:
         )
         conn.execute(
             """
-            TRUNCATE stock_trades, stock_orders, stock_candles, stock_holders,
+            TRUNCATE mm_programs, stock_splits, stock_candle_archive, stock_trades,
+                     stock_orders, stock_candles, stock_holders,
                      stock_daily_summary, dividends, margin_accounts,
                      securities_lending, short_positions, delisting_cases,
                      stock_listings CASCADE

@@ -242,6 +242,7 @@ def ipo():
             price=body.price,
             settlement_mode=body.settlement_mode,
             shortable=body.shortable,
+            exchange_code=body.exchange_code,
         )
 
     return _write({"ticker": body.ticker, "ipo": body.offer_shares}, action)

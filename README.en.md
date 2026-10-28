@@ -60,8 +60,10 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 | `0120_price_index` | Cap-weighted index (`price_indices`/`price_index_points`, one point per minute, recomputable) and market-maker quotes (`mm_quotes` audit trail, mid/volatility/inventory skew); public `/market/indices` and `/stocks/{ticker}/quote`; `POST /stocks/{ticker}/quotes` places two sides (volatility spread, inventory shift of the whole band, never crossing the book, ≤ 25 % of one side’s depth) | 8 |
 | `0121_court_panel` | Player appellate panel: 5 drawn (3 serving + 2 alternates, AI and humans in the same pool under the same rules), one peremptory strike per side, majority verdict, dissents recorded | 3 |
 | `0122_liquidation_fx` | Multi-currency liquidation: estate measured in Q1 equivalent, distributed in priority order and pro rata out of every currency held, with `paid_q1` recording what was actually recovered | 1 |
+| `0123_exchange_matching` | Sub-exchanges: 5,000 cc4 licence, own commission and listing fee, `exchange_code` on IPO settles at that venue’s rate; `mm_programs` keep a maker program standing and `mm_refresh_tick` (60 s) re-quotes both sides | 5 |
+| `0124_split_archive` | Splits with price adjustment (listing/holders/cost basis/candles rescaled, resting orders cancelled, `stock_splits` audit) and candle archiving (`stock_candle_archive`, daily job moves 1m/5m older than 30 days) | 4 |
 
-Current migration head: `0122_liquidation_fx` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+Current migration head: `0124_split_archive` (kept in sync with `server/config.py::DEFAULT_REVISION`).
 
 ### 2.3 Tests
 
@@ -71,7 +73,7 @@ treatment, shareholder meetings and court flow, and liquidation priority.
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 184 passed, ~25 minutes
+  python -m pytest tests -q      # 190 passed, ~28 minutes
 ```
 
 ---
@@ -170,8 +172,8 @@ python __main__.py                    # upstream monolith (universe generation +
   passing.
 - Front end: new “Interstellar Market” panel (order book / candles / portfolio, up = red, down = green)
   mounted in the ship lab; `vite build` and the front-end smoke test pass.
-- Planned: sub-exchange matching (`exchanges`/`securities_firms` tables exist, matching is not wired),
-  a job that refreshes maker quotes automatically, split/reverse-split adjustment, K-line archival.
+- Planned: broker membership and agency commissions, cross-venue routing, client hints for reverse splits,
+  partition/backup policy for archived candles.
 - Known gaps per migration are recorded in the “落地状态 / implementation status” section of each design book
   (e.g. sub-exchange integration, player appeal panels, multi-currency liquidation).
 

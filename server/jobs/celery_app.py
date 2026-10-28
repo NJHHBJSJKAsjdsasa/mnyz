@@ -58,4 +58,6 @@ celery_app.conf.beat_schedule = {
     "dt_outbox_relay": {"task": "atlas.job", "schedule": 10.0, "args": ("dt_outbox_relay",)},
     "revenue_split_tick": {"task": "atlas.job", "schedule": 3600.0, "args": ("revenue_split_tick",)},
     "price_index_tick": {"task": "atlas.job", "schedule": 300.0, "args": ("price_index_tick",)},
+    "mm_refresh_tick": {"task": "atlas.job", "schedule": 60.0, "args": ("mm_refresh_tick",)},
+    "candle_archive_tick": {"task": "atlas.job", "schedule": 86400.0, "args": ("candle_archive_tick",)},
 }

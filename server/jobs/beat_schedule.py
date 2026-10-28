@@ -26,4 +26,6 @@ SCHEDULE = {
     "dt_outbox_relay": 10,
     "revenue_split_tick": 3600,
     "price_index_tick": 300,
+    "mm_refresh_tick": 60,
+    "candle_archive_tick": 86400,
 }

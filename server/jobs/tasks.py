@@ -20,8 +20,10 @@ from ..domain import (
     dt_coordinator,
     insolvency_service,
     market_index,
+    market_maker,
     revenue_service,
     property_service,
+    stock_corporate,
     stock_service,
     world_service,
 )
@@ -241,6 +243,16 @@ def dt_recovery(conn) -> dict:
     return dt_coordinator.recover(conn)
 
 
+def candle_archive_tick(conn) -> dict:
+    """Move stale intraday candles to the archive table (07 §4)."""
+    return stock_corporate.archive_candles(conn)
+
+
+def mm_refresh_tick(conn) -> dict:
+    """Re-quote every standing market-maker program (06 §6.1)."""
+    return market_maker.refresh_all(conn)
+
+
 def price_index_tick(conn) -> dict:
     """Publish the minute snapshot for every active index (03 §4)."""
     return market_index.tick(conn)
@@ -361,4 +373,6 @@ JOBS = {
     "dt_outbox_relay": dt_outbox_relay,
     "revenue_split_tick": revenue_split_tick,
     "price_index_tick": price_index_tick,
+    "mm_refresh_tick": mm_refresh_tick,
+    "candle_archive_tick": candle_archive_tick,
 }

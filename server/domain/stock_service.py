@@ -30,7 +30,7 @@ from ..repo import currency as currency_repo
 from ..repo import indices as index_repo
 from ..repo import revenue as revenue_repo
 from ..repo import stocks as stock_repo
-from . import currency_service
+from . import currency_service, exchange_service
 from .currency_service import Move, q4
 
 FEE_BPS = Decimal(10)        # 0.10 % per side
@@ -75,8 +75,16 @@ def _bucket(ts: datetime, interval: str) -> datetime:
     return ts.replace(hour=0, minute=0)
 
 
-def _fee(notional: Decimal) -> Decimal:
-    return max(q4(notional * FEE_BPS / Decimal(10_000)), MIN_FEE)
+def _fee(notional: Decimal, bps: int = FEE_BPS) -> Decimal:
+    return max(q4(notional * Decimal(bps) / Decimal(10_000)), MIN_FEE)
+
+
+def _listing_fee_bps(conn, listing: dict) -> int:
+    """A listing trades on one venue; that venue sets its own commission (03 §5)."""
+    exchange_id = listing.get("exchange_id")
+    if not exchange_id:
+        return FEE_BPS
+    return index_repo.exchange_fee_bps(conn, str(exchange_id)) or FEE_BPS
 
 
 def _tax(notional: Decimal) -> Decimal:
@@ -232,6 +240,7 @@ def ipo(
     settlement_mode: str = "t0",
     shortable: bool = True,
     idem_key: str | None = None,
+    exchange_code: str | None = None,
 ) -> dict:
     ticker = ticker.strip().upper()
     company = company_repo.by_ticker(conn, ticker, for_update=True)
@@ -263,7 +272,24 @@ def ipo(
     if Decimal(offer_shares) / Decimal(total_after) < IPO_MIN_FREE_FLOAT:
         raise Unprocessable("自由流通比例不得低于 20%")
 
-    exchange = stock_repo.ensure_official_exchange(conn)
+    if exchange_code:
+        exchange = exchange_service.require_active(conn, exchange_code)
+        exchange_service.ensure_listing_room(conn, exchange)
+    else:
+        exchange = stock_repo.ensure_official_exchange(conn)
+    listing_fee = Decimal(str(exchange.get("listing_fee") or 0))
+    if listing_fee > 0:
+        payee = exchange_service.operator_or_treasury(conn, exchange)
+        currency_service.post(
+            conn,
+            kind="listing_fee",
+            moves=[Move(str(company["treasury_actor_id"]), exchange["currency_code"],
+                        -listing_fee),
+                   Move(payee, exchange["currency_code"], listing_fee)],
+            ref_type="exchange",
+            ref_id=str(exchange["id"]),
+            memo=f"{ticker} listing fee",
+        )
 
     listing = stock_repo.create_listing(
         conn,
@@ -417,16 +443,17 @@ def _avg_price(trades: list[dict]) -> str | None:
 def _check_buy_funds(conn, actor_id: str, listing: dict, order_type: str,
                      price: Decimal | None, quantity: int) -> None:
     code = listing["currency_code"]
+    bps = _listing_fee_bps(conn, listing)
     available = _wallet_balance(conn, actor_id, code) - stock_repo.reserved_cash(conn, actor_id)
     if order_type == "limit":
         notional = q4(Decimal(price) * quantity)
-        need = notional + _fee(notional)
+        need = notional + _fee(notional, bps)
     else:
         asks = stock_repo.book_asks(conn, str(listing["id"]), limit=1)
         if not asks:
             raise Unprocessable("当前没有卖盘")
         notional = q4(Decimal(asks[0]["price"]) * quantity)
-        need = notional + _fee(notional)
+        need = notional + _fee(notional, bps)
     if available < need:
         raise InsufficientFunds(
             f"{code} 可用余额不足：需要 {need}（含手续费），可用 {available}"
@@ -538,8 +565,9 @@ def _settle_trade(conn, listing: dict, buyer_order: dict, seller_order: dict,
     """One fill: ledger, shares, trade row and candle upserts (05 §4.3/§5.1)."""
     code = listing["currency_code"]
     notional = q4(price * quantity)
-    fee_buy = _fee(notional)
-    fee_sell = _fee(notional)
+    bps = _listing_fee_bps(conn, listing)
+    fee_buy = _fee(notional, bps)
+    fee_sell = _fee(notional, bps)
     tax = _tax(notional)
     buyer = str(buyer_order["actor_id"])
     seller = str(seller_order["actor_id"])
@@ -927,7 +955,8 @@ def open_short(conn, *, actor: dict, ticker: str, quantity: int,
 
     notional = sum((Decimal(t["price"]) * int(t["quantity"]) for t in trades), Decimal(0))
     avg_price = q4(notional / filled)
-    proceeds = q4(notional) - _fee(q4(notional)) - _tax(q4(notional))
+    bps = _listing_fee_bps(conn, listing)
+    proceeds = q4(notional) - _fee(q4(notional), bps) - _tax(q4(notional))
     _move_to_margin(conn, actor=actor, amount=proceeds, memo="short sale proceeds")
     required = q4(notional * INITIAL_MARGIN)
     cash = Decimal(stock_repo.margin_account(conn, actor_id)["cash"])

@@ -91,3 +91,61 @@ def quotes(conn, listing_id: str, limit: int = 20) -> list[dict]:
         "FROM mm_quotes WHERE listing_id = %s ORDER BY created_at DESC LIMIT %s",
         (listing_id, limit),
     ).fetchall()
+
+
+# ------------------------------------------------------------------ mm programs
+def upsert_program(conn, *, actor_id: str, listing_id: str, quantity: int) -> dict:
+    return conn.execute(
+        """
+        INSERT INTO mm_programs (actor_id, listing_id, quantity)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (actor_id, listing_id) DO UPDATE
+           SET quantity = EXCLUDED.quantity, status = 'active', last_error = ''
+        RETURNING id, actor_id, listing_id, quantity, status, last_run_at
+        """,
+        (actor_id, listing_id, quantity),
+    ).fetchone()
+
+
+def program(conn, *, actor_id: str, listing_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT id, actor_id, listing_id, quantity, status, last_run_at, last_error "
+        "FROM mm_programs WHERE actor_id = %s AND listing_id = %s",
+        (actor_id, listing_id),
+    ).fetchone()
+
+
+def set_program_status(conn, program_id: str, status: str) -> None:
+    conn.execute("UPDATE mm_programs SET status = %s WHERE id = %s", (status, program_id))
+
+
+def active_programs(conn, limit: int = 100) -> list[dict]:
+    return conn.execute(
+        "SELECT p.id, p.actor_id, p.listing_id, p.quantity, l.ticker, l.exchange_id "
+        "  FROM mm_programs p JOIN stock_listings l ON l.id = p.listing_id "
+        " WHERE p.status = 'active' AND l.status = 'listed' "
+        "   AND (p.last_run_at IS NULL OR p.last_run_at < now() - interval '60 seconds') "
+        " ORDER BY p.last_run_at NULLS FIRST LIMIT %s",
+        (limit,),
+    ).fetchall()
+
+
+def touch_program(conn, program_id: str, *, error: str = "") -> None:
+    conn.execute(
+        "UPDATE mm_programs SET last_run_at = now(), last_error = %s WHERE id = %s",
+        (error[:200], program_id),
+    )
+
+
+def programs_of_actor(conn, actor_id: str) -> list[dict]:
+    return conn.execute(
+        "SELECT p.id, p.quantity, p.status, p.last_run_at, p.last_error, l.ticker "
+        "  FROM mm_programs p JOIN stock_listings l ON l.id = p.listing_id "
+        " WHERE p.actor_id = %s ORDER BY l.ticker",
+        (actor_id,),
+    ).fetchall()
+
+
+def exchange_fee_bps(conn, exchange_id: str) -> int | None:
+    row = conn.execute("SELECT fee_bps FROM exchanges WHERE id = %s", (exchange_id,)).fetchone()
+    return int(row["fee_bps"]) if row else None

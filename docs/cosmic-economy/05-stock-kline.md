@@ -537,3 +537,17 @@ listed
   投资者保护 `insurance_fund` 20%；分账后 collection 标记 `split_run_id`，可审计到每一笔。
 - 规则比例之和必须为 1，否则 422；分区/税费（`property_tax` 70/30）用同一套表，`keep` 腿留在 treasury。
 - 未做：券商/交易所作为真实公司主体（当前映射到系统 actor）、按区费率差异化、退款冲正。
+
+
+---
+
+## 15. 拆股复权与 K 线归档（`0124_split_archive`）
+
+- `POST /stocks/{ticker}/split {ratio}`：仅控股方；`ratio>1` 拆股、`<1` 并股，范围 0.01–100。
+- 同一事务内调整：`last_price`/`prev_close` ÷ ratio、`total_shares`/`free_float` × ratio、
+  持仓 `shares` × ratio、`avg_cost` ÷ ratio、所有周期 K 线的 OHLC ÷ ratio 且 `volume` × ratio。
+- **挂单全部撤销**（不重定价）：猜测客户端意图比重挂更危险，宁可让用户重新下单；记录 `stock_splits` 留痕。
+- `candle_archive_tick`（每日）把 30 天前的 1m/5m K 线搬进 `stock_candle_archive`，热表只留近期数据；
+  归档是 `INSERT ... SELECT` + `DELETE` 同一个 CTE，幂等（重复归档不会重复插入）。
+- 未做：并股的碎股处理（当前向下取整，碎股直接消失）、复权因子接口（客户端画长周期图需要）、
+  归档表的分区与冷备。

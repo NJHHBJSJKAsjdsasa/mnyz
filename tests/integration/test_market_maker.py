@@ -105,3 +105,39 @@ def test_quote_without_listing_is_404(client, test_dsn):
         "/api/v1/stocks/NOPE/quotes", json={}, headers=_headers(player["token"])
     )
     assert response.status_code == 404
+
+
+def test_program_enrolls_and_job_refreshes(client, test_dsn):
+    setup = _market_with_momentum(client, test_dsn)
+    maker = _player(client, "mm-program")
+    _fund = __import__("tests.integration.test_ai_economy", fromlist=["_fund"])._fund
+    _fund(test_dsn, maker["id"], "cc4", "5000")
+    client.post(
+        f"/api/v1/stocks/{setup['ticker']}/orders",
+        json={"side": "buy", "type": "limit", "price": "10.3", "quantity": 40},
+        headers=_headers(maker["token"]),
+    )
+
+    enrolled = client.post(
+        f"/api/v1/stocks/{setup['ticker']}/mm-program",
+        json={"quantity": 5},
+        headers=_headers(maker["token"]),
+    )
+    assert enrolled.status_code == 200, enrolled.get_data(as_text=True)
+    assert enrolled.get_json()["data"]["status"] == "active"
+
+    from server.domain import market_maker
+
+    with psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row) as conn:
+        first = market_maker.refresh_all(conn)
+    assert first["refreshed"] == 1
+    actor_id = _actor_id(test_dsn, maker["id"])
+    assert len(_open_orders(test_dsn, actor_id)) == 2
+
+    paused = client.delete(
+        f"/api/v1/stocks/{setup['ticker']}/mm-program", headers=_headers(maker["token"])
+    )
+    assert paused.status_code == 200
+    with psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row) as conn:
+        second = market_maker.refresh_all(conn)
+    assert second["programs"] == 0

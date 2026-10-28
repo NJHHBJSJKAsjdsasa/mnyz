@@ -120,4 +120,73 @@ def place_quotes(conn, *, actor: dict, ticker: str, quantity: int | None = None,
     }
 
 
-__all__ = ["place_quotes"]
+def enroll(conn, *, actor: dict, ticker: str, quantity: int) -> dict:
+    listing = stock_repo.listing_by_ticker(conn, ticker.strip().upper())
+    if listing is None:
+        raise NotFound("该股票未上市")
+    if quantity <= 0:
+        raise NotFound("数量必须大于 0")
+    row = index_repo.upsert_program(
+        conn, actor_id=str(actor["id"]), listing_id=str(listing["id"]), quantity=int(quantity)
+    )
+    return {
+        "program_id": str(row["id"]),
+        "ticker": listing["ticker"],
+        "quantity": int(row["quantity"]),
+        "status": row["status"],
+    }
+
+
+def disenroll(conn, *, actor: dict, ticker: str) -> dict:
+    listing = stock_repo.listing_by_ticker(conn, ticker.strip().upper())
+    if listing is None:
+        raise NotFound("该股票未上市")
+    row = index_repo.program(conn, actor_id=str(actor["id"]), listing_id=str(listing["id"]))
+    if row is None:
+        raise NotFound("没有该标的的做市程序")
+    index_repo.set_program_status(conn, str(row["id"]), "paused")
+    return {"program_id": str(row["id"]), "ticker": listing["ticker"], "status": "paused"}
+
+
+def refresh(conn, program: dict) -> dict:
+    """Re-quote one standing program; failures are recorded, never raised."""
+    actor = {"id": str(program["actor_id"])}
+    try:
+        result = place_quotes(conn, actor=actor, ticker=str(program["ticker"]),
+                              quantity=int(program["quantity"]), refresh=True)
+    except ApiError as exc:
+        index_repo.touch_program(conn, str(program["id"]), error=exc.code)
+        return {"program_id": str(program["id"]), "ok": False, "error": exc.code}
+    index_repo.touch_program(conn, str(program["id"]))
+    return {"program_id": str(program["id"]), "ok": True, "orders": result["orders"]}
+
+
+def refresh_all(conn) -> dict:
+    programs = index_repo.active_programs(conn)
+    ok = failed = 0
+    for program in programs:
+        outcome = refresh(conn, program)
+        if outcome["ok"]:
+            ok += 1
+        else:
+            failed += 1
+    return {"programs": len(programs), "refreshed": ok, "failed": failed}
+
+
+def programs(conn, actor_id: str) -> dict:
+    return {
+        "programs": [
+            {
+                "program_id": str(row["id"]),
+                "ticker": row["ticker"],
+                "quantity": int(row["quantity"]),
+                "status": row["status"],
+                "last_run_at": row["last_run_at"].isoformat() if row["last_run_at"] else None,
+                "last_error": row["last_error"],
+            }
+            for row in index_repo.programs_of_actor(conn, actor_id)
+        ]
+    }
+
+
+__all__ = ["place_quotes", "enroll", "disenroll", "refresh", "refresh_all", "programs"]

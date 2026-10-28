@@ -122,6 +122,8 @@ python sim/simulate.py --only low # 单场景
 | `0120_price_index` | ✅ 已落地 | `price_indices`/`price_index_points`/`mm_quotes`、`market_index`（指数+报价）、`api/v1/market.py`、job `price_index_tick`、前端 `StockMarketPanel`、5 个集成测试 |
 | `0121_court_panel` | ✅ 已落地 | `court_panels`/`court_panel_members`、`court_panel`（抽签/回避/表决/异议）、`api/v1/court.py` 端点、3 个集成测试 |
 | `0122_liquidation_fx` | ✅ 已落地 | `insolvency_claims.paid_q1`、`insolvency_service` 多币种按 Q1 等值分配、1 个集成测试 |
+| `0123_exchange_matching` | ✅ 已落地 | `exchanges` 费率/上市费、`mm_programs` + job `mm_refresh_tick`、`api/v1/market.py` 交易所与做市程序端点、5 个集成测试 |
+| `0124_split_archive` | ✅ 已落地 | `stock_splits`/`stock_candle_archive`、`stock_corporate`（拆股复权 + 归档）、4 个集成测试 |
 
 `0110` 已实现的能力：
 
