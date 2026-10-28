@@ -448,3 +448,12 @@ cap = clamp(8% + traffic_index × 2% + strategic_factor × 3%, 5%, 15%)
   `POST /admin/market/index/publish`；job `price_index_tick` 每 5 分钟发布。
 - 前端：星舰实验舱新增「星际股市」标签，盘口 / K 线（纯 SVG，无图表库）/ 持仓，涨红跌绿。
 - 未做：成分股调整与除权、指数期货、做市商双边自动挂单（当前只出报价与存档）。
+
+
+### 0121 补充：双边做市与指数除权（运维冒烟发现）
+
+- `POST /stocks/{ticker}/quotes`：撤旧单 → 按 `quote` 的 bid/ask 挂双边；单侧 ≤ 该侧盘口 25%；
+  无持仓跳过卖边；每次报价写一条 `mm_quotes`（即使只有一侧能挂）。
+- `quote` 增加**不穿价**约束：bid 不得 ≥ 卖一、ask 不得 ≤ 买一，否则做市报价会立刻自吃对手盘。
+- IPO 时按 `price × offer_shares` 增加 `price_indices.base_cap`（除数修正），
+  新成分股上市不再让 CSX 跳空（真实指数的成分股调整口径）。

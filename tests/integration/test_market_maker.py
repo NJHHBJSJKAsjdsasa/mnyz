@@ -61,6 +61,14 @@ def test_quotes_place_both_sides_and_refresh(client, test_dsn):
     assert len(orders) == 2
     assert {row["side"] for row in orders} == {"buy", "sell"}
 
+    with psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row) as conn:
+        archived = conn.execute(
+            "SELECT mid, bid, ask, spread_bps FROM mm_quotes WHERE listing_id = "
+            "(SELECT id FROM stock_listings WHERE ticker = %s)", (setup["ticker"],),
+        ).fetchall()
+    assert len(archived) == 1
+    assert archived[0]["bid"] < archived[0]["ask"]
+
     # a second call refreshes: the old pair is cancelled, a new pair stands
     second = client.post(
         f"/api/v1/stocks/{setup['ticker']}/quotes",

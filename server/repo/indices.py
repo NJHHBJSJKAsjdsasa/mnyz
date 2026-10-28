@@ -21,6 +21,17 @@ def index(conn, code: str, *, for_update: bool = False) -> dict | None:
     return conn.execute(sql, (code,)).fetchone()
 
 
+def adjust_base_cap(conn, code: str, delta: Decimal) -> None:
+    """Divisor adjustment: a new listing enters without moving the index."""
+    if delta <= 0:
+        return
+    conn.execute(
+        "UPDATE price_indices SET base_cap = COALESCE(base_cap, 0) + %s, updated_at = now() "
+        "WHERE code = %s AND COALESCE(base_cap, 0) > 0",
+        (delta, code),
+    )
+
+
 def set_base_cap(conn, code: str, base_cap: Decimal) -> None:
     conn.execute(
         "UPDATE price_indices SET base_cap = %s, updated_at = now() WHERE code = %s",

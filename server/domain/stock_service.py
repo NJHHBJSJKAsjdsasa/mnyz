@@ -27,6 +27,7 @@ from ..infra.errors import (
 )
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
+from ..repo import indices as index_repo
 from ..repo import revenue as revenue_repo
 from ..repo import stocks as stock_repo
 from . import currency_service
@@ -313,6 +314,9 @@ def ipo(
         price=price,
         quantity=int(offer_shares),
     )
+    # 03 §4: a new constituent must not move the index, so the divisor grows by
+    # the newcomer's market cap at the IPO price.
+    index_repo.adjust_base_cap(conn, "CSX", q4(price * Decimal(int(offer_shares))))
     return {
         "ticker": ticker,
         "listing_id": str(listing["id"]),

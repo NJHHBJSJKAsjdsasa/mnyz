@@ -40,6 +40,46 @@ def test_index_starts_at_base_and_moves_with_price(client, test_dsn):
     assert value > Decimal("1000")
 
 
+def test_ipo_does_not_move_the_index(client, test_dsn):
+    setup = _market_with_momentum(client, test_dsn)
+    token = setup["whale"]["token"]
+    before = Decimal(
+        client.get("/api/v1/market/indices", headers=bearer(token)).get_json()["data"]
+        ["indices"][0]["value"]
+    )
+    assert before == Decimal("1000.0000")
+
+    # a second listing joins the index; the divisor is adjusted so it stays put
+    founder = _player(client, "idx-second-founder")
+    import psycopg
+    from psycopg.rows import dict_row
+
+    from tests.integration.test_ai_economy import _fund
+
+    _fund(test_dsn, founder["id"], "cc3", "50")
+    created = client.post(
+        "/api/v1/companies",
+        json={"ticker": "SEC", "name": "SEC 二号", "shares_total": 100000},
+        headers=_headers(founder["token"]),
+    )
+    assert created.status_code == 200, created.get_data(as_text=True)
+    with psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row) as conn:
+        conn.execute("UPDATE companies SET book_value = 60000, "
+                     "created_at = now() - interval '10 days' WHERE ticker = 'SEC'")
+    ipo = client.post(
+        "/api/v1/stocks/ipo",
+        json={"ticker": "SEC", "price": "10", "offer_shares": 30000},
+        headers=_headers(founder["token"]),
+    )
+    assert ipo.status_code == 200, ipo.get_data(as_text=True)
+
+    after = Decimal(
+        client.get("/api/v1/market/indices", headers=bearer(token)).get_json()["data"]
+        ["indices"][0]["value"]
+    )
+    assert abs(after - before) < Decimal("0.01"), (before, after)
+
+
 def test_points_are_published_once_per_minute(client, test_dsn):
     _market_with_momentum(client, test_dsn)
     admin = _player(client, "idx-admin")

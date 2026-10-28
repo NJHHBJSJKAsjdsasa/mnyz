@@ -10,6 +10,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from ..infra.errors import ApiError, NotFound
+from ..repo import indices as index_repo
 from ..repo import stocks as stock_repo
 from . import market_index, stock_service
 
@@ -92,6 +93,19 @@ def place_quotes(conn, *, actor: dict, ticker: str, quantity: int | None = None,
             "quantity": size,
             "status": order.get("status"),
         }
+
+    # keep the quote in the audit trail even when only one side could rest
+    index_repo.insert_quote(
+        conn,
+        listing_id=str(listing["id"]),
+        actor_id=str(actor["id"]),
+        mid=Decimal(quote["mid"]),
+        bid=Decimal(quote["bid"]),
+        ask=Decimal(quote["ask"]),
+        spread_bps=int(quote["spread_bps"]),
+        volatility_bps=int(quote["volatility_bps"]),
+        inventory_skew_bps=int(quote["inventory_skew_bps"]),
+    )
 
     return {
         "ticker": listing["ticker"],
