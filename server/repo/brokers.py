@@ -212,9 +212,46 @@ def set_venue_status(conn, listing_id: str, exchange_id: str, status: str) -> No
     )
 
 
+# ------------------------------------------------------------- securities lending
+# `securities_lending` is owned by this module (see infra/ownership.py). Stock code borrows
+# and returns through these two functions instead of touching the table directly.
+def insert_lending(conn, *, listing_id: str, lender_actor_id: str, quantity: int,
+                   fee_bps: int, due_at=None) -> dict:
+    return conn.execute(
+        """
+        INSERT INTO securities_lending (listing_id, lender_actor_id, quantity, fee_bps, due_at)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id, listing_id, lender_actor_id, quantity, fee_bps, status, due_at
+        """,
+        (listing_id, lender_actor_id, quantity, fee_bps, due_at),
+    ).fetchone()
+
+
+def mark_lending(conn, lending_id: str, *, status: str | None = None,
+                 borrower_actor_id: str | None = None, quantity: int | None = None) -> None:
+    sets, params = [], []
+    if status is not None:
+        sets.append("status = %s")
+        params.append(status)
+    if borrower_actor_id is not None:
+        sets.append("borrower_actor_id = %s")
+        params.append(borrower_actor_id)
+    if quantity is not None:
+        sets.append("quantity = %s")
+        params.append(quantity)
+    if not sets:
+        return
+    params.append(lending_id)
+    conn.execute(
+        f"UPDATE securities_lending SET {', '.join(sets)}, updated_at = now() WHERE id = %s",
+        params,
+    )
+
+
 __all__ = [
     "membership", "membership_by_id", "upsert_membership", "set_membership_status",
     "memberships_of_exchange", "account_of_client", "open_account", "close_account",
     "clients_of_broker", "insert_commission", "commissions_of_broker", "commission_total",
     "venues_of_listing", "venues_for_listings", "venue", "add_venue", "set_venue_status", "json",
+    "insert_lending", "mark_lending",
 ]

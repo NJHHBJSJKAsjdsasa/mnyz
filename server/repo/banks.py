@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from . import currency
+
 
 def list_banks(conn, *, status: str | None = "active") -> list[dict]:
     if status:
@@ -72,14 +74,9 @@ def create(
     reserve_ratio: Decimal = Decimal("0.15"),
 ) -> dict:
     """Create a bank plus its economic actor in one shot."""
-    actor = conn.execute(
-        """
-        INSERT INTO economic_actors (code, kind, controller, display_name)
-        VALUES ('bank:' || %s, 'bank', 'system', %s)
-        RETURNING id
-        """,
-        (code, name),
-    ).fetchone()
+    actor = currency.create_actor(
+        conn, code=f"bank:{code}", kind="bank", controller="system", display_name=name
+    )
     return conn.execute(
         """
         INSERT INTO banks (code, name, kind, owner_actor_id, actor_id, currency_code, reserve_ratio)
@@ -92,12 +89,8 @@ def create(
 
 def ensure_central_bank(conn) -> None:
     """Idempotent seed; production gets this from migration 0110."""
-    conn.execute(
-        """
-        INSERT INTO economic_actors (code, kind, controller, display_name)
-        VALUES ('bank:ccb', 'bank', 'system', '宇宙中央银行')
-        ON CONFLICT (code) DO NOTHING
-        """
+    currency.ensure_actor(
+        conn, code="bank:ccb", kind="bank", controller="system", display_name="宇宙中央银行"
     )
     conn.execute(
         """

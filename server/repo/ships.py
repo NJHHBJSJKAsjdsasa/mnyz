@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from . import players
+
 
 def create_default(conn, player_id: str) -> dict:
     ship = conn.execute(
@@ -40,19 +42,12 @@ def modules(conn, player_id: str) -> dict[str, dict]:
 
 
 def ensure_flags(conn, player_id: str) -> dict:
-    conn.execute(
-        "INSERT INTO player_flags (player_id) VALUES (%s) ON CONFLICT (player_id) DO NOTHING",
-        (player_id,),
-    )
-    return conn.execute(
-        "SELECT hull, vouchers FROM player_flags WHERE player_id = %s", (player_id,)
-    ).fetchone()
+    # `player_flags` belongs to the platform module — delegate instead of writing it here.
+    return players.ensure_flags(conn, player_id)
 
 
 def flags(conn, player_id: str) -> dict | None:
-    return conn.execute(
-        "SELECT hull, vouchers FROM player_flags WHERE player_id = %s", (player_id,)
-    ).fetchone()
+    return players.flags(conn, player_id)
 
 
 def set_level(conn, player_id: str, level: int) -> None:
@@ -78,17 +73,11 @@ def upsert_module(conn, player_id: str, module_code: str, level: int, overclock:
 
 
 def set_hull(conn, player_id: str, hull: int) -> None:
-    conn.execute(
-        "UPDATE player_flags SET hull = %s, updated_at = now() WHERE player_id = %s",
-        (hull, player_id),
-    )
+    players.set_hull(conn, player_id, hull)
 
 
 def add_vouchers(conn, player_id: str, amount: int) -> None:
-    conn.execute(
-        "UPDATE player_flags SET vouchers = vouchers + %s, updated_at = now() WHERE player_id = %s",
-        (amount, player_id),
-    )
+    players.add_vouchers(conn, player_id, amount)
 
 
 def tech_levels(conn, player_id: str) -> dict[str, int]:

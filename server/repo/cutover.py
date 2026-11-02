@@ -34,6 +34,30 @@ def set_flag(conn, name: str, mode: str, rollout_pct: int, updated_by: str | Non
     )
 
 
+def set_switch(conn, name: str, enabled: bool, description: str = "") -> None:
+    """Boolean kill switch — for flags that are "on/off", not part of the canary vocabulary.
+
+    ``set_flag`` derives ``enabled`` from the mode (anything but ``local`` counts as on),
+    which is wrong for operational switches such as the AI autopilot pause: there the mode
+    stays ``local`` while ``enabled`` is the actual state.
+    """
+    conn.execute(
+        """
+        INSERT INTO feature_flags (name, enabled, mode, rollout_pct, description)
+        VALUES (%s, %s, 'local', 0, %s)
+        ON CONFLICT (name) DO UPDATE SET enabled = EXCLUDED.enabled,
+          description = COALESCE(NULLIF(EXCLUDED.description, ''), feature_flags.description),
+          updated_at = now()
+        """,
+        (name, enabled, description),
+    )
+
+
+def switch_enabled(conn, name: str) -> bool:
+    row = conn.execute("SELECT enabled FROM feature_flags WHERE name = %s", (name,)).fetchone()
+    return bool(row["enabled"]) if row else False
+
+
 def set_override(conn, player_id: str, flag_key: str, mode: str, hours: int = 24) -> None:
     conn.execute(
         """

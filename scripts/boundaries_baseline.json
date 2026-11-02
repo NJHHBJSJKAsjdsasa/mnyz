@@ -1,9 +1,1 @@
-[
-  "server/domain/ai_economy.py:council_seats (owner: world)",
-  "server/domain/ai_economy.py:players (owner: platform)",
-  "server/repo/ai.py:feature_flags (owner: platform)",
-  "server/repo/banks.py:economic_actors (owner: currency)",
-  "server/repo/companies.py:economic_actors (owner: currency)",
-  "server/repo/ships.py:player_flags (owner: platform)",
-  "server/repo/stocks.py:securities_lending (owner: broker)"
-]
+[]

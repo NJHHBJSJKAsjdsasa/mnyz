@@ -83,18 +83,20 @@ python scripts/check_boundaries.py
 python scripts/check_boundaries.py --write-baseline
 ```
 
-基线文件 `scripts/boundaries_baseline.json` 记录**当前 7 条历史越界** <!--fact:boundaries.baseline=7-->（2026-10-28 冻结；
-拆分 `company_governance` 后从 15 条降到 7 条）：
+基线文件 `scripts/boundaries_baseline.json` 现在是**空数组** <!--fact:boundaries.baseline=0-->：7 条历史越界已于 2026-11-02 全部清零
+（2026-10-28 冻结时为 15 条，拆分 `company_governance` 后降到 7 条，之后逐条修完）。
 
-| 越界 | 现状 | 修法 |
+| 原越界 | 当时的问题 | 现在的写法 |
 |---|---|---|
-| `banks/companies → economic_actors` | 冻结/解冻 actor 状态时直接 UPDATE | 走 `currency_service.set_actor_status()` |
-| `stocks → securities_lending` | 借券写的是 broker 模块的表 | 由 `broker_service` 提供 `lend()` |
-| `ai → feature_flags` | AI 开关直接写平台表 | 走 `cutover.set_flag()` |
-| `ai_economy → players / council_seats` | AI 玩家初始化 | 初始化脚本单列，不进运行时路径 |
-| `ships → player_flags` | 船体/护盾标记 | 平台提供 `player_flags.set()` |
+| `banks/companies → economic_actors` | 建银行/公司时自己 INSERT actor | 走 `repo/currency.create_actor()` / `ensure_actor()` |
+| `stocks → securities_lending` | 借券直接写 broker 的表 | 走 `repo/brokers.insert_lending()` / `mark_lending()` |
+| `ai → feature_flags` | AI 熔断开关直接写平台表 | 走 `repo/cutover.set_switch()` / `switch_enabled()` |
+| `ai_economy → players` | AI 初始化时 UPDATE controller | 走 `repo/players.set_controller()` |
+| `ai_economy → council_seats` | AI 占议会席位直接 UPDATE | 走 `repo/council.assign_ai()`（与真人 `assign_player` 分开） |
+| `ships → player_flags` | 船体/改装券直接 UPDATE | 走 `repo/players.set_hull()` / `add_vouchers()` |
 
-基线只会变短：修掉一条删一条，**不允许新增**。
+**基线现在为空，任何新增越界都会直接让 CI 变红** —— 这是想要的状态。
+以后若确实需要临时豁免，往这个文件加条目时必须同时写清原因和到期方式。
 
 `--report` 还会列出「写到了未登记归属的表」—— 这些不拦，属于映射尚未覆盖的部分。
 

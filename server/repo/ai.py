@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
+from . import cutover
+
 AGENT_COLUMNS = (
     "id, code, name, persona, player_id, actor_id, faction_code, capital_seed, "
     "risk_profile, config, status, last_tick_at, created_at"
@@ -179,21 +181,13 @@ PAUSE_FLAG = "ai.runtime_pause"
 
 
 def set_pause(conn, paused: bool) -> None:
-    conn.execute(
-        """
-        INSERT INTO feature_flags (name, enabled, mode, rollout_pct, description)
-        VALUES (%s, %s, 'local', 0, 'AI 自动下单运维熔断（不没收资产）')
-        ON CONFLICT (name) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()
-        """,
-        (PAUSE_FLAG, paused),
-    )
+    # `feature_flags` belongs to the platform module; write through its repo instead of
+    # reaching into the table from here (see docs/architecture/module-dependencies.md §4).
+    cutover.set_switch(conn, PAUSE_FLAG, paused, "AI 自动下单运维熔断（不没收资产）")
 
 
 def is_paused(conn) -> bool:
-    row = conn.execute(
-        "SELECT enabled FROM feature_flags WHERE name = %s", (PAUSE_FLAG,)
-    ).fetchone()
-    return bool(row["enabled"]) if row else False
+    return cutover.switch_enabled(conn, PAUSE_FLAG)
 
 
 # ------------------------------------------------------------------ directory

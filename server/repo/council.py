@@ -47,6 +47,20 @@ def assign_player(conn, seat_no: int, player_id: str) -> bool:
     return bool(row)
 
 
+def assign_ai(conn, seat_no: int, player_id: str) -> bool:
+    """Seat an AI agent. Kept separate from `assign_player`: AI seats never belonged to a
+    human, so the `is_ai = false` guard in `assign_player` would reject every one of them."""
+    row = conn.execute(
+        """
+        UPDATE council_seats SET player_id = %s, joined_at = now()
+         WHERE seat_no = %s AND is_ai AND player_id IS NULL
+        RETURNING seat_no
+        """,
+        (player_id, seat_no),
+    ).fetchone()
+    return bool(row)
+
+
 def vacate_player(conn, player_id: str) -> bool:
     row = conn.execute(
         """

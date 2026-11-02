@@ -11,6 +11,8 @@ import json
 from datetime import date, datetime
 from decimal import Decimal
 
+from . import brokers
+
 LISTING_COLUMNS = (
     "id, exchange_id, company_id, ticker, currency_code, total_shares, free_float, "
     "status, ipo_price, last_price, prev_close, listed_at, settlement_mode, "
@@ -727,14 +729,15 @@ def set_margin_status(conn, actor_id: str, status: str, currency_code: str = "cc
 # ------------------------------------------------------------------ lending
 def insert_lending(conn, *, listing_id: str, lender_actor_id: str, quantity: int,
                    fee_bps: int, due_at=None) -> dict:
-    return conn.execute(
-        """
-        INSERT INTO securities_lending (listing_id, lender_actor_id, quantity, fee_bps, due_at)
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id, listing_id, lender_actor_id, quantity, fee_bps, status, due_at
-        """,
-        (listing_id, lender_actor_id, quantity, fee_bps, due_at),
-    ).fetchone()
+    # `securities_lending` belongs to the broker module; write through its repo.
+    return brokers.insert_lending(
+        conn,
+        listing_id=listing_id,
+        lender_actor_id=lender_actor_id,
+        quantity=quantity,
+        fee_bps=fee_bps,
+        due_at=due_at,
+    )
 
 
 def open_lending(conn, listing_id: str, *, for_update: bool = False) -> list[dict]:
@@ -767,22 +770,12 @@ def due_lending(conn, lending_id: str) -> dict | None:
 
 def mark_lending(conn, lending_id: str, *, status: str | None = None,
                  borrower_actor_id: str | None = None, quantity: int | None = None) -> None:
-    sets, params = [], []
-    if status is not None:
-        sets.append("status = %s")
-        params.append(status)
-    if borrower_actor_id is not None:
-        sets.append("borrower_actor_id = %s")
-        params.append(borrower_actor_id)
-    if quantity is not None:
-        sets.append("quantity = %s")
-        params.append(quantity)
-    if not sets:
-        return
-    params.append(lending_id)
-    conn.execute(
-        f"UPDATE securities_lending SET {', '.join(sets)}, updated_at = now() WHERE id = %s",
-        params,
+    brokers.mark_lending(
+        conn,
+        lending_id,
+        status=status,
+        borrower_actor_id=borrower_actor_id,
+        quantity=quantity,
     )
 
 

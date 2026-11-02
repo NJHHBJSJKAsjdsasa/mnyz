@@ -22,6 +22,35 @@ def create(
     ).fetchone()
 
 
+def flags(conn, player_id: str) -> dict | None:
+    """Hull / voucher counters. `player_flags` is owned here (see infra/ownership.py)."""
+    return conn.execute(
+        "SELECT hull, vouchers FROM player_flags WHERE player_id = %s", (player_id,)
+    ).fetchone()
+
+
+def ensure_flags(conn, player_id: str) -> dict:
+    conn.execute(
+        "INSERT INTO player_flags (player_id) VALUES (%s) ON CONFLICT (player_id) DO NOTHING",
+        (player_id,),
+    )
+    return flags(conn, player_id)
+
+
+def set_hull(conn, player_id: str, hull: int) -> None:
+    conn.execute(
+        "UPDATE player_flags SET hull = %s, updated_at = now() WHERE player_id = %s",
+        (hull, player_id),
+    )
+
+
+def add_vouchers(conn, player_id: str, amount: int) -> None:
+    conn.execute(
+        "UPDATE player_flags SET vouchers = vouchers + %s, updated_at = now() WHERE player_id = %s",
+        (amount, player_id),
+    )
+
+
 def get(conn, player_id: str) -> dict | None:
     return conn.execute(
         """
@@ -31,6 +60,17 @@ def get(conn, player_id: str) -> dict | None:
         """,
         (player_id,),
     ).fetchone()
+
+
+def set_controller(conn, player_id: str, controller: str) -> None:
+    """`human` / `server_ai`. Lives here because `players` is owned by this module.
+
+    `players` has no `updated_at` column — do not add one here.
+    """
+    conn.execute(
+        "UPDATE players SET controller = %s WHERE id = %s",
+        (controller, player_id),
+    )
 
 
 def lock(conn, player_id: str) -> dict | None:

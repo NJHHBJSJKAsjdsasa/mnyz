@@ -42,6 +42,35 @@ def actor_by_code(conn, code: str) -> dict | None:
     ).fetchone()
 
 
+def create_actor(conn, *, code: str, kind: str, controller: str, display_name: str) -> dict:
+    """Create a non-player actor (bank, company, firm…). Fails on a duplicate code.
+
+    `economic_actors` belongs to the currency module, so bank/company registration goes
+    through here rather than inserting into the table from their own repo files.
+    """
+    return conn.execute(
+        """
+        INSERT INTO economic_actors (code, kind, controller, display_name)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, code, kind, controller, display_name
+        """,
+        (code, kind, controller, display_name),
+    ).fetchone()
+
+
+def ensure_actor(conn, *, code: str, kind: str, controller: str, display_name: str) -> dict:
+    """Idempotent variant used by seed paths."""
+    conn.execute(
+        """
+        INSERT INTO economic_actors (code, kind, controller, display_name)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (code) DO NOTHING
+        """,
+        (code, kind, controller, display_name),
+    )
+    return actor_by_code(conn, code)
+
+
 def create_player_actor(conn, player_id: str, display_name: str, controller: str = "human") -> dict:
     return conn.execute(
         """

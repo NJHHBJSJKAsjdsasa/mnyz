@@ -20,6 +20,7 @@ from ..infra.errors import ApiError, InvalidArgument, NotFound
 from ..repo import accounts as account_repo
 from ..repo import ai as ai_repo
 from ..repo import banks as bank_repo
+from ..repo import council as council_repo
 from ..repo import currency as currency_repo
 from ..repo import players as player_repo
 from ..repo import stocks as stock_repo
@@ -116,9 +117,7 @@ def bootstrap(
             conn, account_id=str(account["id"]), universe_id=str(universe["id"]),
             display_name=name,
         )
-        conn.execute(
-            "UPDATE players SET controller = 'server_ai' WHERE id = %s", (str(player["id"]),)
-        )
+        player_repo.set_controller(conn, str(player["id"]), "server_ai")
         actor = currency_repo.create_player_actor(conn, str(player["id"]), name, "server_ai")
         if actor is None:  # pragma: no cover - unique player_id guarantees one row
             actor = currency_repo.actor_for_player(conn, str(player["id"]))
@@ -171,10 +170,8 @@ def _link_council_seats(conn) -> None:
         return
     agents = ai_repo.agents(conn, status=None, limit=len(seats))
     for seat, agent in zip(seats, agents):
-        conn.execute(
-            "UPDATE council_seats SET player_id = %s, joined_at = now() WHERE seat_no = %s",
-            (str(agent["player_id"]), int(seat["seat_no"])),
-        )
+        # `council_seats` belongs to the world module — seat the agent through its repo.
+        council_repo.assign_ai(conn, int(seat["seat_no"]), str(agent["player_id"]))
 
 
 # ------------------------------------------------------------------ context

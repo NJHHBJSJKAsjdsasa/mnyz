@@ -4,17 +4,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from . import currency
+
 
 def create(conn, *, ticker: str, name: str, founder_actor_id: str, shares_total: int,
            jurisdiction_sector: str, charter: dict | None = None) -> dict:
-    actor = conn.execute(
-        """
-        INSERT INTO economic_actors (code, kind, controller, display_name)
-        VALUES ('company:' || %s, 'company', 'system', %s)
-        RETURNING id
-        """,
-        (ticker, name),
-    ).fetchone()
+    actor = currency.create_actor(
+        conn, code=f"company:{ticker}", kind="company", controller="system", display_name=name
+    )
     import json
 
     return conn.execute(
