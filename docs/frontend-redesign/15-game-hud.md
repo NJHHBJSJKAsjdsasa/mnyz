@@ -110,9 +110,8 @@ npm run shot -- --only public,game,panel      13 张，产物 .workbuddy/shots10
 ### 7.5.1 首页整屏重做（`Layouts/main/HomeScreen.tsx`）
 
 **停用的**：`Layouts/main/HeroPanel.tsx`（212 行）、`Components/CoordinateSelector.tsx`（841 行）。
-它们就是「现在的界面」——居中营销块 + 底部表单。两个文件不再被任何代码引用：
-`CoordinateSelector.tsx` 已物理删除，`HeroPanel.tsx` **截至 2026-11-02 仍在磁盘上**（212 行、零 import，
-`HomeScreen.tsx` 与 `Layouts/__main__.tsx` 只有注释提到它），属未清理的残留文件，可随时删除。
+它们就是「现在的界面」——居中营销块 + 底部表单。两个文件不再被任何代码引用，
+**均已物理删除**（`HeroPanel` 于 2026-11-02 清除，见 `docs/optimization/05-dead-code.md`）。
 
 新的桥段布局（一整屏，无滚动也能操作）：
 

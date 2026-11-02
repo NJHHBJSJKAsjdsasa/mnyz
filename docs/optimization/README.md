@@ -53,6 +53,7 @@
 | [02-frontend.md](02-frontend.md) | 前端：死代码、大文件、循环动画、5 文档合一、首屏预算、可访问性、视觉回归 |
 | [03-backend.md](03-backend.md) | 后端：越界清零、job 可靠性、迁移可逆、指标与告警、经济平衡回归 |
 | [04-delivery.md](04-delivery.md) | 交付：CI 补全、dist 策略、提交粒度、分支与发布、CHANGELOG 与 tag |
+| [05-dead-code.md](05-dead-code.md) | **零引用文件清查**：入口可达性分析、已删 6 个 / 保留实验页 / 异象链待决策 |
 
 ---
 
