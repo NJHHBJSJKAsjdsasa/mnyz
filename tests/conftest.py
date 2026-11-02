@@ -179,6 +179,28 @@ def _truncate(dsn: str) -> None:
         )
 
 
+def _install_test_jwt_keys() -> None:
+    """Give the session its own RSA key pair instead of borrowing `.env.server`.
+
+    `.env.server` is git-ignored, so CI (and any fresh clone) had no keys at all and every
+    integration test died in setup with `jwt.exceptions.InvalidKeyError`. Generating them
+    per session keeps tests self-contained and avoids committing a private key.
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    os.environ["ATLAS_JWT_PRIVATE_KEY"] = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("ascii")
+    os.environ["ATLAS_JWT_PUBLIC_KEY"] = key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("ascii")
+
+
 @pytest.fixture(scope="session")
 def test_dsn() -> str:
     dsn = os.environ.get("ATLAS_TEST_DATABASE_URL", "").strip()
@@ -190,6 +212,7 @@ def test_dsn() -> str:
     os.environ["ATLAS_REDIS_URL"] = "memory://"
     os.environ["ATLAS_ENV"] = "dev"
     os.environ["ATLAS_INTERNAL_TOKEN"] = "test-internal-token"
+    _install_test_jwt_keys()
     _ensure_database(dsn)
     _migrate()
     return dsn
