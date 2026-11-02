@@ -8,6 +8,7 @@ read while the secret is still verified against an Argon2id hash. The docs'
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -40,8 +41,51 @@ from ..repo import players as player_repo
 from ..repo import sessions as session_repo
 from ..repo import ships as ship_repo
 from ..repo import wallets as wallet_repo
+from . import ledger
 
 MAX_FAILURES = 5
+
+# What a brand-new player flies with.
+#
+# A typical galaxy jump costs ~113 AM / ~57 E115 / ~77 D (see
+# `currency_service` cost table and the client's `calculateJumpCost`), so this is
+# about four jumps — enough to leave the origin and reach a system worth
+# collecting in, not enough to skip the early game. Without it every new account
+# started at zero and the home screen's jump button was permanently disabled;
+# the game could not be started at all.
+STARTER_KIT = {
+    "antimatter": Decimal("500"),
+    "element115": Decimal("300"),
+    "deuterium": Decimal("400"),
+}
+
+
+def _grant_starter_kit(conn, player_id: str) -> None:
+    """Hand a new player their starting fuel.
+
+    Resources live in `wallets` (keyed by `resource_code`), a different ledger from
+    the money one (`currency_accounts`, cc1–cc9) — so `currency_service` is the
+    wrong door here and raises a foreign-key error on `antimatter`. This goes
+    through `ledger.post_transaction`, which writes the wallet rows and the
+    matching entries, and credits the `quest` system account.
+
+    `idem_key` makes the grant replay-safe if registration is retried.
+    """
+    # `post_transaction` updates wallet rows, so they must exist first. Normally
+    # `_ensure_player` creates them, but a player without rows would otherwise
+    # fail the grant with InsufficientFunds (and `/state` would still show 0).
+    wallet_repo.ensure(conn, player_id)
+    ledger.post_transaction(
+        conn,
+        player_id,
+        STARTER_KIT,
+        ledger.TxRef(
+            kind="starter_kit",
+            ref_type="starter_kit",
+            ref_id=player_id,
+            idem_key=f"starter:{player_id}",
+        ),
+    )
 LOCK_SECONDS = 900
 
 
@@ -105,6 +149,7 @@ def register(conn, ctx: AuthContext, command: RegisterCommand, client: ClientInf
         conn, email=email.lower(), password_hash=hash_password(password), status="active"
     )
     player = _ensure_player(conn, account["id"], command.universe, command.display_name)
+    _grant_starter_kit(conn, player["id"])
     refresh_token = _new_session(conn, ctx, player, client)
     audit_repo.write(
         conn,
@@ -132,6 +177,7 @@ def login(conn, ctx: AuthContext, command: LoginCommand, client: ClientInfo) -> 
         )
         audit_repo.write(conn, audit_repo.AuditEvent(action="login_failed", actor=account["id"], ip=client.ip))
         if row["locked_until"] and row["failed_logins"] >= MAX_FAILURES:
+            # Error copy, read by a human: "+00:00" is friendlier than a bare Z here.
             raise AccountLocked(f"失败次数过多，已锁定至 {row['locked_until'].isoformat()}")
         raise InvalidCredentials()
 

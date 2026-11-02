@@ -5,9 +5,11 @@ from __future__ import annotations
 from flask import Blueprint, g, request
 
 from ...domain import planet as planet_domain
-from ...domain import codex_reward, scan_service, sector_service, surface_service, task_service
+from ...domain import codex_reward, milestones, relics, scan_service, sector_service, surface_service, task_service
 from ...domain import surface as surface_domain
 from ...domain.collect import CollectIntent, collect, config_for
+from ...domain.sector import coordinates_from_key, sector_of
+from ...infra.serialize import day as day_of
 from ...infra.context import db
 from ...infra.errors import InvalidArgument
 from ...models.explore import CollectRequest, SurfaceSampleRequest
@@ -74,7 +76,7 @@ def surface_grid(planet_key: str):
             "daily_samples": surface_domain.DAILY_SAMPLES,
             "used": used,
             "remaining": max(0, surface_domain.DAILY_SAMPLES - used),
-            "game_day": day.isoformat(),
+            "game_day": day_of(day),
         }
     )
 
@@ -125,6 +127,8 @@ def visit_planet(planet_key: str):
         planet = planet_domain.resolve_planet(conn, player, planet_key)
         added = codex_repo.add_many(conn, player["id"], "planet", [planet["planet_type"]])
         added += codex_repo.add_many(conn, player["id"], "element", list(planet["elements"]))
+        coords = coordinates_from_key(planet_key)
+        milestones.record_visit(conn, player["id"], planet_key, coords, sector_of(coords)["key"])
         task_service.advance(conn, player, "planetsDiscovered", 1)
         version = player_repo.bump_state(conn, player["id"])
     return success({"added": added, "state_version": version})
@@ -179,3 +183,42 @@ def collect_planet(planet_key: str):
         result = collect(conn, player, CollectIntent(planet_key, body.coordinates), config_for(conn))
         finish_idempotency(conn, ticket, 200, result)
     return success(result, int(result["state_version"]))
+
+
+# ------------------------------------------------------------------ relics
+@bp.get("/relics")
+@require_auth()
+@rate_limit("relics", 60, 60)
+def relic_progress():
+    with db().transaction() as conn:
+        player = player_repo.get(conn, g.player_id)
+        data = relics.progress(conn, player)
+    return success(data, int(player["state_version"]))
+
+
+@bp.post("/relics/<path:planet_key>")
+@require_auth(write=True)
+@rate_limit("relic_discover", 60, 60)
+def relic_discover(planet_key: str):
+    """Record the fragment this planet carries; the server decides which one."""
+    payload = {"planet_key": planet_key}
+    with db().transaction() as conn:
+        ticket = begin_idempotency(conn, g.account_id, payload)
+        if ticket.replayed and ticket.cached:
+            cached = ticket.cached
+            return success(cached, int(cached.get("state_version", 0)), extra_headers={"Idempotent-Replay": "true"})
+        player = player_repo.get(conn, g.player_id)
+        result = relics.discover(conn, player, planet_key)
+        finish_idempotency(conn, ticket, 200, result)
+    return success(result)
+
+
+@bp.get("/progress/exploration")
+@require_auth()
+@rate_limit("milestones", 120, 60)
+def exploration_milestones():
+    """Cumulative discovery scoreboard (T-62); pays nothing — rewards live in /tasks."""
+    with db().transaction() as conn:
+        player = player_repo.get(conn, g.player_id)
+        data = milestones.milestone(conn, player)
+    return success(data, int(player["state_version"]))

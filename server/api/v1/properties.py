@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from flask import Blueprint, g, request
 
-from ...domain import currency_service, property_service
+from ...domain import currency_service, property_disputes, property_service
 from ...infra.context import db
 from ...infra.errors import Forbidden, InvalidArgument, NotFound
-from ...models.commerce import PropertyBidRequest, PropertyListRequest, PropertyRegisterRequest
+from ...models.commerce import (
+    PropertyBidRequest,
+    PropertyDisputeRequest,
+    PropertyDisputeResolveRequest,
+    PropertyListRequest,
+    PropertyRegisterRequest,
+)
 from ...repo import players as player_repo
 from ...repo import properties as property_repo
 from ..deps import (
+    check_if_match,
     begin_idempotency,
     finish_idempotency,
     parse_model,
@@ -29,6 +36,9 @@ def _write(payload: dict, action):
             return success(ticket.cached, extra_headers={"Idempotent-Replay": "true"})
         player = player_repo.get(conn, g.player_id)
         player["account_role"] = getattr(g, "player", {}).get("account_role")
+        # T-04 / 10 §P1-2: only enforced when the client sends If-Match, so
+        # older clients keep working while new ones get real optimistic locking.
+        check_if_match(player)
         result = action(conn, player)
         finish_idempotency(conn, ticket, 200, result)
     return success(result)
@@ -51,6 +61,9 @@ def list_properties():
     return success({
         "properties": [
             {
+                # `id` is what loan collateral refers to; `asset_key` stays the
+                # human handle used by the list/buy endpoints.
+                "id": str(row["id"]),
                 "asset_key": row["asset_key"],
                 "kind": row["kind"],
                 "name": row["name"],
@@ -86,6 +99,45 @@ def my_properties():
         ],
         "bills": bills,
     })
+
+
+@bp.post("/properties/<path:asset_key>/dispute")
+@require_auth(write=True)
+@rate_limit("property_dispute", 10, 60)
+def open_dispute(asset_key: str):
+    body = parse_model(PropertyDisputeRequest)
+    payload = {"asset_key": asset_key, "reason": body.reason}
+
+    def action(conn, player):
+        actor = currency_service.actor_for_player(conn, player)
+        return property_disputes.open_dispute(conn, actor=actor, asset_key=asset_key, reason=body.reason)
+
+    return _write(payload, action)
+
+
+@bp.get("/properties/disputes")
+@require_auth()
+@rate_limit("property_disputes", 120, 60)
+def list_disputes():
+    asset_key = request.args.get("asset_key") or None
+    with db().connection() as conn:
+        return success({"disputes": property_disputes.disputes_of(conn, asset_key)})
+
+
+@bp.post("/properties/disputes/<dispute_id>/resolve")
+@require_auth(write=True)
+@rate_limit("property_dispute_resolve", 30, 60)
+def resolve_dispute(dispute_id: str):
+    body = parse_model(PropertyDisputeResolveRequest)
+    payload = {"dispute": dispute_id, "upheld": body.upheld}
+
+    def action(conn, player):
+        _require_admin(player)
+        return property_disputes.resolve_dispute(
+            conn, dispute_id=dispute_id, upheld=body.upheld, note=body.note
+        )
+
+    return _write(payload, action)
 
 
 @bp.get("/properties/listings")

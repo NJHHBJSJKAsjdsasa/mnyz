@@ -8,24 +8,19 @@ from flask import Blueprint, g
 
 from ...domain import revenue_service
 from ...infra.context import db
-from ...infra.errors import Forbidden
+from ...infra.serialize import ts
 from ...models.revenue import SplitRequest
 from ...repo import revenue as revenue_repo
-from ..deps import parse_model, rate_limit, require_auth, success
+from ..deps import parse_model, rate_limit, require_admin, require_auth, success
 
 bp = Blueprint("revenue", __name__)
-
-
-def _require_admin() -> None:
-    if str(getattr(g, "player", {}).get("account_role") or "") not in ("admin", "ops"):
-        raise Forbidden("需要运维/管理员权限")
 
 
 @bp.get("/admin/economy/revenue")
 @require_auth()
 @rate_limit("revenue_view", 60, 60)
 def overview():
-    _require_admin()
+    require_admin()
     with db().connection() as conn:
         runs = revenue_repo.runs(conn, limit=10)
         return success({
@@ -39,7 +34,7 @@ def overview():
                     "amount": str(Decimal(row["amount"])),
                     "collections": int(row["collections"]),
                     "ran_by": row["ran_by"],
-                    "at": row["created_at"].isoformat(),
+                    "at": ts(row["created_at"]),
                 }
                 for row in runs
             ],
@@ -50,7 +45,7 @@ def overview():
 @require_auth(write=True)
 @rate_limit("revenue_split", 20, 3600)
 def split():
-    _require_admin()
+    require_admin()
     body = parse_model(SplitRequest)
     with db().transaction() as conn:
         if body.kind:

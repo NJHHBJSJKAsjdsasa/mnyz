@@ -20,6 +20,7 @@ from ...models.stock import (
 )
 from ...repo import players as player_repo
 from ..deps import (
+    check_if_match,
     begin_idempotency,
     finish_idempotency,
     parse_model,
@@ -37,6 +38,9 @@ def _write(payload: dict, action):
         if ticket.replayed and ticket.cached:
             return success(ticket.cached, extra_headers={"Idempotent-Replay": "true"})
         player = player_repo.get(conn, g.player_id)
+        # T-04 / 10 §P1-2: only enforced when the client sends If-Match, so
+        # older clients keep working while new ones get real optimistic locking.
+        check_if_match(player)
         result = action(conn, player)
         finish_idempotency(conn, ticket, 200, result)
     return success(result)
@@ -52,8 +56,15 @@ def _actor(conn, player) -> dict:
 @rate_limit("stocks", 120, 60)
 def list_stocks():
     status = request.args.get("status") or "listed"
+    try:
+        limit = int(request.args.get("limit") or 100)
+    except ValueError:
+        raise InvalidArgument("limit 必须是整数") from None
+    cursor = request.args.get("cursor") or None
     with db().connection() as conn:
-        return success({"stocks": stock_service.list_stocks(conn, status=status)})
+        return success(stock_service.list_stocks_page(
+            conn, status=status, limit=limit, cursor=cursor
+        ))
 
 
 @bp.get("/stocks/orders")
@@ -140,6 +151,7 @@ def place_order(ticker: str):
         "type": body.type,
         "price": str(body.price) if body.price is not None else None,
         "quantity": body.quantity,
+        "venue": body.venue_code,
     }
 
     def action(conn, player):
@@ -151,6 +163,7 @@ def place_order(ticker: str):
             order_type=body.type,
             quantity=body.quantity,
             price=body.price,
+            venue_code=body.venue_code,
         )
 
     return _write(payload, action)
@@ -243,6 +256,7 @@ def ipo():
             settlement_mode=body.settlement_mode,
             shortable=body.shortable,
             exchange_code=body.exchange_code,
+            call_auction_minutes=body.call_auction_minutes,
         )
 
     return _write({"ticker": body.ticker, "ipo": body.offer_shares}, action)

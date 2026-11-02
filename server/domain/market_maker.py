@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import ApiError, NotFound
 from ..repo import indices as index_repo
 from ..repo import stocks as stock_repo
@@ -173,7 +174,8 @@ def refresh_all(conn) -> dict:
     return {"programs": len(programs), "refreshed": ok, "failed": failed}
 
 
-def programs(conn, actor_id: str) -> dict:
+def programs(conn, actor_id: str, ticker: str | None = None) -> dict:
+    rows = index_repo.programs_of_actor(conn, actor_id, ticker=ticker)
     return {
         "programs": [
             {
@@ -181,10 +183,10 @@ def programs(conn, actor_id: str) -> dict:
                 "ticker": row["ticker"],
                 "quantity": int(row["quantity"]),
                 "status": row["status"],
-                "last_run_at": row["last_run_at"].isoformat() if row["last_run_at"] else None,
+                "last_run_at": ts(row["last_run_at"]),
                 "last_error": row["last_error"],
             }
-            for row in index_repo.programs_of_actor(conn, actor_id)
+            for row in rows
         ]
     }
 

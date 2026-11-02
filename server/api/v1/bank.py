@@ -22,6 +22,7 @@ from ...models.currency import (
 from ...repo import currency as currency_repo
 from ...repo import players as player_repo
 from ..deps import (
+    check_if_match,
     begin_idempotency,
     finish_idempotency,
     parse_model,
@@ -40,6 +41,9 @@ def _write(payload: dict, action):
             return success(ticket.cached, extra_headers={"Idempotent-Replay": "true"})
         player = player_repo.get(conn, g.player_id)
         player["account_role"] = getattr(g, "player", {}).get("account_role")
+        # T-04 / 10 §P1-2: only enforced when the client sends If-Match, so
+        # older clients keep working while new ones get real optimistic locking.
+        check_if_match(player)
         result = action(conn, player)
         finish_idempotency(conn, ticket, 200, result)
     return success(result)
@@ -214,7 +218,7 @@ def bank_accounts():
 def open_loan(bank_id: str):
     body = parse_model(LoanRequest)
     payload = {"bank": bank_id, "currency": body.currency_code, "amount": str(body.amount),
-               "term": body.term_days}
+               "term": body.term_days, "collateral": sorted(body.collateral_asset_ids)}
 
     def action(conn, player):
         actor = currency_service.actor_for_player(conn, player)
@@ -225,6 +229,7 @@ def open_loan(bank_id: str):
             currency_code=body.currency_code,
             amount=body.amount,
             term_days=body.term_days,
+            collateral_asset_ids=body.collateral_asset_ids,
         )
 
     return _write(payload, action)
@@ -237,6 +242,15 @@ def list_loans():
     with db().connection() as conn:
         actor = currency_service.actor_for_player(conn, player_repo.get(conn, g.player_id))
         return success({"loans": bank_service.loans(conn, actor["id"])})
+
+
+@bp.get("/bank/loans/<loan_id>/collateral")
+@require_auth()
+@rate_limit("bank_loan_collateral", 120, 60)
+def loan_collateral(loan_id: str):
+    with db().connection() as conn:
+        actor = currency_service.actor_for_player(conn, player_repo.get(conn, g.player_id))
+        return success(bank_service.collateral_of(conn, actor, loan_id))
 
 
 @bp.post("/bank/loans/<loan_id>/repay")

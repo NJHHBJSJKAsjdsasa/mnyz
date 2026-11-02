@@ -336,3 +336,86 @@ def assets_for_appraisal(conn, limit: int = 5000) -> list[dict]:
         """,
         (limit,),
     ).fetchall()
+
+
+# ------------------------------------------------------------------ disputes
+
+
+def latest_transfer(conn, asset_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT id, from_actor_id, to_actor_id, price, created_at FROM property_transfers "
+        "WHERE asset_id = %s ORDER BY created_at DESC LIMIT 1",
+        (asset_id,),
+    ).fetchone()
+
+
+def cancel_open_listings(conn, asset_id: str) -> int:
+    row = conn.execute(
+        "UPDATE property_listings SET status = 'cancelled', closed_at = now() "
+        "WHERE asset_id = %s AND status = 'open' RETURNING id",
+        (asset_id,),
+    ).fetchall()
+    return len(row)
+
+
+def insert_dispute(
+    conn, *, asset_id: str, transfer_id: str, opened_by: str, reason: str,
+    encumbrance_id: str, closes_at,
+) -> dict:
+    return conn.execute(
+        """
+        INSERT INTO property_disputes
+               (asset_id, transfer_id, opened_by, reason, encumbrance_id, closes_at)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id, asset_id, transfer_id, opened_by, reason, status, encumbrance_id,
+                  opened_at, closes_at, resolved_at, resolution_note
+        """,
+        (asset_id, transfer_id, opened_by, reason, encumbrance_id, closes_at),
+    ).fetchone()
+
+
+def dispute(conn, dispute_id: str, *, for_update: bool = False) -> dict | None:
+    sql = (
+        "SELECT id, asset_id, transfer_id, opened_by, reason, status, encumbrance_id, "
+        "opened_at, closes_at, resolved_at, resolution_note "
+        "FROM property_disputes WHERE id = %s"
+    )
+    if for_update:
+        sql += " FOR UPDATE"
+    return conn.execute(sql, (dispute_id,)).fetchone()
+
+
+def open_dispute_of(conn, asset_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT id FROM property_disputes WHERE asset_id = %s AND status = 'open'",
+        (asset_id,),
+    ).fetchone()
+
+
+def open_disputes(conn) -> list[dict]:
+    return conn.execute(
+        "SELECT id, asset_id, transfer_id, opened_by, encumbrance_id, closes_at "
+        "FROM property_disputes WHERE status = 'open' ORDER BY closes_at"
+    ).fetchall()
+
+
+def finish_dispute(conn, dispute_id: str, *, status: str, note: str = "") -> None:
+    conn.execute(
+        "UPDATE property_disputes SET status = %s, resolution_note = %s, resolved_at = now() "
+        "WHERE id = %s",
+        (status, note, dispute_id),
+    )
+
+
+def disputes_for(conn, asset_id: str | None) -> list[dict]:
+    sql = (
+        "SELECT d.id, d.asset_id, a.asset_key, d.transfer_id, d.opened_by, d.reason, d.status, "
+        "d.opened_at, d.closes_at, d.resolved_at, d.resolution_note "
+        "FROM property_disputes d JOIN property_assets a ON a.id = d.asset_id"
+    )
+    params: tuple = ()
+    if asset_id:
+        sql += " WHERE d.asset_id = %s"
+        params = (asset_id,)
+    sql += " ORDER BY d.opened_at DESC LIMIT 100"
+    return conn.execute(sql, params).fetchall()

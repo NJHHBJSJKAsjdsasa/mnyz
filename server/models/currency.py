@@ -42,6 +42,9 @@ class LoanRequest(StrictModel):
     currency_code: str = Field(default="cc1", pattern=CURRENCY_PATTERN)
     amount: Decimal = Field(gt=0, max_digits=24, decimal_places=4)
     term_days: int = Field(default=90, ge=30, le=180)
+    #: Deeds pledged as collateral (property asset ids). Optional: unsecured
+    #: lending stays available, it just cannot be liquidated on default.
+    collateral_asset_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
 class RepayRequest(StrictModel):

@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import banks as bank_repo
 from . import currency_service
@@ -124,7 +125,7 @@ def quote(conn, *, actor: dict, certificate_id: str, ask_yield_bps: int) -> dict
         "certificate_id": str(cert["id"]),
         "price": str(Decimal(row["price"])),
         "ask_yield_bps": ask_yield_bps,
-        "expires_at": row["expires_at"].isoformat(),
+        "expires_at": ts(row["expires_at"]),
         "remaining_days": remaining_days,
     }
 
@@ -227,7 +228,7 @@ def open_quotes(conn) -> list[dict]:
             "ask_yield_bps": int(row["ask_yield_bps"]),
             "principal": str(Decimal(row["principal"])),
             "accrued_interest": str(Decimal(row["accrued_interest"])),
-            "expires_at": row["expires_at"].isoformat(),
+            "expires_at": ts(row["expires_at"]),
         }
         for row in bank_repo.certificate_quotes(conn)
     ]
@@ -243,5 +244,5 @@ def _payload(row: dict) -> dict:
         "rate_bps": int(row["rate_bps"]),
         "term_days": int(row["term_days"]),
         "status": row["status"],
-        "matures_at": row["matures_at"].isoformat(),
+        "matures_at": ts(row["matures_at"]),
     }

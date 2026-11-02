@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from ..infra.serialize import day as day_of
 from ..infra.clock import ms_until
 from ..infra.errors import ApiError, InvalidArgument, PlayerLocked
 from ..repo import calendar as calendar_repo
@@ -114,7 +115,7 @@ def _context(conn, player: dict, intent: CollectIntent, planet: dict | None) -> 
     return CollectContext(
         planet_key=intent.planet_key,
         coordinates=intent.coordinates,
-        game_day=day.isoformat(),
+        game_day=day_of(day),
         ship_level=_ship_level(conn, player["id"]),
         module_level=int(coil["level"]),
         module_overclock=int(coil["overclock"]),

@@ -376,8 +376,11 @@ def test_delisting_triggered_by_negative_equity(client, test_dsn):
     status = client.get(
         "/api/v1/stocks/KAPPA/delisting", headers=bearer(ipo["founder"]["token"])
     ).get_json()["data"]
-    assert status["status"] == "suspended"
-    assert status["case"]["status"] == "triggered"
+    # T-22: the trigger opens a 30-day 整理期 instead of freezing the book, so
+    # holders can still leave at a market price before the clearing price is set.
+    assert status["status"] == "listed"
+    assert status["case"]["status"] == "consolidation"
+    assert status["case"]["consolidation_ends_at"] is not None
 
 
 def test_ledger_reconciles_after_trading(client, test_dsn):

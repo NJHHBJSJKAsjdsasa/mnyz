@@ -97,11 +97,17 @@ def post(
     idem_key: str | None = None,
     memo: str = "",
     balanced_in_q1: bool = False,
+    reversal_of: str | None = None,
+    reversal_reason: str = "",
 ) -> dict:
     """Write one balanced ledger transaction.
 
     ``balanced_in_q1`` is needed for exchange, where value leaves one currency
     and appears in another at a fixed ratio; the Q1-equivalent sum is zero.
+
+    ``reversal_of`` marks this row as the mirror of an earlier transaction
+    (T-32). It is carried through here — rather than patched on afterwards — so
+    that a reversal can never exist without its link.
     """
     aggregated: dict[tuple[str, str], Decimal] = {}
     for move in moves:
@@ -140,6 +146,8 @@ def post(
         ref_id=ref_id,
         idempotency_key=idem_key,
         memo=memo,
+        reversal_of=reversal_of,
+        reversal_reason=reversal_reason,
     )
     actors = {actor_id: currency_repo.actor_by_id(conn, actor_id) for actor_id, _ in aggregated}
     entries = []
@@ -481,6 +489,77 @@ def grant_reward(
         idem_key=idem_key,
         memo="issuance reward",
     )
+
+
+def distribute_daily_reward(conn, *, day=None, currency_code: str = "cc1") -> dict:
+    """Pay the day's reward budget out to active players (01 §4.1 step 3).
+
+    The budget was minted into treasury by :func:`issue_daily`; this function is
+    the only thing that moves it to players, one equal share each. Two
+    deliberate choices:
+
+    * equal split, not activity-weighted — the activity weight is already inside
+      the issuance formula, weighting twice would make big players compound;
+    * the remainder stays in treasury instead of being rounded up, so the sum of
+      the rewards can never exceed the budget.
+
+    Idempotent per ``(day, actor)``: re-running the job reuses the same ledger
+    key, so a retry cannot pay twice.
+    """
+    from datetime import date as _date
+
+    day = day or _date.today()
+    record = currency_repo.issuance_for_day(conn, day)
+    if record is None:
+        return {"skipped": "no_issuance", "day": str(day)}
+
+    policy = currency_repo.active_policy(conn)
+    share = Decimal(policy["reward_share"]) if policy else Decimal("0.70")
+    budget = q4(Decimal(record["emitted_amount"]) * share)
+    if budget <= 0:
+        return {"skipped": "empty_budget", "day": str(day)}
+
+    rows = conn.execute(
+        """
+        SELECT a.id AS actor_id
+          FROM players p
+          JOIN economic_actors a ON a.player_id = p.id
+         WHERE p.last_seen_at > now() - interval '24 hours'
+           AND p.locked_reason IS NULL
+           AND a.status = 'active'
+         ORDER BY p.id
+        """
+    ).fetchall()
+    if not rows:
+        return {"skipped": "no_active_players", "day": str(day), "budget": str(budget)}
+
+    per_actor = q4(budget / Decimal(len(rows)))
+    if per_actor <= 0:
+        return {"skipped": "share_below_precision", "day": str(day), "budget": str(budget)}
+
+    paid = Decimal(0)
+    recipients = 0
+    for row in rows:
+        grant_reward(
+            conn,
+            actor_id=str(row["actor_id"]),
+            amount=per_actor,
+            ref_type="daily_reward",
+            ref_id=str(day),
+            idem_key=f"daily_reward:{day}:{row['actor_id']}",
+            currency_code=currency_code,
+        )
+        paid += per_actor
+        recipients += 1
+
+    return {
+        "day": str(day),
+        "budget": str(budget),
+        "paid": str(paid),
+        "remaining": str(budget - paid),
+        "per_actor": str(per_actor),
+        "recipients": recipients,
+    }
 
 
 def entry_count(conn, actor_id: str) -> int:

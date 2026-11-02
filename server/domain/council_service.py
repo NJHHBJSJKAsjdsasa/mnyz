@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from ..infra.errors import AlreadyClaimed, NotFound, Unprocessable
+from decimal import Decimal
+
+from ..infra.serialize import ts
+from ..infra.errors import AlreadyClaimed, InsufficientFunds, InvalidArgument, NotFound, Unprocessable
+from ..repo import companies as company_repo
 from ..repo import council as council_repo
 from ..repo import outbox as outbox_repo
 from ..repo import players as player_repo
@@ -10,7 +14,7 @@ from ..repo import sectors as sector_repo
 from ..repo import ships as ship_repo
 from ..repo import tech as tech_repo
 from ..repo import wallets as wallet_repo
-from . import task_service
+from . import currency_service, stock_service, task_service
 from .ledger import TxRef, post_transaction
 from .rng import SeededRandom, hash_text
 from .sector_service import quote as sector_quote
@@ -18,6 +22,11 @@ from .sector_service import quote as sector_quote
 AI_SEATS = 5
 PASS_YES = 4
 MOTION_MINUTES = 2
+#: IPOs get a longer review than a sector licence: the council is being asked to
+#: put a company in front of every investor in the universe.
+IPO_MOTION_MINUTES = 30
+#: First-day call-auction window opened by an approved IPO (05 §4.4).
+IPO_CALL_AUCTION_MINUTES = 30
 SEED_SEATS = [
     (1, "守望者·奥罗拉", "keepers", True, "稳定与遗迹"),
     (2, "会计官·塞勒斯", "guild", True, "贸易与财富"),
@@ -96,6 +105,46 @@ def apply_sector(conn, player: dict, sector_key: str) -> dict:
     return {"motion": _motion_payload(conn, motion, council_repo.seat_for_player(conn, player["id"])), "state_version": version}
 
 
+def apply_ipo(
+    conn,
+    player: dict,
+    *,
+    ticker: str,
+    offer_shares: int,
+    price: Decimal,
+    exchange_code: str | None = None,
+    call_auction_minutes: int = IPO_CALL_AUCTION_MINUTES,
+) -> dict:
+    """Put an IPO before the council; approval lists the company automatically."""
+    _ensure_seats(conn)
+    code = ticker.strip().upper()
+    if council_repo.open_ipo_motion(conn, code):
+        raise AlreadyClaimed("该 ticker 的 IPO 申请正在审议中")
+    actor = currency_service.actor_for_player(conn, player)
+    # Validate now so a doomed application never reaches the seats...
+    stock_service.precheck_ipo(conn, actor=actor, ticker=code, offer_shares=offer_shares, price=price)
+    cost = {
+        "ticker": code,
+        "offer_shares": int(offer_shares),
+        "price": str(price),
+        "exchange_code": (exchange_code or "").strip().upper(),
+        "call_auction_minutes": max(0, int(call_auction_minutes)),
+    }
+    motion = council_repo.create_motion(
+        conn, "ipo", player["id"], None, cost, IPO_MOTION_MINUTES
+    )
+    _ai_vote(conn, motion, player)
+    version = player_repo.bump_state(conn, player["id"])
+    outbox_repo.add(
+        conn,
+        aggregate_type="player",
+        aggregate_id=player["id"],
+        event_type="council.motion",
+        payload={"motion_id": str(motion["id"]), "ticker": code},
+    )
+    return {"motion": _motion_payload(conn, motion, council_repo.seat_for_player(conn, player["id"])), "state_version": version}
+
+
 def apply_seat(conn, player: dict) -> dict:
     _ensure_seats(conn)
     if council_repo.seat_for_player(conn, player["id"]):
@@ -138,17 +187,28 @@ def resolve_due(conn) -> dict:
         yes = sum(1 for row in votes if row["vote"] == "yes")
         no = sum(1 for row in votes if row["vote"] == "no")
         passed = yes >= PASS_YES and yes > no
+        extra = ""
         if passed and motion["kind"] == "sector_license":
             _grant_sector(conn, motion)
         elif passed and motion["kind"] == "membership":
             if not _assign_seat(conn, motion):
                 passed = False
+        elif passed and motion["kind"] == "ipo":
+            # Approval *is* the listing: the parameters were frozen at application
+            # time and re-validated here, so a pass cannot be replayed later.
+            try:
+                listed = _execute_ipo(conn, motion)
+                extra = f"已挂牌 {listed['ticker']} @ {listed['ipo_price']}。"
+            except (InvalidArgument, NotFound, Unprocessable, InsufficientFunds) as exc:
+                passed = False
+                extra = f"IPO 执行失败：{exc}"
         elif not passed and motion["kind"] == "sector_license":
             _refund(conn, motion)
         status = "passed" if passed else "rejected"
         reason = (
             f"赞成 {yes} / 反对 {no}，"
             + ("达到 4 票门槛。" if passed else "未达到 4 票门槛，资源按 50% 退还。")
+            + extra
         )
         council_repo.finish(conn, str(motion["id"]), status, reason)
         player = player_repo.get(conn, str(motion["player_id"]))
@@ -163,6 +223,21 @@ def resolve_due(conn) -> dict:
             )
         resolved += 1
     return {"resolved": resolved}
+
+
+def _execute_ipo(conn, motion: dict) -> dict:
+    cost = motion["cost"] or {}
+    player = player_repo.get(conn, str(motion["player_id"]))
+    actor = currency_service.actor_for_player(conn, player)
+    return stock_service.ipo(
+        conn,
+        actor=actor,
+        ticker=str(cost.get("ticker", "")),
+        offer_shares=int(cost.get("offer_shares", 0)),
+        price=Decimal(str(cost.get("price", "0"))),
+        exchange_code=(cost.get("exchange_code") or None),
+        call_auction_minutes=int(cost.get("call_auction_minutes") or 0),
+    )
 
 
 def _grant_sector(conn, motion: dict) -> None:
@@ -214,6 +289,14 @@ def _ai_vote(conn, motion: dict, player: dict) -> None:
             if faction == "keepers":
                 score -= 0.03
             score += rng.next() * 0.30
+        elif motion["kind"] == "ipo":
+            # The council is underwriting a public listing: book value and the
+            # free float carry the decision, plus the usual noise.
+            cost = motion["cost"] or {}
+            company = company_repo.by_ticker(conn, str(cost.get("ticker", "")))
+            book = Decimal(company["book_value"]) if company else Decimal(0)
+            score = 0.30 + min(float(book) / 500_000.0, 1.0) * 0.30
+            score += min(level, 999) / 999 * 0.10 + rng.next() * 0.25
         else:
             score = 0.15 + min(level, 999) / 999 * 0.35 + min(licenses, 60) / 60 * 0.15
             score += min(tech, 16) / 16 * 0.12 + rng.next() * 0.25
@@ -233,9 +316,9 @@ def _motion_payload(conn, motion: dict, seat: dict | None) -> dict:
         "sector_key": motion["sector_key"],
         "cost": motion["cost"],
         "status": motion["status"],
-        "created_at": motion["created_at"].isoformat(),
-        "closes_at": motion["closes_at"].isoformat(),
-        "decided_at": motion["decided_at"].isoformat() if motion.get("decided_at") else None,
+        "created_at": ts(motion["created_at"]),
+        "closes_at": ts(motion["closes_at"]),
+        "decided_at": ts(motion.get("decided_at")),
         "outcome_reason": motion.get("outcome_reason"),
         "yes": yes,
         "no": no,

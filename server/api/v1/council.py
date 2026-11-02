@@ -6,12 +6,11 @@ from flask import Blueprint, g
 
 from ...domain import council_service
 from ...infra.context import db
-from ...models.explore import CouncilSectorRequest, CouncilVoteRequest
+from ...models.explore import CouncilIpoRequest, CouncilSectorRequest, CouncilVoteRequest
 from ...repo import players as player_repo
 from ..deps import (
     begin_idempotency,
     check_if_match,
-    current_player,
     finish_idempotency,
     parse_model,
     rate_limit,
@@ -30,13 +29,15 @@ def _read(fn):
 
 
 def _write(payload: dict, fn):
-    check_if_match(current_player())
     with db().transaction() as conn:
         ticket = begin_idempotency(conn, g.account_id, payload)
         if ticket.replayed and ticket.cached:
             cached = ticket.cached
             return success(cached, int(cached.get("state_version", 0)), extra_headers={"Idempotent-Replay": "true"})
         player = player_repo.get(conn, g.player_id)
+        # Checked inside the transaction against the row we are about to write
+        # (not the request-scoped copy), so a concurrent vote is caught.
+        check_if_match(player)
         result = fn(conn, player)
         finish_idempotency(conn, ticket, 200, result)
     return success(result, int(result.get("state_version", 0)))
@@ -57,6 +58,25 @@ def council_sector():
     return _write(
         {"kind": "sector_license", "sector_key": body.sector_key},
         lambda conn, player: council_service.apply_sector(conn, player, body.sector_key),
+    )
+
+
+@bp.post("/council/ipo")
+@require_auth(write=True)
+@rate_limit("council_ipo", 5, 60)
+def council_ipo():
+    body = parse_model(CouncilIpoRequest)
+    return _write(
+        {"kind": "ipo", "ticker": body.ticker.upper(), "price": str(body.price)},
+        lambda conn, player: council_service.apply_ipo(
+            conn,
+            player,
+            ticker=body.ticker,
+            offer_shares=body.offer_shares,
+            price=body.price,
+            exchange_code=body.exchange_code,
+            call_auction_minutes=body.call_auction_minutes,
+        ),
     )
 
 

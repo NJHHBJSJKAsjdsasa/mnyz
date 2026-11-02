@@ -13,10 +13,11 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import properties as property_repo
 from ..repo import revenue as revenue_repo
-from . import currency_service
+from . import currency_service, loan_collections
 from .currency_service import Move, q4
 
 TRANSFER_TAX_BPS = Decimal(200)
@@ -124,7 +125,7 @@ def list_asset(
         "kind": kind,
         "price": str(value),
         "min_increment": str(q4(min_increment)),
-        "expires_at": listing["expires_at"].isoformat(),
+        "expires_at": ts(listing["expires_at"]),
         "appraised_value": str(Decimal(asset["appraised_value"])),
     }
 
@@ -140,7 +141,7 @@ def listings(conn) -> list[dict]:
             "min_increment": str(Decimal(row["min_increment"])),
             "appraised_value": str(Decimal(row["appraised_value"])),
             "sector": row["jurisdiction_sector"],
-            "expires_at": row["expires_at"].isoformat(),
+            "expires_at": ts(row["expires_at"]),
         }
         for row in property_repo.open_listings(conn)
     ]
@@ -299,7 +300,13 @@ def _settle(
         commission=commission,
         tx_id=settle["tx_id"],
     )
-    return {
+    # A liquidation auction is an ordinary sale whose seller is the bank. The
+    # loan side then splits the net proceeds (interest → principal → borrower);
+    # for every other listing this returns None and nothing happens.
+    liquidation = loan_collections.settle_liquidation(
+        conn, listing_id=str(listing["id"]), seller_net=seller_net
+    )
+    payload = {
         "transfer_id": str(transfer["id"]),
         "asset_key": asset["asset_key"],
         "buyer_actor_id": buyer["id"],
@@ -311,6 +318,9 @@ def _settle(
         "tx_ids": [hold["tx_id"], settle["tx_id"]],
         "bid_id": bid_id,
     }
+    if liquidation is not None:
+        payload["liquidation"] = liquidation
+    return payload
 
 
 # ------------------------------------------------------------------ tax
@@ -335,7 +345,7 @@ def issue_tax_bills(conn, period: date | None = None) -> dict:
         )
         issued += 1
         total += amount
-    return {"period": period.isoformat(), "bills": issued, "total": str(q4(total))}
+    return {"period": ts(period), "bills": issued, "total": str(q4(total))}
 
 
 def bills_of(conn, actor_id: str) -> list[dict]:
@@ -343,9 +353,9 @@ def bills_of(conn, actor_id: str) -> list[dict]:
         {
             "id": str(row["id"]),
             "asset_key": row["asset_key"],
-            "period": row["period"].isoformat(),
+            "period": ts(row["period"]),
             "amount": str(Decimal(row["amount"])),
-            "due_at": row["due_at"].isoformat(),
+            "due_at": ts(row["due_at"]),
             "status": row["status"],
         }
         for row in property_repo.bills_of(conn, actor_id)

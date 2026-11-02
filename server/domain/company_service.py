@@ -12,6 +12,7 @@ import re
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
@@ -85,13 +86,13 @@ def detail(conn, ticker: str) -> dict:
                 "actor_id": str(row["actor_id"]),
                 "display_name": row["display_name"],
                 "shares": int(row["shares"]),
-                "locked_until": row["locked_until"].isoformat() if row["locked_until"] else None,
+                "locked_until": ts(row["locked_until"]),
             }
             for row in holdings
         ],
         "financials": [
             {
-                "period": row["period"].isoformat(),
+                "period": ts(row["period"]),
                 "revenue": str(Decimal(row["revenue"])),
                 "cost": str(Decimal(row["cost"])),
                 "profit": str(Decimal(row["profit"])),
@@ -167,7 +168,7 @@ def publish_financials(
     conn.execute("UPDATE companies SET book_value = %s WHERE id = %s", (book_value, str(company["id"])))
     return {
         "ticker": company["ticker"],
-        "period": row["period"].isoformat(),
+        "period": ts(row["period"]),
         "revenue": str(Decimal(row["revenue"])),
         "cost": str(Decimal(row["cost"])),
         "profit": str(Decimal(row["profit"])),
@@ -184,5 +185,5 @@ def _payload(row: dict) -> dict:
         "shares_total": int(row["shares_total"]),
         "free_float": int(row["free_float"]),
         "book_value": str(Decimal(row["book_value"])),
-        "created_at": row["created_at"].isoformat(),
+        "created_at": ts(row["created_at"]),
     }

@@ -14,6 +14,8 @@ class StockOrderRequest(StrictModel):
     type: str = Field(default="limit", pattern="^(limit|market)$")
     price: Decimal | None = Field(default=None, gt=0, max_digits=24, decimal_places=4)
     quantity: int = Field(gt=0, le=1_000_000_000)
+    # 03 §5: leave empty to let the router pick the best venue
+    venue_code: str | None = Field(default=None, max_length=8)
 
 
 class IpoRequest(StrictModel):
@@ -23,6 +25,9 @@ class IpoRequest(StrictModel):
     settlement_mode: str = Field(default="t0", pattern="^(t0|t1)$")
     shortable: bool = True
     exchange_code: str | None = Field(default=None, max_length=8)
+    #: First-day call auction length. 0 keeps continuous trading from the open
+    #: (legacy clients); 30 is what the council-approved path uses.
+    call_auction_minutes: int = Field(default=0, ge=0, le=240)
 
 
 class ShortRequest(StrictModel):

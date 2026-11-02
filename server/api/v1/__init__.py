@@ -6,23 +6,31 @@ from flask import Blueprint
 
 from . import (
     admin_ai,
+    admin_ops,
     assets,
     auth,
     bank,
+    brokers,
     commerce,
     council,
     court,
+    crafting,
     cutover,
     economy,
     explore,
     insolvency,
     internal_dt,
+    ledger,
     market,
+    meta,
     properties,
+    protection,
     revenue,
     session,
     stocks,
     tasks,
+    travel,
+    universe,
 )
 
 api_bp = Blueprint("api_v1", __name__)
@@ -45,3 +53,11 @@ api_bp.register_blueprint(insolvency.bp)
 api_bp.register_blueprint(internal_dt.bp)
 api_bp.register_blueprint(revenue.bp)
 api_bp.register_blueprint(market.bp)
+api_bp.register_blueprint(brokers.bp)
+api_bp.register_blueprint(meta.bp)
+api_bp.register_blueprint(admin_ops.bp)
+api_bp.register_blueprint(travel.bp)
+api_bp.register_blueprint(universe.bp)
+api_bp.register_blueprint(crafting.bp)
+api_bp.register_blueprint(ledger.bp)
+api_bp.register_blueprint(protection.bp)

@@ -153,6 +153,35 @@ def test_bootstrap_provisions_first_class_players(client, test_dsn):
     assert all(item["controller"] == "ai" for item in listed)
     assert "provider" not in listed[0]
 
+    # 10 §P2 #14: keyset pagination — pages must not overlap and the cursor must terminate
+    first = client.get("/api/v1/players?controller=ai&limit=4", headers=bearer(admin["token"]))
+    first_data = first.get_json()["data"]
+    assert len(first_data["players"]) == 4
+    assert first_data["has_more"] is True
+    assert first_data["next_cursor"]
+
+    second = client.get(
+        f"/api/v1/players?controller=ai&limit=4&cursor={first_data['next_cursor']}",
+        headers=bearer(admin["token"]),
+    )
+    second_data = second.get_json()["data"]
+    assert len(second_data["players"]) == 4
+    ids_1 = {item["id"] for item in first_data["players"]}
+    ids_2 = {item["id"] for item in second_data["players"]}
+    assert ids_1.isdisjoint(ids_2)
+
+    third = client.get(
+        f"/api/v1/players?controller=ai&limit=4&cursor={second_data['next_cursor']}",
+        headers=bearer(admin["token"]),
+    )
+    third_data = third.get_json()["data"]
+    assert len(third_data["players"]) == 1
+    assert third_data["has_more"] is False
+    assert third_data["next_cursor"] is None
+
+    bad = client.get("/api/v1/players?controller=ai&limit=nope", headers=bearer(admin["token"]))
+    assert bad.status_code == 400
+
     # idempotent: a second bootstrap creates nothing
     again = _tick(client, admin["token"], bootstrap=9, capital="5000")
     assert again.get_json()["data"]["bootstrapped"] == 0

@@ -11,6 +11,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InsufficientFunds, InvalidArgument, NotFound, Unprocessable
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
@@ -150,8 +151,8 @@ def _case_payload(row: dict) -> dict:
         "amount": str(Decimal(row["amount"])),
         "currency_code": row["currency_code"],
         "claim": row["claim"],
-        "filed_at": row["filed_at"].isoformat(),
-        "hearing_at": row["hearing_at"].isoformat() if row["hearing_at"] else None,
+        "filed_at": ts(row["filed_at"]),
+        "hearing_at": ts(row["hearing_at"]),
     }
 
 
@@ -168,14 +169,14 @@ def case_detail(conn, case_id: str) -> dict:
                 "id": str(row["id"]),
                 "side": row["side"],
                 "summary": row["summary"],
-                "created_at": row["created_at"].isoformat(),
+                "created_at": ts(row["created_at"]),
             }
             for row in legal.evidence_of(conn, case_id)
         ],
         "hearings": [
             {
                 "id": str(row["id"]),
-                "scheduled_at": row["scheduled_at"].isoformat(),
+                "scheduled_at": ts(row["scheduled_at"]),
                 "status": row["status"],
             }
             for row in legal.hearings_of(conn, case_id)
@@ -185,7 +186,7 @@ def case_detail(conn, case_id: str) -> dict:
             "judgment": judgment["judgment"],
             "remedy": judgment["remedy"],
             "status": judgment["status"],
-            "issued_at": judgment["issued_at"].isoformat(),
+            "issued_at": ts(judgment["issued_at"]),
         }
         if judgment
         else None,
@@ -193,7 +194,7 @@ def case_detail(conn, case_id: str) -> dict:
             "id": str(appeal["id"]),
             "status": appeal["status"],
             "outcome": appeal["outcome"],
-            "filed_at": appeal["filed_at"].isoformat(),
+            "filed_at": ts(appeal["filed_at"]),
         }
         if appeal
         else None,
@@ -273,7 +274,7 @@ def hold_hearing(conn, case_id: str) -> dict:
     if remedy.get("corporate_remedy") == "void_unapproved_related_party" and case["company_id"]:
         from . import company_law
 
-        for txn in legal.related_parties(conn, str(case["company_id"])):
+        for txn in company_law.related_parties(conn, str(case["company_id"])):
             if txn["status"] == "proposed":
                 company_law.void_related_party(conn, str(case["company_id"]), str(txn["id"]))
     return {
@@ -471,10 +472,10 @@ def _recognition_payload(row: dict) -> dict:
         "reason_label": REJECTION_CODES.get(str(row["reason_code"] or ""), ""),
         "reason": row["reason"],
         "decided_by": row["decided_by"],
-        "decided_at": row["decided_at"].isoformat() if row["decided_at"] else None,
+        "decided_at": ts(row["decided_at"]),
         "dt_tx_id": str(row["dt_tx_id"]) if row["dt_tx_id"] else None,
         "conflict_with": str(row["conflict_with"]) if row["conflict_with"] else None,
-        "created_at": row["created_at"].isoformat(),
+        "created_at": ts(row["created_at"]),
     }
 
 

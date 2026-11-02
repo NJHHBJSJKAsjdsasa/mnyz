@@ -15,9 +15,11 @@ Rules
 
 from __future__ import annotations
 
+import base64
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import (
     Forbidden,
     InsufficientFunds,
@@ -25,12 +27,14 @@ from ..infra.errors import (
     NotFound,
     Unprocessable,
 )
+from ..repo import banks as bank_repo
+from ..repo import brokers as broker_repo
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
 from ..repo import indices as index_repo
 from ..repo import revenue as revenue_repo
 from ..repo import stocks as stock_repo
-from . import currency_service, exchange_service
+from . import currency_service, events, exchange_service
 from .currency_service import Move, q4
 
 FEE_BPS = Decimal(10)        # 0.10 % per side
@@ -40,6 +44,9 @@ MARKET_LEVELS = 5            # 05 §4.2
 POSITION_CAP = Decimal("0.10")    # 05 §6 single-actor cap
 SHORT_POOL_CAP = Decimal("0.15")  # 05 §12.2
 INITIAL_MARGIN = Decimal("1.5")
+#: 05 §7.3: 整理期 30 天让持有人自己走，清算期 3 天等最后一批报价。
+CONSOLIDATION_DAYS = 30
+AUCTION_DAYS = 3
 MAINTENANCE_MARGIN = Decimal("1.3")
 FORCE_MARGIN = Decimal("1.05")
 HALT_PCT = Decimal("0.30")
@@ -62,29 +69,123 @@ def _next_utc_midnight(now: datetime | None = None) -> datetime:
     return datetime.combine(current.date() + timedelta(days=1), time.min, tzinfo=timezone.utc)
 
 
-def _bucket(ts: datetime, interval: str) -> datetime:
-    ts = ts.astimezone(timezone.utc).replace(second=0, microsecond=0)
+def _bucket(moment: datetime, interval: str) -> datetime:
+    # Parameter is not called `ts`: that is the serializer imported above, and
+    # shadowing it here would break any ts() call added later in this scope.
+    moment = moment.astimezone(timezone.utc).replace(second=0, microsecond=0)
     if interval == "1m":
-        return ts
+        return moment
     if interval == "5m":
-        return ts.replace(minute=ts.minute - ts.minute % 5)
+        return moment.replace(minute=moment.minute - moment.minute % 5)
     if interval == "15m":
-        return ts.replace(minute=ts.minute - ts.minute % 15)
+        return moment.replace(minute=moment.minute - moment.minute % 15)
     if interval == "1h":
-        return ts.replace(minute=0)
-    return ts.replace(hour=0, minute=0)
+        return moment.replace(minute=0)
+    return moment.replace(hour=0, minute=0)
 
 
 def _fee(notional: Decimal, bps: int = FEE_BPS) -> Decimal:
     return max(q4(notional * Decimal(bps) / Decimal(10_000)), MIN_FEE)
 
 
-def _listing_fee_bps(conn, listing: dict) -> int:
-    """A listing trades on one venue; that venue sets its own commission (03 §5)."""
-    exchange_id = listing.get("exchange_id")
+def _listing_fee_bps(conn, listing: dict, venue_id: str | None = None) -> int:
+    """The venue a trade clears on sets its own commission (03 §5)."""
+    exchange_id = venue_id or listing.get("exchange_id")
     if not exchange_id:
         return FEE_BPS
+    venue = broker_repo.venue(conn, str(listing["id"]), str(exchange_id))
+    if venue is not None:
+        return int(venue["fee_bps"])
     return index_repo.exchange_fee_bps(conn, str(exchange_id)) or FEE_BPS
+
+
+def _primary_venue(conn, listing: dict) -> dict:
+    """Synthetic venue for listings never mirrored into ``listing_venues``."""
+    exchange = stock_repo.exchange_by_id(conn, str(listing["exchange_id"]))
+    return {
+        "exchange_id": listing["exchange_id"],
+        "code": exchange["code"] if exchange else "PRIMARY",
+        "name": exchange["name"] if exchange else "主交易所",
+        "kind": exchange["kind"] if exchange else "official",
+        "fee_bps": int(exchange["fee_bps"]) if exchange else int(FEE_BPS),
+        "status": "active",
+    }
+
+
+def _active_venues(conn, listing: dict) -> list[dict]:
+    rows = broker_repo.venues_of_listing(conn, str(listing["id"]))
+    active = [row for row in rows if row["status"] == "active"]
+    if active:
+        return active
+    # a listing always has its primary venue even if the row was never mirrored
+    return [_primary_venue(conn, listing)]
+
+
+def _resolve_venue(conn, listing: dict, *, requested: str | None,
+                   side: str) -> dict:
+    """Pick the venue an order goes to (03 §5): explicit code, or best price.
+
+    Routing without an explicit venue takes the best executable price; when no
+    venue quotes anything it falls back to the cheapest commission.
+    """
+    venues = _active_venues(conn, listing)
+    if requested:
+        code = requested.strip().upper()
+        for row in venues:
+            if str(row["code"]).upper() == code:
+                return row
+        raise NotFound(f"该标的未在 {code} 挂牌")
+    best: tuple[Decimal, int, dict] | None = None
+    for row in venues:
+        exchange_id = str(row["exchange_id"])
+        if side == "buy":
+            book = stock_repo.book_asks(conn, str(listing["id"]), limit=1,
+                                        venue_id=exchange_id)
+            price = Decimal(book[0]["price"]) if book else None
+            score = price if price is not None else Decimal("1e12")
+        else:
+            book = stock_repo.book_bids(conn, str(listing["id"]), limit=1,
+                                        venue_id=exchange_id)
+            price = Decimal(book[0]["price"]) if book else None
+            score = -price if price is not None else Decimal("1e12")
+        candidate = (score, int(row["fee_bps"]), row)
+        if best is None or candidate[:2] < best[:2]:
+            best = candidate
+    return best[2] if best else venues[0]
+
+
+def _deepest_venue(conn, listing: dict, side: str) -> dict:
+    """Shorting and covering need depth, not the best single price."""
+    venues = _active_venues(conn, listing)
+    best: tuple[int, dict] | None = None
+    for row in venues:
+        venue_id = str(row["exchange_id"])
+        if side == "sell":
+            book = stock_repo.book_bids(conn, str(listing["id"]), venue_id=venue_id)
+        else:
+            book = stock_repo.book_asks(conn, str(listing["id"]), venue_id=venue_id)
+        depth = sum(int(item["quantity"]) - int(item["filled"]) for item in book)
+        if best is None or depth > best[0]:
+            best = (depth, row)
+    return best[1] if best else venues[0]
+
+
+def _agency_commission(conn, actor_id: str, venue_id: str | None,
+                       notional: Decimal) -> dict | None:
+    """Agency commission for one side of a trade, capped by the venue's terms."""
+    if not venue_id or notional <= 0:
+        return None
+    account = broker_repo.account_of_client(conn, actor_id)
+    if account is None or account["status"] != "active":
+        return None
+    membership = broker_repo.membership(conn, str(account["broker_actor_id"]), str(venue_id))
+    if membership is None or membership["status"] != "active":
+        return None
+    bps = min(int(account["commission_bps"]), int(membership["commission_bps"]))
+    amount = q4(notional * Decimal(bps) / Decimal(10_000))
+    if bps <= 0 or amount <= 0:
+        return None
+    return {"broker": str(account["broker_actor_id"]), "bps": bps, "amount": amount}
 
 
 def _tax(notional: Decimal) -> Decimal:
@@ -105,6 +206,7 @@ def _assert_tradable(listing: dict) -> None:
     halted = listing["halted_until"]
     if halted is not None and halted > _now():
         raise Unprocessable(
+            # Error copy for a human; see auth.py.
             f"熔断中（{listing['halt_reason'] or '价格异动'}），恢复时间 {halted.isoformat()}"
         )
 
@@ -131,15 +233,39 @@ def _payload_order(row: dict) -> dict:
         "filled": int(row["filled"]),
         "remaining": int(row["quantity"]) - int(row["filled"]),
         "status": row["status"],
-        "created_at": row["created_at"].isoformat(),
+        # 03 §5: which venue this order lives on (a listing may have several books)
+        "venue_id": str(row["venue_id"]) if row.get("venue_id") else None,
+        "created_at": ts(row["created_at"]),
     }
 
 
-def _payload_listing(conn, listing: dict) -> dict:
+def _venues_payload(conn, listing: dict, rows: list[dict] | None = None) -> list[dict]:
+    """Every venue a listing trades on, fees included (03 §5)."""
+    venues = rows if rows is not None else broker_repo.venues_of_listing(
+        conn, str(listing["id"]))
+    if not venues:
+        venues = [_primary_venue(conn, listing)]
+    return [
+        {
+            "exchange_id": str(row["exchange_id"]),
+            "exchange_code": str(row["code"]),
+            "exchange_name": row["name"],
+            "kind": row.get("kind"),
+            "fee_bps": int(row["fee_bps"]),
+            "status": row["status"],
+        }
+        for row in venues
+    ]
+
+
+def _payload_listing(conn, listing: dict, venue_rows: list[dict] | None = None) -> dict:
     last = Decimal(listing["last_price"] or 0)
     ref = _reference_price(listing)
     change = (last - ref) / ref if ref > 0 and last > 0 else Decimal(0)
     company = company_repo.by_id(conn, str(listing["company_id"]))
+    venues = _venues_payload(conn, listing, venue_rows)
+    primary_id = str(listing["exchange_id"])
+    primary = next((row for row in venues if row["exchange_id"] == primary_id), venues[0])
     return {
         "ticker": listing["ticker"],
         "company": company["name"] if company else "",
@@ -154,16 +280,71 @@ def _payload_listing(conn, listing: dict) -> dict:
         "settlement_mode": listing["settlement_mode"],
         "shortable": bool(listing["shortable"]),
         "circuit_breaker_pct": str(Decimal(listing["circuit_breaker_pct"])),
-        "halted_until": listing["halted_until"].isoformat() if listing["halted_until"] else None,
+        "halted_until": ts(listing["halted_until"]),
         "halt_reason": listing["halt_reason"] or "",
-        "listed_at": listing["listed_at"].isoformat() if listing["listed_at"] else None,
+        "listed_at": ts(listing["listed_at"]),
+        # 05 §4.4: the opening auction window, if this listing opened with one.
+        "auction_ends_at": ts(listing.get("auction_ends_at")),
+        "auction_cleared_at": ts(listing.get("auction_cleared_at")),
+        # 03 §5: which venues carry this listing, and what each charges
+        "exchange_id": primary_id,
+        "exchange_code": primary["exchange_code"],
+        "fee_bps": primary["fee_bps"],
+        "venues": venues,
     }
 
 
 # ------------------------------------------------------------------ queries
 def list_stocks(conn, status: str | None = "listed") -> list[dict]:
     rows = stock_repo.list_listings(conn, status=status)
-    return [_payload_listing(conn, row) for row in rows]
+    grouped = broker_repo.venues_for_listings(conn, [str(row["id"]) for row in rows])
+    return [
+        _payload_listing(conn, row, grouped.get(str(row["id"]), []))
+        for row in rows
+    ]
+
+
+def list_stocks_page(conn, *, status: str | None = "listed", limit: int = 100,
+                     cursor: str | None = None) -> dict:
+    """Keyset page + total/has_more/next_cursor (10 §P0-4).
+
+    The listing payload is unchanged; pagination metadata is additive so old
+    clients keep working. ``limit`` is clamped to ``[1, 200]`` because the repo
+    used to hard-truncate at 200 without telling anyone.
+    """
+    limit = max(1, min(int(limit), MAX_PAGE))
+    after = _decode_cursor(cursor) if cursor else None
+    rows = stock_repo.list_listings(conn, status=status, limit=limit + 1, after=after)
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    grouped = broker_repo.venues_for_listings(conn, [str(row["id"]) for row in rows])
+    items = [_payload_listing(conn, row, grouped.get(str(row["id"]), [])) for row in rows]
+    total = stock_repo.count_listings(conn, status=status)
+    return {
+        "stocks": items,
+        "total": total,
+        "has_more": has_more,
+        "next_cursor": _encode_cursor(rows[-1]) if (has_more and rows) else None,
+    }
+
+
+MAX_PAGE = 200
+
+
+def _encode_cursor(row: dict) -> str:
+    listed_at = row["listed_at"] or datetime(1970, 1, 1, tzinfo=timezone.utc)
+    # Deterministic seed for the listing id — format is part of the contract.
+    raw = f"{listed_at.isoformat()}|{row['id']}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, str]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        stamp, listing_id = raw.rsplit("|", 1)
+        return datetime.fromisoformat(stamp), listing_id
+    except Exception:  # noqa: BLE001 - any malformed cursor is a client bug
+        raise InvalidArgument("cursor 无效，请从第一页重新拉取") from None
 
 
 def detail(conn, ticker: str) -> dict:
@@ -185,7 +366,7 @@ def detail(conn, ticker: str) -> dict:
             {
                 "price": str(Decimal(row["price"])),
                 "quantity": int(row["quantity"]),
-                "executed_at": row["executed_at"].isoformat(),
+                "executed_at": ts(row["executed_at"]),
             }
             for row in recent
         ],
@@ -215,7 +396,7 @@ def candles(conn, ticker: str, interval: str = "1m", limit: int = 300, before=No
         "interval": interval,
         "candles": [
             {
-                "t": row["bucket_start"].isoformat(),
+                "t": ts(row["bucket_start"]),
                 "o": str(Decimal(row["open"])),
                 "h": str(Decimal(row["high"])),
                 "l": str(Decimal(row["low"])),
@@ -230,28 +411,23 @@ def candles(conn, ticker: str, interval: str = "1m", limit: int = 300, before=No
 
 
 # ------------------------------------------------------------------ IPO
-def ipo(
-    conn,
-    *,
-    actor: dict,
-    ticker: str,
-    offer_shares: int,
-    price: Decimal,
-    settlement_mode: str = "t0",
-    shortable: bool = True,
-    idem_key: str | None = None,
-    exchange_code: str | None = None,
-) -> dict:
+def precheck_ipo(
+    conn, *, actor: dict, ticker: str, offer_shares: int, price: Decimal
+) -> tuple[dict, Decimal]:
+    """Every gate an IPO must pass, before any money or listing exists.
+
+    Split out so the council motion can validate at application time and the
+    listing itself re-validates at execution time (the company may have changed
+    during the 30-minute review).
+    """
     ticker = ticker.strip().upper()
     company = company_repo.by_ticker(conn, ticker, for_update=True)
     if company is None:
         raise NotFound("公司不存在")
     if company["status"] != "private":
         raise Unprocessable("只有未上市的私有公司可以申请 IPO")
-    if settlement_mode not in ("t0", "t1"):
-        raise InvalidArgument("结算模式仅支持 t0/t1")
-    price = q4(price)
-    if price <= 0:
+    value = q4(price)
+    if value <= 0:
         raise InvalidArgument("发行价必须大于 0")
     if offer_shares <= 0:
         raise InvalidArgument("发行股数必须大于 0")
@@ -271,6 +447,27 @@ def ipo(
     total_after = int(company["shares_total"]) + int(offer_shares)
     if Decimal(offer_shares) / Decimal(total_after) < IPO_MIN_FREE_FLOAT:
         raise Unprocessable("自由流通比例不得低于 20%")
+    return company, value
+
+
+def ipo(
+    conn,
+    *,
+    actor: dict,
+    ticker: str,
+    offer_shares: int,
+    price: Decimal,
+    settlement_mode: str = "t0",
+    shortable: bool = True,
+    idem_key: str | None = None,
+    exchange_code: str | None = None,
+    call_auction_minutes: int = 0,
+) -> dict:
+    ticker = ticker.strip().upper()
+    if settlement_mode not in ("t0", "t1"):
+        raise InvalidArgument("结算模式仅支持 t0/t1")
+    company, price = precheck_ipo(conn, actor=actor, ticker=ticker, offer_shares=offer_shares, price=price)
+    total_after = int(company["shares_total"]) + int(offer_shares)
 
     if exchange_code:
         exchange = exchange_service.require_active(conn, exchange_code)
@@ -302,9 +499,18 @@ def ipo(
         settlement_mode=settlement_mode,
         circuit_breaker_pct=BREAKER_PCT,
         shortable=shortable,
+        auction_minutes=max(0, int(call_auction_minutes)),
     )
     company_repo.mark_public(
         conn, str(company["id"]), shares_total=total_after, free_float=int(offer_shares)
+    )
+    # the primary venue always trades the listing, so the book has a home (03 §5)
+    broker_repo.add_venue(
+        conn,
+        listing_id=str(listing["id"]),
+        exchange_id=str(exchange["id"]),
+        fee_bps=int(exchange["fee_bps"]),
+        admitted_by=str(actor["id"]),
     )
 
     treasury_actor = str(company["treasury_actor_id"])
@@ -339,6 +545,7 @@ def ipo(
         order_type="limit",
         price=price,
         quantity=int(offer_shares),
+        venue_id=str(exchange["id"]),
     )
     # 03 §4: a new constituent must not move the index, so the divisor grows by
     # the newcomer's market cap at the IPO price.
@@ -353,6 +560,8 @@ def ipo(
         "settlement_mode": settlement_mode,
         "offer_order_id": str(book_order["id"]),
         "exchange": exchange["code"],
+        "call_auction_minutes": max(0, int(call_auction_minutes)),
+        "auction_ends_at": ts(listing["auction_ends_at"]),
     }
 
 
@@ -367,6 +576,7 @@ def place_order(
     quantity: int,
     price: Decimal | None,
     idem_key: str | None = None,
+    venue_code: str | None = None,
 ) -> dict:
     if side not in ("buy", "sell"):
         raise InvalidArgument("side 仅支持 buy/sell，做空请用 /short")
@@ -384,9 +594,15 @@ def place_order(
         value = None
 
     actor_id = str(actor["id"])
+    venue = _resolve_venue(conn, listing, requested=venue_code, side=side)
+    venue_id = str(venue["exchange_id"])
     _wash_guard(conn, actor_id, str(listing["id"]))
+    in_auction = _in_call_auction(listing)
+    if in_auction and order_type != "limit":
+        raise Unprocessable("首日集合竞价只接受限价单（窗口内不撮合）")
     if side == "buy":
-        _check_buy_funds(conn, actor_id, listing, order_type, value, quantity)
+        _check_buy_funds(conn, actor_id, listing, order_type, value, quantity,
+                         venue_id=venue_id)
         _check_position_cap(conn, actor_id, listing, quantity)
     else:
         _check_sellable(conn, actor_id, listing, quantity)
@@ -399,7 +615,19 @@ def place_order(
         order_type=order_type,
         price=value,
         quantity=int(quantity),
+        venue_id=venue_id,
     )
+    if in_auction:
+        # 05 §4.4: everything rests until the single clearing price is struck.
+        return {
+            "ticker": listing["ticker"],
+            **_payload_order(stock_repo.order_by_id(conn, str(order["id"]))),
+            "venue": venue["code"],
+            "avg_price": None,
+            "trades": [],
+            "call_auction": True,
+            "auction_ends_at": ts(listing["auction_ends_at"]),
+        }
     trades, filled = _match(conn, listing, order)
 
     if filled >= int(order["quantity"]):
@@ -416,6 +644,7 @@ def place_order(
     return {
         "ticker": listing["ticker"],
         **_payload_order(fresh),
+        "venue": venue["code"],
         "avg_price": _avg_price(trades),
         "trades": [
             {
@@ -430,6 +659,122 @@ def place_order(
     }
 
 
+# ------------------------------------------------- first-day call auction (T-21)
+
+
+def _in_call_auction(listing: dict) -> bool:
+    """A listing is in its opening auction until the window closes *and* clears."""
+    ends = listing.get("auction_ends_at")
+    if ends is None or listing.get("auction_cleared_at") is not None:
+        return False
+    return ends > _now()
+
+
+def _clearing_price(
+    orders: list[dict], fallback: Decimal, band: Decimal
+) -> tuple[Decimal, int]:
+    """Single price that maximises traded volume; ties go to the price nearest
+    the IPO price (05 §4.4). Prices outside the first-day breaker band are not
+    eligible — a printed price the breaker would immediately halt on is worse
+    than a quiet opening.
+    """
+    low, high = fallback * (1 - band), fallback * (1 + band)
+    candidates = {fallback}
+    for row in orders:
+        price = Decimal(row["price"])
+        if low <= price <= high:
+            candidates.add(price)
+
+    best_price, best_volume = fallback, 0
+    for price in sorted(candidates):
+        demand = sum(
+            int(row["quantity"]) - int(row["filled"])
+            for row in orders
+            if row["side"] == "buy" and Decimal(row["price"]) >= price
+        )
+        supply = sum(
+            int(row["quantity"]) - int(row["filled"])
+            for row in orders
+            if row["side"] == "sell" and Decimal(row["price"]) <= price
+        )
+        volume = min(demand, supply)
+        current = (volume, -abs(price - fallback), -price)
+        if current > (best_volume, -abs(best_price - fallback), -best_price):
+            best_price, best_volume = price, volume
+    return q4(best_price), best_volume
+
+
+def clear_call_auction(conn, listing: dict, *, idem_key: str | None = None) -> dict:
+    """Strike the opening price, fill everybody at it, then open continuous trading.
+
+    Allocations are greedy by price then time, and a wash (same actor on both
+    sides) is skipped rather than netted — the same rule continuous trading uses.
+    """
+    listing_id = str(listing["id"])
+    orders = stock_repo.open_limit_orders(conn, listing_id)
+    ipo_price = Decimal(listing["ipo_price"])
+    price, volume = _clearing_price(orders, ipo_price, Decimal(listing["circuit_breaker_pct"]))
+
+    buys = [row for row in orders if row["side"] == "buy" and Decimal(row["price"]) >= price]
+    sells = [row for row in orders if row["side"] == "sell" and Decimal(row["price"]) <= price]
+    buys.sort(key=lambda row: (-Decimal(row["price"]), row["created_at"], str(row["id"])))
+    sells.sort(key=lambda row: (Decimal(row["price"]), row["created_at"], str(row["id"])))
+
+    remaining = {str(row["id"]): int(row["quantity"]) - int(row["filled"]) for row in orders}
+    traded = 0
+    i = j = 0
+    while i < len(buys) and j < len(sells) and traded < volume:
+        buy, sell = buys[i], sells[j]
+        if str(buy["actor_id"]) == str(sell["actor_id"]):
+            # Skip the wash and try the next seller for this buyer.
+            j += 1
+            continue
+        take = min(remaining[str(buy["id"])], remaining[str(sell["id"])], volume - traded)
+        if take <= 0:
+            i += 1
+            continue
+        _settle_trade(conn, listing, buy, sell, price, take)
+        remaining[str(buy["id"])] -= take
+        remaining[str(sell["id"])] -= take
+        traded += take
+        if remaining[str(buy["id"])] <= 0:
+            i += 1
+        if remaining[str(sell["id"])] <= 0:
+            j += 1
+
+    for row in orders:
+        filled = int(row["filled"]) + (int(row["quantity"]) - int(row["filled"]) - remaining[str(row["id"])])
+        _bump_order(conn, str(row["id"]), filled, int(row["quantity"]))
+
+    cleared = stock_repo.mark_auction_cleared(conn, listing_id, price)
+    events.publish(
+        conn,
+        type="stock.auction_cleared",
+        aggregate=listing_id,
+        payload={
+            "ticker": listing["ticker"],
+            "price": str(price),
+            "volume": traded,
+            "ipo_price": str(ipo_price),
+        },
+    )
+    return {
+        "ticker": cleared["ticker"],
+        "clearing_price": str(price),
+        "matched_volume": traded,
+        "orders": len(orders),
+        "ipo_price": str(ipo_price),
+    }
+
+
+def call_auction_tick(conn) -> dict:
+    """Job entry point: clear every opening auction whose window has closed."""
+    cleared = []
+    for listing in stock_repo.due_call_auctions(conn):
+        cleared.append(clear_call_auction(conn, listing))
+    return {"cleared": len(cleared), "auctions": cleared}
+
+
 def _avg_price(trades: list[dict]) -> str | None:
     if not trades:
         return None
@@ -441,19 +786,23 @@ def _avg_price(trades: list[dict]) -> str | None:
 
 
 def _check_buy_funds(conn, actor_id: str, listing: dict, order_type: str,
-                     price: Decimal | None, quantity: int) -> None:
+                     price: Decimal | None, quantity: int,
+                     venue_id: str | None = None) -> None:
     code = listing["currency_code"]
-    bps = _listing_fee_bps(conn, listing)
+    bps = _listing_fee_bps(conn, listing, venue_id)
     available = _wallet_balance(conn, actor_id, code) - stock_repo.reserved_cash(conn, actor_id)
     if order_type == "limit":
         notional = q4(Decimal(price) * quantity)
         need = notional + _fee(notional, bps)
     else:
-        asks = stock_repo.book_asks(conn, str(listing["id"]), limit=1)
+        asks = stock_repo.book_asks(conn, str(listing["id"]), limit=1, venue_id=venue_id)
         if not asks:
             raise Unprocessable("当前没有卖盘")
         notional = q4(Decimal(asks[0]["price"]) * quantity)
         need = notional + _fee(notional, bps)
+    commission = _agency_commission(conn, actor_id, venue_id, notional)
+    if commission is not None:
+        need += commission["amount"]
     if available < need:
         raise InsufficientFunds(
             f"{code} 可用余额不足：需要 {need}（含手续费），可用 {available}"
@@ -521,11 +870,12 @@ def _match(conn, listing: dict, order: dict) -> tuple[list[dict], int]:
     quantity = int(order["quantity"])
     trades: list[dict] = []
     levels: list[Decimal] = []
+    venue_id = str(order["venue_id"]) if order.get("venue_id") else None
     while filled < quantity:
         if order["side"] == "buy":
-            book = stock_repo.book_asks(conn, str(listing["id"]))
+            book = stock_repo.book_asks(conn, str(listing["id"]), venue_id=venue_id)
         else:
-            book = stock_repo.book_bids(conn, str(listing["id"]))
+            book = stock_repo.book_bids(conn, str(listing["id"]), venue_id=venue_id)
         book = [row for row in book if str(row["actor_id"]) != str(order["actor_id"])]
         counterparty = _pick(book, order["side"], order["type"], order["price"], levels)
         if counterparty is None:
@@ -565,7 +915,8 @@ def _settle_trade(conn, listing: dict, buyer_order: dict, seller_order: dict,
     """One fill: ledger, shares, trade row and candle upserts (05 §4.3/§5.1)."""
     code = listing["currency_code"]
     notional = q4(price * quantity)
-    bps = _listing_fee_bps(conn, listing)
+    venue_id = str(buyer_order["venue_id"]) if buyer_order.get("venue_id") else None
+    bps = _listing_fee_bps(conn, listing, venue_id)
     fee_buy = _fee(notional, bps)
     fee_sell = _fee(notional, bps)
     tax = _tax(notional)
@@ -573,14 +924,29 @@ def _settle_trade(conn, listing: dict, buyer_order: dict, seller_order: dict,
     seller = str(seller_order["actor_id"])
     treasury = currency_service.system_actor(conn, currency_service.TREASURY)
 
+    # 05 §9: agency commission sits on top of the exchange fee and goes to the broker
+    buy_commission = _agency_commission(conn, buyer, venue_id, notional)
+    sell_commission = _agency_commission(conn, seller, venue_id, notional)
+    broker_moves: dict[str, Decimal] = {}
+    for side_commission in (buy_commission, sell_commission):
+        if side_commission is None:
+            continue
+        broker = side_commission["broker"]
+        broker_moves[broker] = broker_moves.get(broker, Decimal(0)) + side_commission["amount"]
+
+    moves = [
+        Move(buyer, code, -(notional + fee_buy
+                            + (buy_commission["amount"] if buy_commission else 0))),
+        Move(seller, code, notional - fee_sell - tax
+             - (sell_commission["amount"] if sell_commission else 0)),
+        Move(treasury["id"], code, fee_buy + fee_sell + tax),
+    ]
+    moves.extend(Move(broker, code, amount) for broker, amount in broker_moves.items())
+
     tx = currency_service.post(
         conn,
         kind="stock_trade",
-        moves=[
-            Move(buyer, code, -(notional + fee_buy)),
-            Move(seller, code, notional - fee_sell - tax),
-            Move(treasury["id"], code, fee_buy + fee_sell + tax),
-        ],
+        moves=moves,
         ref_type="stock_listing",
         ref_id=str(listing["id"]),
         memo=f"{listing['ticker']} {quantity}@{price}",
@@ -623,7 +989,22 @@ def _settle_trade(conn, listing: dict, buyer_order: dict, seller_order: dict,
         fee_sell=fee_sell,
         tax=tax,
         tx_id=tx["tx_id"],
+        venue_id=venue_id,
     )
+    for side_actor, side_commission in ((buyer, buy_commission), (seller, sell_commission)):
+        if side_commission is None:
+            continue
+        broker_repo.insert_commission(
+            conn,
+            trade_id=str(trade["id"]),
+            broker_actor_id=side_commission["broker"],
+            client_actor_id=side_actor,
+            exchange_id=venue_id,
+            currency_code=code,
+            notional=notional,
+            commission_bps=side_commission["bps"],
+            amount=side_commission["amount"],
+        )
 
     executed = trade["executed_at"]
     for interval in CANDLE_INTERVALS:
@@ -713,7 +1094,7 @@ def portfolio(conn, actor: dict) -> dict:
                 "last_price": str(last),
                 "market_value": str(value),
                 "unrealized_pnl": str(q4((last - Decimal(row["avg_cost"])) * shares)),
-                "locked_until": row["locked_until"].isoformat() if row["locked_until"] else None,
+                "locked_until": ts(row["locked_until"]),
                 "status": row["status"],
             }
         )
@@ -856,7 +1237,7 @@ def lend_shares(conn, *, actor: dict, ticker: str, quantity: int, fee_bps: int =
         "ticker": listing["ticker"],
         "quantity": int(row["quantity"]),
         "fee_bps": int(row["fee_bps"]),
-        "due_at": row["due_at"].isoformat() if row["due_at"] else None,
+        "due_at": ts(row["due_at"]),
     }
 
 
@@ -911,7 +1292,9 @@ def open_short(conn, *, actor: dict, ticker: str, quantity: int,
     if Decimal(pool_used + quantity) > SHORT_POOL_CAP * int(listing["free_float"]):
         raise Unprocessable("单票空头持仓不得超过流通股本 15%")
 
-    bids = stock_repo.book_bids(conn, str(listing["id"]))
+    venue = _deepest_venue(conn, listing, "sell")
+    venue_id = str(venue["exchange_id"])
+    bids = stock_repo.book_bids(conn, str(listing["id"]), venue_id=venue_id)
     depth = sum(int(row["quantity"]) - int(row["filled"]) for row in bids)
     if depth < quantity:
         raise Unprocessable(f"买盘深度不足，最多可开空 {depth} 股")
@@ -937,6 +1320,7 @@ def open_short(conn, *, actor: dict, ticker: str, quantity: int,
         order_type="market",
         price=None,
         quantity=int(quantity),
+        venue_id=venue_id,
     )
     trades, filled = _match(conn, listing, order)
     stock_repo.set_order_fill(conn, str(order["id"]), filled,
@@ -1016,7 +1400,9 @@ def cover_short(conn, *, actor: dict, ticker: str, quantity: int | None = None,
     if wanted <= 0:
         raise InvalidArgument("还券数量必须大于 0")
 
-    asks = stock_repo.book_asks(conn, str(listing["id"]))
+    venue = _deepest_venue(conn, listing, "buy")
+    venue_id = str(venue["exchange_id"])
+    asks = stock_repo.book_asks(conn, str(listing["id"]), venue_id=venue_id)
     depth = sum(int(row["quantity"]) - int(row["filled"]) for row in asks)
     if depth < wanted:
         raise Unprocessable(f"卖盘深度不足，最多可还券 {depth} 股")
@@ -1044,6 +1430,7 @@ def cover_short(conn, *, actor: dict, ticker: str, quantity: int | None = None,
         order_type="market",
         price=None,
         quantity=wanted,
+        venue_id=venue_id,
     )
     trades, filled = _match(conn, listing, order)
     stock_repo.set_order_fill(conn, str(order["id"]), filled,
@@ -1152,12 +1539,33 @@ def pay_dividend(conn, *, actor: dict, ticker: str, per_share: Decimal,
         record_at=_now(),
         pay_at=_now(),
     )
+    # 12-A: ex-dividend. Without this the market cap grows by the payout and the
+    # price index counts a dividend as a rally. The reference price is the only
+    # thing that moves — holders keep their shares, cash already moved above.
+    prev = Decimal(listing["prev_close"] or listing["last_price"] or 0)
+    ex_price = max(Decimal("0.0001"), q4(prev - value))
+    stock_repo.set_prev_close(conn, str(listing["id"]), ex_price)
+    events.publish(
+        conn,
+        type=events.STOCK_DIVIDEND,
+        aggregate=listing["ticker"],
+        payload={
+            "ticker": listing["ticker"],
+            "per_share": str(value),
+            "total_paid": str(total),
+            "holders": len(payouts),
+            "prev_close_after": str(ex_price),
+        },
+        actor_id=str(actor["id"]),
+    )
     return {
         "ticker": listing["ticker"],
         "per_share": str(value),
         "total_paid": str(total),
         "holders": len(payouts),
         "dividend_id": str(record["id"]),
+        "prev_close_before": str(q4(prev)),
+        "prev_close_after": str(ex_price),
     }
 
 
@@ -1172,8 +1580,8 @@ def dividends(conn, ticker: str) -> list[dict]:
             "per_share": str(Decimal(row["per_share"])),
             "total_paid": str(Decimal(row["total_paid"])),
             "status": row["status"],
-            "record_at": row["record_at"].isoformat(),
-            "pay_at": row["pay_at"].isoformat(),
+            "record_at": ts(row["record_at"]),
+            "pay_at": ts(row["pay_at"]),
         }
         for row in rows
     ]
@@ -1193,8 +1601,18 @@ def delisting_status(conn, ticker: str) -> dict:
             "reason": case["reason"],
             "status": case["status"],
             "last_price": str(Decimal(case["last_price"])),
-            "triggered_at": case["triggered_at"].isoformat(),
-            "settled_at": case["settled_at"].isoformat() if case["settled_at"] else None,
+            "triggered_at": ts(case["triggered_at"]),
+            "settled_at": ts(case["settled_at"]),
+            "consolidation_ends_at": ts(case["consolidation_ends_at"]),
+            "auction_ends_at": ts(case["auction_ends_at"]),
+            "clearing_price": (
+                str(Decimal(case["clearing_price"]))
+                if case["clearing_price"] is not None
+                else None
+            ),
+            "distributed_amount": str(Decimal(case["distributed_amount"])),
+            "currency_code": case["currency_code"],
+            "payouts": _payouts(conn, str(case["id"])),
         }
         if case
         else None,
@@ -1202,47 +1620,233 @@ def delisting_status(conn, ticker: str) -> dict:
 
 
 def trigger_delisting(conn, listing: dict, reason: str) -> dict:
+    """Open the case and enter the consolidation window (05 §7.3).
+
+    The listing keeps trading on purpose: 整理期 exists so holders can leave at a
+    market price instead of being handed a liquidation value they never agreed
+    to. Only when the window closes does the book stop.
+    """
     case = stock_repo.current_delisting(conn, str(listing["id"]))
     if case is not None:
         return case
+    ends_at = _now() + timedelta(days=CONSOLIDATION_DAYS)
     case = stock_repo.insert_delisting(
         conn,
         listing_id=str(listing["id"]),
         reason=reason,
         last_price=Decimal(listing["last_price"] or listing["ipo_price"]),
+        status="consolidation",
+        consolidation_ends_at=ends_at,
+        currency_code=str(listing["currency_code"]),
     )
-    stock_repo.set_listing_status(conn, str(listing["id"]), "suspended")
-    stock_repo.set_halt(conn, str(listing["id"]), None, f"退市程序：{reason}")
+    stock_repo.set_listing_status(conn, str(listing["id"]), "listed")
+    stock_repo.set_halt(conn, str(listing["id"]), None, f"退市整理期：{reason}")
     return case
 
 
-def settle_delisting(conn, ticker: str) -> dict:
-    """Close the case: shares become a liquidation claim handled by 08."""
-    listing = _lock_listing(conn, ticker)
-    case = stock_repo.current_delisting(conn, str(listing["id"]))
-    if case is None:
-        raise Unprocessable("该股票没有进行中的退市程序")
-    for holder in stock_repo.holders_of(conn, str(listing["id"])):
+def advance_delisting(conn) -> dict:
+    """Drive every open case one step along its clock (job ``delisting_tick``)."""
+    started = cleared = 0
+    for case in stock_repo.due_delisting(conn, "consolidation"):
+        listing_id = str(case["listing_id"])
+        stock_repo.advance_delisting(
+            conn, str(case["id"]), status="auction",
+            auction_ends_at=_now() + timedelta(days=AUCTION_DAYS),
+        )
+        stock_repo.set_listing_status(conn, listing_id, "suspended")
+        stock_repo.set_halt(conn, listing_id, None, "退市清算中")
+        started += 1
+    for case in stock_repo.due_delisting(conn, "auction"):
+        clear_delisting(conn, case)
+        cleared += 1
+    return {"to_auction": started, "cleared": cleared}
+
+
+def clear_delisting(conn, case: dict) -> dict:
+    """Price, pay creditors, pay shareholders, void the shares (05 §7.3 / 08 §6).
+
+    Order matters and is the whole point of the task: banks first (the only
+    creditor the simulation models), shareholders take the remainder pro-rata.
+    A company with no cash distributes nothing — the shares still die, which is
+    what "退市" means for the holder.
+    """
+    listing_id = str(case["listing_id"])
+    listing = stock_repo.listing_by_id(conn, listing_id, for_update=True)
+    if listing is None:  # pragma: no cover
+        raise NotFound("上市记录不存在")
+    case_id = str(case["id"])
+    code = str(case["currency_code"] or listing["currency_code"] or "cc4")
+
+    # Clearing price: what the consolidation window actually traded at.
+    since = case["triggered_at"]
+    clearing = stock_repo.consolidation_vwap(conn, listing_id, since)
+    if clearing is None or clearing <= 0:
+        clearing = Decimal(listing["last_price"] or listing["ipo_price"] or 0)
+    clearing = q4(clearing)
+
+    company = company_repo.by_ticker(conn, str(listing["ticker"]))
+    treasury = str(company["treasury_actor_id"]) if company and company["treasury_actor_id"] else None
+    distributed = Decimal(0)
+    if treasury is not None:
+        distributed = _pay_creditors(conn, case_id=case_id, treasury=treasury, code=code)
+        distributed += _pay_shareholders(
+            conn, case_id=case_id, listing=listing, treasury=treasury, code=code,
+            clearing=clearing,
+        )
+
+    for holder in stock_repo.holders_of(conn, listing_id):
         stock_repo.debit_shares(
             conn,
             actor_id=str(holder["actor_id"]),
-            listing_id=str(listing["id"]),
+            listing_id=listing_id,
             quantity=int(holder["shares"]),
         )
-    for position in stock_repo.open_shorts(conn, listing_id=str(listing["id"]), for_update=True):
+    for position in stock_repo.open_shorts(conn, listing_id=listing_id, for_update=True):
         stock_repo.close_short(
             conn,
             str(position["id"]),
             remaining=None,
             status="closed",
-            closed_price=Decimal(listing["last_price"] or 0),
+            closed_price=clearing,
             fee_paid=Decimal(0),
         )
         if position["borrowed_from"]:
             _return_lending(conn, str(position["borrowed_from"]), int(position["quantity"]))
-    stock_repo.settle_delisting(conn, str(case["id"]))
-    stock_repo.set_listing_status(conn, str(listing["id"]), "delisted")
-    return {"ticker": listing["ticker"], "case_id": str(case["id"]), "status": "settled"}
+    stock_repo.settle_delisting(
+        conn, case_id, clearing_price=clearing, distributed=q4(distributed)
+    )
+    stock_repo.set_listing_status(conn, listing_id, "delisted")
+    return {
+        "ticker": listing["ticker"],
+        "case_id": case_id,
+        "status": "settled",
+        "clearing_price": str(clearing),
+        "distributed": str(q4(distributed)),
+        "currency_code": code,
+    }
+
+
+def settle_delisting(conn, ticker: str) -> dict:
+    """Skip the clock and clear now (admin / test hook)."""
+    listing = _lock_listing(conn, ticker)
+    case = stock_repo.current_delisting(conn, str(listing["id"]))
+    if case is None:
+        raise Unprocessable("该股票没有进行中的退市程序")
+    return clear_delisting(conn, case)
+
+
+def _pay_creditors(conn, *, case_id: str, treasury: str, code: str) -> Decimal:
+    """Repay active bank loans out of the company treasury; banks are first in line."""
+    from . import bank_service  # local: bank_service imports stock helpers too
+
+    paid = Decimal(0)
+    for loan in bank_repo.loans_of(conn, treasury, status="active"):
+        if _balance_of(conn, treasury, code) <= 0:
+            break
+        if str(loan["currency_code"]) != code:
+            # A loan in another currency cannot be paid from this balance; the
+            # bank's own collateral path (0134) takes over from here.
+            continue
+        due = Decimal(loan["outstanding"]) + Decimal(loan["accrued_interest"])
+        if due <= 0:
+            continue
+        amount = min(_balance_of(conn, treasury, code), q4(due))
+        if amount <= 0:  # pragma: no cover
+            continue
+        try:
+            bank_service.repay(
+                conn,
+                actor={"id": treasury},
+                loan_id=str(loan["id"]),
+                amount=amount,
+                idem_key=f"delisting:{case_id}:{loan['id']}",
+            )
+        except (Unprocessable, Forbidden):
+            continue
+        paid += amount
+        bank = bank_repo.by_id(conn, str(loan["bank_id"]))
+        stock_repo.insert_payout(
+            conn,
+            case_id=case_id,
+            actor_id=str(bank["actor_id"]) if bank else treasury,
+            kind="creditor",
+            amount=amount,
+            currency_code=code,
+            ref=f"loan {loan['id']}",
+        )
+    return paid
+
+
+def _pay_shareholders(conn, *, case_id: str, listing: dict, treasury: str, code: str,
+                      clearing: Decimal) -> Decimal:
+    """Pro-rata the remaining treasury cash to the float (treasury stock excluded)."""
+    listing_id = str(listing["id"])
+    cash = _balance_of(conn, treasury, code)
+    holders = [
+        (str(row["actor_id"]), int(row["shares"]))
+        for row in stock_repo.holders_of(conn, listing_id)
+        if str(row["actor_id"]) != treasury and int(row["shares"]) > 0
+    ]
+    total = sum(qty for _, qty in holders)
+    if cash <= 0 or total <= 0:
+        return Decimal(0)
+
+    plan: dict[str, Decimal] = {}
+    for actor_id, qty in holders:
+        part = q4(cash * Decimal(qty) / Decimal(total))
+        if part > 0:
+            plan[actor_id] = plan.get(actor_id, Decimal(0)) + part
+    # Rounding down leaves dust in the treasury; the largest holder absorbs it so
+    # the case's ``distributed_amount`` matches the money that actually moved.
+    leftover = q4(cash - sum(plan.values(), Decimal(0)))
+    if leftover > 0:
+        biggest = max(holders, key=lambda row: (row[1], row[0]))[0]
+        plan[biggest] = plan.get(biggest, Decimal(0)) + leftover
+
+    paid = Decimal(0)
+    for actor_id in sorted(plan):
+        amount = plan[actor_id]
+        if amount <= 0:
+            continue
+        shares = dict(holders)[actor_id]
+        tx = currency_service.post(
+            conn,
+            kind="delisting_liquidation",
+            moves=[Move(treasury, code, -amount), Move(actor_id, code, amount)],
+            ref_type="delisting_case",
+            ref_id=case_id,
+            memo=f"liquidation {clearing} x {shares}",
+        )
+        stock_repo.insert_payout(
+            conn, case_id=case_id, actor_id=actor_id, kind="shareholder",
+            amount=amount, currency_code=code, shares=shares,
+            ref=f"clearing {clearing}", tx_id=tx["tx_id"],
+        )
+        paid += amount
+    return paid
+
+
+def _balance_of(conn, actor_id: str, code: str) -> Decimal:
+    row = currency_repo.account(conn, actor_id, code)
+    return Decimal(row["balance"]) if row else Decimal(0)
+
+
+def _payouts(conn, case_id: str) -> list[dict]:
+    return [
+        {
+            "actor_id": str(row["actor_id"]),
+            "actor_code": row["actor_code"] or "",
+            "kind": row["kind"],
+            "amount": str(Decimal(row["amount"])),
+            "shares": int(row["shares"]),
+            "currency_code": row["currency_code"],
+            "ref": row["ref"],
+            "tx_id": str(row["tx_id"]) if row["tx_id"] else None,
+            "created_at": ts(row["created_at"]),
+        }
+        for row in stock_repo.payouts_of(conn, case_id)
+    ]
+
 
 
 # ------------------------------------------------------------------ jobs

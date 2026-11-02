@@ -15,6 +15,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import distributed_tx as dt_repo
 
@@ -131,11 +132,11 @@ def _payload(row: dict, conn, *, detail: bool = False) -> dict:
         "fee_amount": str(Decimal(row["fee_amount"])),
         "fee_split": _fee_split(Decimal(row["fee_amount"])),
         "retries": int(row["retries"]),
-        "deadline_at": row["deadline_at"].isoformat(),
-        "decided_at": row["decided_at"].isoformat() if row["decided_at"] else None,
-        "unknown_since": row["unknown_since"].isoformat() if row["unknown_since"] else None,
+        "deadline_at": ts(row["deadline_at"]),
+        "decided_at": ts(row["decided_at"]),
+        "unknown_since": ts(row["unknown_since"]),
         "last_error": row["last_error"],
-        "created_at": row["created_at"].isoformat(),
+        "created_at": ts(row["created_at"]),
     }
     if detail:
         data["participants"] = [
@@ -143,8 +144,8 @@ def _payload(row: dict, conn, *, detail: bool = False) -> dict:
                 "participant_id": item["participant_id"],
                 "region": item["region"],
                 "status": item["status"],
-                "prepared_at": item["prepared_at"].isoformat() if item["prepared_at"] else None,
-                "committed_at": item["committed_at"].isoformat() if item["committed_at"] else None,
+                "prepared_at": ts(item["prepared_at"]),
+                "committed_at": ts(item["committed_at"]),
                 "last_error": item["last_error"],
             }
             for item in dt_repo.participants_of(conn, str(row["id"]))
@@ -154,7 +155,7 @@ def _payload(row: dict, conn, *, detail: bool = False) -> dict:
                 "decision": item["decision"],
                 "reason": item["reason"],
                 "decided_by": item["decided_by"],
-                "at": item["created_at"].isoformat(),
+                "at": ts(item["created_at"]),
             }
             for item in dt_repo.decisions_of(conn, str(row["id"]))
         ]
@@ -162,7 +163,7 @@ def _payload(row: dict, conn, *, detail: bool = False) -> dict:
             {
                 "event_type": item["event_type"],
                 "payload": item["payload"],
-                "published_at": item["published_at"].isoformat() if item["published_at"] else None,
+                "published_at": ts(item["published_at"]),
             }
             for item in dt_repo.outbox_of(conn, str(row["id"]))
         ]
@@ -336,7 +337,7 @@ def get(conn, tx_id: str) -> dict:
         {
             "coordinator_id": lease["coordinator_id"],
             "region": lease["region"],
-            "lease_until": lease["lease_until"].isoformat(),
+            "lease_until": ts(lease["lease_until"]),
         }
         if lease
         else None

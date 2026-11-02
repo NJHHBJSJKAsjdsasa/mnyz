@@ -78,8 +78,13 @@ def _truncate(dsn: str) -> None:
                      stock_orders, stock_candles, stock_holders,
                      stock_daily_summary, dividends, margin_accounts,
                      securities_lending, short_positions, delisting_cases,
+                     stock_delisting_payouts, investor_protection_claims,
                      stock_listings CASCADE
             """
+        )
+        conn.execute(
+            "TRUNCATE broker_commissions, broker_accounts, broker_memberships, "
+            "listing_venues CASCADE"
         )
         conn.execute("TRUNCATE ai_decisions, ai_agents, ai_decision_providers CASCADE")
         conn.execute(
@@ -130,6 +135,11 @@ def _truncate(dsn: str) -> None:
             VALUES ('CSX', '宇宙股票综合指数', 'cap_weighted', 'cc4', 1000)
             ON CONFLICT (code) DO NOTHING
             """
+        )
+        # Tables without a players FK must be cleared explicitly.
+        conn.execute(
+            "TRUNCATE announcements, craft_runs, weekly_claims, relic_fragments, "
+            "relic_claims, planet_visits"
         )
         conn.execute("TRUNCATE dt_config")
         conn.execute("INSERT INTO dt_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING")

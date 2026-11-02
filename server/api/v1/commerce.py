@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from flask import Blueprint, g
 
-from ...domain import company_law, company_service, currency_service
+from ...domain import antitrust, company_law, company_service, currency_service, licensing
 from ...infra.context import db
-from ...models.commerce import CompanyRequest, FinancialsRequest, ShareTransferRequest
+from ...infra.serialize import ts
+from ...models.commerce import (
+    CompanyRequest,
+    FinancialsRequest,
+    LicenseDecisionRequest,
+    LicenseRequest,
+    ShareTransferRequest,
+)
 from ...models.legal import (
     CharterRequest,
     MeetingRequest,
@@ -21,6 +28,7 @@ from ..deps import (
     finish_idempotency,
     parse_model,
     rate_limit,
+    require_admin,
     require_auth,
     success,
 )
@@ -52,7 +60,12 @@ def list_companies():
 @rate_limit("company", 60, 60)
 def company_detail(ticker: str):
     with db().connection() as conn:
-        return success(company_service.detail(conn, ticker))
+        payload = company_service.detail(conn, ticker)
+        # The UI needs the caller's own actor id to offer a directed placement
+        # (the buyer must be the proposer, see company_law.propose).
+        actor = currency_service.actor_for_player(conn, player_repo.get(conn, g.player_id))
+        payload["my_actor_id"] = str(actor["id"])
+        return success(payload)
 
 
 @bp.post("/companies")
@@ -97,6 +110,8 @@ def transfer_shares(ticker: str):
 @rate_limit("company_financials", 20, 60)
 def publish_financials(ticker: str):
     body = parse_model(FinancialsRequest)
+    # Deliberately not ts(): this string seeds the idempotency key, so its shape
+    # must not change (a "T00:00:00Z" suffix would silently mint a new key).
     payload = {"ticker": ticker, "period": body.period.isoformat()}
 
     def action(conn, player):
@@ -131,7 +146,7 @@ def licenses():
                 "kind": row["kind"],
                 "status": row["status"],
                 "monthly_fee": str(row["monthly_fee"]),
-                "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
+                "expires_at": ts(row["expires_at"]),
             }
             for row in rows
         ]
@@ -250,3 +265,68 @@ def decide_related_party(ticker: str, txn_id: str):
         )
 
     return _write({"ticker": ticker, "txn": txn_id, "approve": body.approve}, action)
+
+
+# ------------------------------------------------------------------ anti-trust
+@bp.get("/admin/commerce/antitrust")
+@require_auth()
+@rate_limit("antitrust_read", 60, 60)
+def antitrust_overview():
+    require_admin()
+    with db().connection() as conn:
+        return success(antitrust.overview(conn))
+
+
+@bp.post("/admin/commerce/antitrust/snapshot")
+@require_auth(write=True)
+@rate_limit("antitrust_snapshot", 5, 3600)
+def antitrust_snapshot():
+    """Recompute today's snapshot by hand (the daily job is authoritative)."""
+    require_admin()
+    with db().transaction() as conn:
+        return success(antitrust.snapshot(conn))
+
+
+# ------------------------------------------------------------------ licences
+@bp.get("/commerce/licences/catalogue")
+@require_auth()
+@rate_limit("licence_catalogue", 120, 60)
+def licence_catalogue():
+    return success(licensing.catalogue())
+
+
+@bp.post("/commerce/licenses")
+@require_auth(write=True)
+@rate_limit("licence_apply", 10, 3600)
+def licence_apply():
+    body = parse_model(LicenseRequest)
+
+    def action(conn, player):
+        return licensing.apply(conn, currency_service.actor_for_player(conn, player), body.kind)
+
+    return _write({"kind": body.kind}, action)
+
+
+@bp.get("/admin/commerce/licenses/pending")
+@require_auth()
+@rate_limit("licence_pending", 60, 60)
+def licence_pending():
+    require_admin()
+    with db().connection() as conn:
+        return success(licensing.pending(conn))
+
+
+@bp.post("/admin/commerce/licenses/<license_id>/decide")
+@require_auth(write=True)
+@rate_limit("licence_decide", 60, 3600)
+def licence_decide(license_id: str):
+    require_admin()
+    body = parse_model(LicenseDecisionRequest)
+    reviewer = str(getattr(g, "player", {}).get("display_name") or getattr(g, "player_id", ""))
+
+    def action(conn, _player):
+        return licensing.decide(
+            conn, license_id=license_id, approve=body.approve, reviewer=reviewer, note=body.note
+        )
+
+    return _write({"license": license_id, "approve": body.approve}, action)

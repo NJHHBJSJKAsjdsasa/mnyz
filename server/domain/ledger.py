@@ -38,10 +38,14 @@ SYSTEM_ACCOUNT_BY_KIND = {
     "wreck_salvage": "loot",
     "fleet_yield": "loot",
     "station_yield": "loot",
+    "craft_in": "sink",
     "craft_out": "loot",
     "combat_loot": "loot",
     "planet_yield": "loot",
     "contract_reward": "quest",
+    # A new player's starting fuel. Same source as a quest reward: value that the
+    # system hands out on purpose, not loot the player found.
+    "starter_kit": "quest",
     "task_reward": "quest",
     "codex_reward": "quest",
     "npc_trade": "market",
@@ -53,6 +57,7 @@ SYSTEM_ACCOUNT_BY_KIND = {
     "siege_loot": "escrow",
     "migration": "migration",
     "correction": "sink",
+    "travel": "sink",
 }
 
 

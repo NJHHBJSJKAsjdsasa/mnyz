@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from pydantic import Field, field_validator
 
 from .auth import StrictModel
@@ -89,3 +91,11 @@ class CouncilSectorRequest(StrictModel):
 
 class CouncilVoteRequest(StrictModel):
     vote: str = Field(pattern="^(yes|no)$")
+
+
+class CouncilIpoRequest(StrictModel):
+    ticker: str = Field(min_length=3, max_length=8)
+    offer_shares: int = Field(gt=0, le=10_000_000_000)
+    price: Decimal = Field(gt=0, max_digits=24, decimal_places=4)
+    exchange_code: str | None = Field(default=None, max_length=8)
+    call_auction_minutes: int = Field(default=30, ge=0, le=240)

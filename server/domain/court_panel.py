@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import legal
+from . import company_law
 from . import court_service
 
 PANEL_SIZE = 5
@@ -31,7 +33,7 @@ def _pool(conn, case: dict, seed: str) -> list[dict]:
     """
     blocked = {str(case["plaintiff_actor_id"]), str(case["defendant_actor_id"])}
     if case["company_id"]:
-        for row in legal.officers_of(conn, str(case["company_id"])):
+        for row in company_law.officers(conn, str(case["company_id"])):
             blocked.add(str(row["actor_id"]))
     rows = conn.execute(
         """
@@ -82,8 +84,8 @@ def detail(conn, panel_id: str) -> dict:
         "status": panel["status"],
         "verdict": panel["verdict"],
         "dissent": panel["dissent"],
-        "created_at": panel["created_at"].isoformat(),
-        "decided_at": panel["decided_at"].isoformat() if panel["decided_at"] else None,
+        "created_at": ts(panel["created_at"]),
+        "decided_at": ts(panel["decided_at"]),
         "members": [
             {
                 "actor_id": str(row["actor_id"]),

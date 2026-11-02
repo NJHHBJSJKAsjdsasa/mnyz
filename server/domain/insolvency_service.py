@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import companies as company_repo
 from ..repo import currency as currency_repo
@@ -146,7 +147,7 @@ def file_case(conn, *, actor: dict, ticker: str, kind: str = "liquidation",
         "kind": kind,
         "status": "stay",
         "administrator_actor_id": str(administrator["id"]),
-        "automatic_stay_until": stay_until.isoformat(),
+        "automatic_stay_until": ts(stay_until),
         "court": court["code"],
     }
 
@@ -166,11 +167,9 @@ def detail(conn, case_id: str) -> dict:
         "administrator_actor_id": str(case["administrator_actor_id"])
         if case["administrator_actor_id"]
         else None,
-        "automatic_stay_until": case["automatic_stay_until"].isoformat()
-        if case["automatic_stay_until"]
-        else None,
-        "filed_at": case["filed_at"].isoformat(),
-        "closed_at": case["closed_at"].isoformat() if case["closed_at"] else None,
+        "automatic_stay_until": ts(case["automatic_stay_until"]),
+        "filed_at": ts(case["filed_at"]),
+        "closed_at": ts(case["closed_at"]),
         "claims": [
             {
                 "id": str(row["id"]),

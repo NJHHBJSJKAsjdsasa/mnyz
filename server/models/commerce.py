@@ -42,6 +42,15 @@ class PropertyRegisterRequest(StrictModel):
     traffic_index: Decimal = Field(default=Decimal(0), ge=0, le=100)
 
 
+class PropertyDisputeRequest(StrictModel):
+    reason: str = Field(default="", max_length=280)
+
+
+class PropertyDisputeResolveRequest(StrictModel):
+    upheld: bool
+    note: str = Field(default="", max_length=280)
+
+
 class PropertyListRequest(StrictModel):
     price: Decimal = Field(gt=0, max_digits=24, decimal_places=4)
     kind: str = Field(default="fixed", pattern="^(fixed|auction)$")
@@ -51,3 +60,15 @@ class PropertyListRequest(StrictModel):
 
 class PropertyBidRequest(StrictModel):
     amount: Decimal = Field(gt=0, max_digits=24, decimal_places=4)
+
+
+LICENCE_KINDS = "^(cross_region_trade|property_broker|port|securities_firm|bank|exchange)$"
+
+
+class LicenseRequest(StrictModel):
+    kind: str = Field(pattern=LICENCE_KINDS)
+
+
+class LicenseDecisionRequest(StrictModel):
+    approve: bool
+    note: str = Field(default="", max_length=280)

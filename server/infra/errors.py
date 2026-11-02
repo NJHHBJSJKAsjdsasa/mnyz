@@ -32,6 +32,7 @@ _TITLES = {
     "account_locked": "账号已锁定",
     "player_locked": "玩家已被冻结",
     "already_claimed": "已被领取",
+    "quote_expired": "报价已过期",
     "daily_limit": "今日次数已用完",
     "unprocessable": "操作不可执行",
     "storage_offline": "存储暂不可用",
@@ -40,6 +41,11 @@ _TITLES = {
     "transaction_retry_exhausted": "事务冲突，请重试",
     "internal_error": "服务器内部错误",
 }
+
+
+def title_of(code: str) -> str:
+    """Human title for a machine code; used by ``GET /meta/error-codes``."""
+    return _TITLES.get(code, "")
 
 
 class ApiError(Exception):
@@ -183,6 +189,12 @@ class OutOfStock(ApiError):
 
 class ContractExpired(ApiError):
     status, code = 409, "contract_expired"
+
+
+class QuoteExpired(ApiError):
+    """A priced offer outlived its TTL; the client must re-quote (11 §4.1)."""
+
+    status, code = 410, "quote_expired"
 
 
 class StorageOffline(ApiError):

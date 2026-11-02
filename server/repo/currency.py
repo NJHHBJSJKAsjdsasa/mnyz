@@ -217,15 +217,120 @@ def insert_transaction(
     ref_id: str | None,
     idempotency_key: str | None,
     memo: str = "",
+    reversal_of: str | None = None,
+    reversal_reason: str = "",
 ) -> dict:
     return conn.execute(
         """
-        INSERT INTO currency_ledger_transactions (kind, ref_type, ref_id, idempotency_key, memo)
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id, kind, ref_type, ref_id, created_at
+        INSERT INTO currency_ledger_transactions
+               (kind, ref_type, ref_id, idempotency_key, memo, reversal_of, reversal_reason)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, kind, ref_type, ref_id, memo, reversal_of, created_at
         """,
-        (kind, ref_type, ref_id, idempotency_key, memo),
+        (kind, ref_type, ref_id, idempotency_key, memo, reversal_of, reversal_reason),
     ).fetchone()
+
+
+def transaction(conn, tx_id: str, for_update: bool = False) -> dict | None:
+    sql = (
+        "SELECT id, kind, ref_type, ref_id, memo, reversal_of, reversal_reason, created_at "
+        "FROM currency_ledger_transactions WHERE id = %s"
+    )
+    if for_update:
+        sql += " FOR UPDATE"
+    return conn.execute(sql, (tx_id,)).fetchone()
+
+
+def reversal_child(conn, tx_id: str) -> dict | None:
+    """The (at most one) reversal of ``tx_id``, if it exists."""
+    return conn.execute(
+        "SELECT id, kind, memo, reversal_reason, created_at "
+        "FROM currency_ledger_transactions WHERE reversal_of = %s",
+        (tx_id,),
+    ).fetchone()
+
+
+def reversal_chain(conn, tx_id: str) -> list[dict]:
+    """Ancestors of ``tx_id``, nearest first (walk ``reversal_of`` upward)."""
+    return conn.execute(
+        """
+        WITH RECURSIVE up AS (
+            SELECT t.id, t.reversal_of, t.kind, t.memo, t.created_at, 1 AS depth
+              FROM currency_ledger_transactions t
+             WHERE t.id = (SELECT reversal_of FROM currency_ledger_transactions WHERE id = %s)
+            UNION ALL
+            SELECT t.id, t.reversal_of, t.kind, t.memo, t.created_at, up.depth + 1
+              FROM currency_ledger_transactions t
+              JOIN up ON t.id = up.reversal_of
+        )
+        SELECT id, kind, memo, created_at, depth FROM up ORDER BY depth
+        """,
+        (tx_id,),
+    ).fetchall()
+
+
+def reversal_descendants(conn, tx_id: str) -> int:
+    """How many mirror transactions hang off ``tx_id`` (any depth)."""
+    row = conn.execute(
+        """
+        WITH RECURSIVE down AS (
+            SELECT id, 1 AS depth FROM currency_ledger_transactions WHERE reversal_of = %s
+            UNION ALL
+            SELECT t.id, down.depth + 1
+              FROM currency_ledger_transactions t
+              JOIN down ON t.reversal_of = down.id
+        )
+        SELECT COUNT(*) AS n FROM down
+        """,
+        (tx_id,),
+    ).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def list_transactions(
+    conn,
+    *,
+    kind: str | None = None,
+    actor_id: str | None = None,
+    ref_type: str | None = None,
+    ref_id: str | None = None,
+    since=None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    where: list[str] = []
+    params: list = []
+    if kind:
+        where.append("t.kind = %s")
+        params.append(kind)
+    if ref_type:
+        where.append("t.ref_type = %s")
+        params.append(ref_type)
+    if ref_id:
+        where.append("t.ref_id = %s")
+        params.append(ref_id)
+    if since:
+        where.append("t.created_at >= %s")
+        params.append(since)
+    if actor_id:
+        where.append(
+            "EXISTS (SELECT 1 FROM currency_ledger_entries e "
+            "WHERE e.tx_id = t.id AND e.actor_id = %s)"
+        )
+        params.append(actor_id)
+    sql = (
+        "SELECT t.id, t.kind, t.ref_type, t.ref_id, t.memo, t.reversal_of, t.created_at, "
+        "       (SELECT COUNT(*) FROM currency_ledger_entries e WHERE e.tx_id = t.id) AS entry_count, "
+        "       (SELECT r.id FROM currency_ledger_transactions r WHERE r.reversal_of = t.id) "
+        "         AS reversed_by "
+        "  FROM currency_ledger_transactions t"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY t.created_at DESC, t.id DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+    return conn.execute(sql, tuple(params)).fetchall()
+
 
 
 def transaction_by_idempotency(conn, key: str) -> dict | None:

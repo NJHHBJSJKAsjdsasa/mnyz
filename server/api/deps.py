@@ -16,6 +16,7 @@ from ..infra.context import cache, db, keys
 from ..infra.errors import (
     AccountLocked,
     ApiError,
+    Forbidden,
     IdempotencyConflict,
     InvalidArgument,
     MissingIdempotencyKey,
@@ -91,6 +92,16 @@ def require_auth(write: bool = False) -> Callable:
         return wrapper
 
     return decorator
+
+
+ADMIN_ROLES = ("admin", "ops")
+
+
+def require_admin() -> None:
+    """Guard for the admin/ops surface; call it *after* :func:`require_auth`."""
+    role = str(getattr(g, "player", {}).get("account_role") or "")
+    if role not in ADMIN_ROLES:
+        raise Forbidden("需要运维/管理员权限")
 
 
 def rate_limit(scope: str, capacity: int, per_seconds: int, by: str = "player") -> Callable:

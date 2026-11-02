@@ -143,6 +143,33 @@ def _register_hooks(app: Flask) -> None:
         return response
 
     @app.after_request
+    def _security_headers(response):
+        """Baseline hardening (12 §B).
+
+        CSP is only fenced in when not running dev: Vite's HMR client and the
+        Jinja data islands need inline script in development, and shipping a
+        policy that already allows 'unsafe-inline' everywhere teaches nothing.
+        """
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault(
+            "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+        )
+        if not app.config["SETTINGS"].is_dev:
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; img-src 'self' data: blob:; "
+                "style-src 'self' 'unsafe-inline'; script-src 'self'; "
+                "connect-src 'self'; font-src 'self' data:; frame-ancestors 'self'",
+            )
+        if app.config["SETTINGS"].is_prod:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        return response
+
+    @app.after_request
     def _finish(response):
         duration_ms = (time.perf_counter() - getattr(g, "started_at", time.perf_counter())) * 1000
         response.headers["X-Request-Id"] = getattr(g, "request_id", "")

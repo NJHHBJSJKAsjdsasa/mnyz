@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..infra.serialize import day as day_of
 from ..infra.errors import NotFound, OutOfStock
 from ..repo import calendar as calendar_repo
 from ..repo import market as market_repo
@@ -20,7 +21,7 @@ def get_market(conn, player: dict, planet_key: str) -> dict:
     balances = wallet_repo.balances(conn, player["id"])
     return {
         "planet": planet_domain.public_payload(planet),
-        "game_day": day.isoformat(),
+        "game_day": day_of(day),
         "quotes": [
             {
                 "resource_code": row["resource_code"],

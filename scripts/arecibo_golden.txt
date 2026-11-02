@@ -1,0 +1,22 @@
+Bacteria@Kepler_442b 1f6046646a6bd998
+Bacteria@Trappist_1e b46a4ebf81839dcf
+Vegetation@Kepler_442b 20d0e849e7c11750
+Vegetation@Trappist_1e e32c524e25e401e6
+Animal Life@Kepler_442b f240af89012e5f5a
+Animal Life@Trappist_1e efa00f190796bcec
+Intelligent Life@Kepler_442b d508911c2ba4b8a7
+Intelligent Life@Trappist_1e 708a7493579f5661
+Vegetable Animals@Kepler_442b 69f4f2f6b3345216
+Vegetable Animals@Trappist_1e 7c8e1f1e581c07ff
+Silicon-Based Life@Kepler_442b f53ee598c88a00c8
+Silicon-Based Life@Trappist_1e 230e4a4704e3094d
+Robotic Entities@Kepler_442b e77b2d376a2a5228
+Robotic Entities@Trappist_1e 8c8ec3baa18bf4f5
+Conscious Gas@Kepler_442b 8648195328260325
+Conscious Gas@Trappist_1e f71cb22f3f3e9e8a
+Non-Physical Entity@Kepler_442b 757314729e6e0ba8
+Non-Physical Entity@Trappist_1e aabd785ab2f5f577
+Have I just found God?@Kepler_442b 7c2e2a67f433dc3a
+Have I just found God?@Trappist_1e 7c2e2a67f433dc3a
+Something Unknown@Kepler_442b fafc74cfa892d341
+Something Unknown@Trappist_1e febac29b49d60fe8

@@ -14,7 +14,8 @@ from decimal import Decimal
 LISTING_COLUMNS = (
     "id, exchange_id, company_id, ticker, currency_code, total_shares, free_float, "
     "status, ipo_price, last_price, prev_close, listed_at, settlement_mode, "
-    "circuit_breaker_pct, shortable, halted_until, halt_reason, created_at"
+    "circuit_breaker_pct, shortable, halted_until, halt_reason, created_at, "
+    "auction_ends_at, auction_cleared_at"
 )
 
 
@@ -25,6 +26,14 @@ def exchange_by_code(conn, code: str) -> dict | None:
         "       fee_bps, listing_fee, max_listings "
         "FROM exchanges WHERE code = %s",
         (code,),
+    ).fetchone()
+
+
+def exchange_by_id(conn, exchange_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT id, code, name, kind, currency_code, status, fee_bps, listing_fee, "
+        "       max_listings FROM exchanges WHERE id = %s",
+        (exchange_id,),
     ).fetchone()
 
 
@@ -71,18 +80,38 @@ def listing_by_id(conn, listing_id: str, *, for_update: bool = False) -> dict | 
     return conn.execute(sql, (listing_id,)).fetchone()
 
 
-def list_listings(conn, *, status: str | None = None, limit: int = 200) -> list[dict]:
+def list_listings(conn, *, status: str | None = None, limit: int = 200,
+                  after: tuple[datetime, str] | None = None) -> list[dict]:
+    """Keyset page of listings, newest first (10 §P0-4).
+
+    ``after`` is the ``(listed_at, id)`` of the last row the client already has.
+    ``listed_at`` is nullable in old rows, so ordering and the cursor predicate
+    both coalesce it — otherwise pagination silently re-serves those rows.
+    """
+    where: list[str] = []
+    params: list = []
     if status:
-        return conn.execute(
-            f"SELECT {LISTING_COLUMNS} FROM stock_listings WHERE status = %s "
-            "ORDER BY listed_at DESC NULLS LAST LIMIT %s",
-            (status, limit),
-        ).fetchall()
-    return conn.execute(
-        f"SELECT {LISTING_COLUMNS} FROM stock_listings "
-        "ORDER BY listed_at DESC NULLS LAST LIMIT %s",
-        (limit,),
-    ).fetchall()
+        where.append("status = %s")
+        params.append(status)
+    if after is not None:
+        where.append("(COALESCE(listed_at, to_timestamp(0)), id) < (%s, %s)")
+        params.extend([after[0], after[1]])
+    sql = f"SELECT {LISTING_COLUMNS} FROM stock_listings"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY COALESCE(listed_at, to_timestamp(0)) DESC, id DESC LIMIT %s"
+    params.append(limit)
+    return conn.execute(sql, tuple(params)).fetchall()
+
+
+def count_listings(conn, *, status: str | None = None) -> int:
+    if status:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM stock_listings WHERE status = %s", (status,)
+        ).fetchone()
+    else:
+        row = conn.execute("SELECT COUNT(*) AS n FROM stock_listings").fetchone()
+    return int(row["n"])
 
 
 def create_listing(
@@ -98,14 +127,22 @@ def create_listing(
     circuit_breaker_pct: Decimal,
     shortable: bool,
     status: str = "listed",
+    auction_minutes: int = 0,
 ) -> dict:
+    """Create the listing. ``auction_minutes > 0`` opens a call-auction window.
+
+    During that window orders are collected and never matched; the clearing job
+    strikes one price for everybody. ``0`` keeps the legacy behaviour of trading
+    continuously from the first second (tests and small exchanges rely on it).
+    """
     return conn.execute(
         f"""
         INSERT INTO stock_listings
                (exchange_id, company_id, ticker, total_shares, free_float, ipo_price,
                 settlement_mode, circuit_breaker_pct, shortable, status, last_price,
-                prev_close, listed_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                prev_close, listed_at, auction_ends_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(),
+                CASE WHEN %s > 0 THEN now() + make_interval(mins => %s) ELSE NULL END)
         RETURNING {LISTING_COLUMNS}
         """,
         (
@@ -121,6 +158,8 @@ def create_listing(
             status,
             ipo_price,
             ipo_price,
+            int(auction_minutes),
+            int(auction_minutes),
         ),
     ).fetchone()
 
@@ -154,7 +193,7 @@ def clear_expired_halt(conn) -> int:
 
 # ------------------------------------------------------------------ orders
 ORDER_COLUMNS = (
-    "id, listing_id, actor_id, side, type, price, quantity, filled, status, "
+    "id, listing_id, venue_id, actor_id, side, type, price, quantity, filled, status, "
     "created_at, updated_at"
 )
 
@@ -168,14 +207,15 @@ def insert_order(
     order_type: str,
     price: Decimal | None,
     quantity: int,
+    venue_id: str | None = None,
 ) -> dict:
     return conn.execute(
         f"""
-        INSERT INTO stock_orders (listing_id, actor_id, side, type, price, quantity)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO stock_orders (listing_id, venue_id, actor_id, side, type, price, quantity)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING {ORDER_COLUMNS}
         """,
-        (listing_id, actor_id, side, order_type, price, quantity),
+        (listing_id, venue_id, actor_id, side, order_type, price, quantity),
     ).fetchone()
 
 
@@ -186,25 +226,41 @@ def order_by_id(conn, order_id: str, *, for_update: bool = False) -> dict | None
     return conn.execute(sql, (order_id,)).fetchone()
 
 
-def book_bids(conn, listing_id: str, limit: int = 50) -> list[dict]:
-    """Resting buys, best price first, oldest first inside a price level."""
-    return conn.execute(
+def book_bids(conn, listing_id: str, limit: int = 50,
+              venue_id: str | None = None) -> list[dict]:
+    """Resting buys, best price first, oldest first inside a price level.
+
+    ``venue_id`` scopes the book to one venue: liquidity on another venue is a
+    different market and must not be matched against (03 §5).
+    """
+    sql = (
         f"SELECT {ORDER_COLUMNS} FROM stock_orders "
         "WHERE listing_id = %s AND side = 'buy' AND status IN ('open','partial') "
         "  AND quantity > filled "
-        "ORDER BY price DESC, created_at ASC, id ASC LIMIT %s",
-        (listing_id, limit),
-    ).fetchall()
+    )
+    params: list = [listing_id]
+    if venue_id:
+        sql += "  AND venue_id = %s "
+        params.append(venue_id)
+    sql += "ORDER BY price DESC, created_at ASC, id ASC LIMIT %s"
+    params.append(limit)
+    return conn.execute(sql, params).fetchall()
 
 
-def book_asks(conn, listing_id: str, limit: int = 50) -> list[dict]:
-    return conn.execute(
+def book_asks(conn, listing_id: str, limit: int = 50,
+              venue_id: str | None = None) -> list[dict]:
+    sql = (
         f"SELECT {ORDER_COLUMNS} FROM stock_orders "
         "WHERE listing_id = %s AND side = 'sell' AND status IN ('open','partial') "
         "  AND quantity > filled "
-        "ORDER BY price ASC, created_at ASC, id ASC LIMIT %s",
-        (listing_id, limit),
-    ).fetchall()
+    )
+    params: list = [listing_id]
+    if venue_id:
+        sql += "  AND venue_id = %s "
+        params.append(venue_id)
+    sql += "ORDER BY price ASC, created_at ASC, id ASC LIMIT %s"
+    params.append(limit)
+    return conn.execute(sql, params).fetchall()
 
 
 def set_order_fill(conn, order_id: str, filled: int, status: str) -> None:
@@ -276,17 +332,19 @@ def insert_trade(
     fee_sell: Decimal,
     tax: Decimal,
     tx_id: str | None,
+    venue_id: str | None = None,
 ) -> dict:
     return conn.execute(
         """
         INSERT INTO stock_trades
-               (listing_id, buy_order_id, sell_order_id, buyer_actor_id, seller_actor_id,
-                price, quantity, fee_buy, fee_sell, tax, tx_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               (listing_id, venue_id, buy_order_id, sell_order_id, buyer_actor_id,
+                seller_actor_id, price, quantity, fee_buy, fee_sell, tax, tx_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id, price, quantity, fee_buy, fee_sell, tax, executed_at
         """,
         (
             listing_id,
+            venue_id,
             buy_order_id,
             sell_order_id,
             buyer_actor_id,
@@ -817,31 +875,130 @@ def shorts_of(conn, actor_id: str) -> list[dict]:
 
 
 # ------------------------------------------------------------------ delisting
-def insert_delisting(conn, *, listing_id: str, reason: str, last_price: Decimal) -> dict:
+def insert_delisting(
+    conn,
+    *,
+    listing_id: str,
+    reason: str,
+    last_price: Decimal,
+    status: str = "consolidation",
+    consolidation_ends_at=None,
+    currency_code: str = "cc4",
+) -> dict:
     return conn.execute(
         """
-        INSERT INTO delisting_cases (listing_id, reason, last_price)
-        VALUES (%s, %s, %s)
-        RETURNING id, listing_id, reason, status, last_price, triggered_at
+        INSERT INTO delisting_cases
+               (listing_id, reason, last_price, status, consolidation_ends_at, currency_code)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id, listing_id, reason, status, last_price, triggered_at,
+                  consolidation_ends_at, auction_ends_at, clearing_price,
+                  distributed_amount, currency_code
         """,
-        (listing_id, reason, last_price),
+        (listing_id, reason, last_price, status, consolidation_ends_at, currency_code),
     ).fetchone()
 
 
 def current_delisting(conn, listing_id: str) -> dict | None:
     return conn.execute(
-        "SELECT id, listing_id, reason, status, last_price, triggered_at, settled_at "
-        "FROM delisting_cases WHERE listing_id = %s AND status IN ('triggered','auction') "
+        "SELECT id, listing_id, reason, status, last_price, triggered_at, settled_at, "
+        "       consolidation_ends_at, auction_ends_at, clearing_price, "
+        "       distributed_amount, currency_code "
+        "FROM delisting_cases "
+        "WHERE listing_id = %s AND status IN ('triggered','consolidation','auction') "
         "ORDER BY triggered_at DESC LIMIT 1",
         (listing_id,),
     ).fetchone()
 
 
-def settle_delisting(conn, case_id: str, status: str = "settled") -> None:
+def due_delisting(conn, status: str, *, before=None) -> list[dict]:
+    """Cases in ``status`` whose clock has run out.
+
+    "Due" always means "the deadline is in the past" — with ``before`` omitted
+    that is ``now()``. An unfiltered variant here would let one tick walk a case
+    straight from 整理期 to 清算 in a single pass.
+    """
+    column = "consolidation_ends_at" if status == "consolidation" else "auction_ends_at"
+    return conn.execute(
+        f"SELECT id, listing_id, reason, status, last_price, triggered_at, "
+        f"       consolidation_ends_at, auction_ends_at, clearing_price, "
+        f"       distributed_amount, currency_code "
+        f"FROM delisting_cases "
+        f"WHERE status = %s AND {column} IS NOT NULL AND {column} <= COALESCE(%s, now()) "
+        f"ORDER BY triggered_at",
+        (status, before),
+    ).fetchall()
+
+
+def advance_delisting(conn, case_id: str, *, status: str, auction_ends_at=None) -> None:
     conn.execute(
-        "UPDATE delisting_cases SET status = %s, settled_at = now() WHERE id = %s",
-        (status, case_id),
+        "UPDATE delisting_cases SET status = %s, auction_ends_at = %s WHERE id = %s",
+        (status, auction_ends_at, case_id),
     )
+
+
+def settle_delisting(
+    conn,
+    case_id: str,
+    status: str = "settled",
+    *,
+    clearing_price=None,
+    distributed=None,
+) -> None:
+    conn.execute(
+        "UPDATE delisting_cases "
+        "SET status = %s, settled_at = now(), "
+        "    clearing_price = COALESCE(%s, clearing_price), "
+        "    distributed_amount = COALESCE(%s, distributed_amount) "
+        "WHERE id = %s",
+        (status, clearing_price, distributed, case_id),
+    )
+
+
+def consolidation_vwap(conn, listing_id: str, since) -> Decimal | None:
+    """Volume-weighted average price over the consolidation window (05 §7.3)."""
+    row = conn.execute(
+        "SELECT COALESCE(SUM(price * quantity), 0) AS notional, "
+        "       COALESCE(SUM(quantity), 0) AS volume "
+        "  FROM stock_trades WHERE listing_id = %s AND executed_at >= %s",
+        (listing_id, since),
+    ).fetchone()
+    if row is None or int(row["volume"] or 0) <= 0:
+        return None
+    return Decimal(row["notional"]) / Decimal(row["volume"])
+
+
+def insert_payout(
+    conn,
+    *,
+    case_id: str,
+    actor_id: str,
+    kind: str,
+    amount: Decimal,
+    currency_code: str,
+    shares: int = 0,
+    ref: str = "",
+    tx_id: str | None = None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO stock_delisting_payouts
+               (case_id, actor_id, kind, amount, shares, currency_code, ref, tx_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (case_id, actor_id, kind, amount, shares, currency_code, ref, tx_id),
+    )
+
+
+def payouts_of(conn, case_id: str) -> list[dict]:
+    return conn.execute(
+        "SELECT p.id, p.actor_id, a.code AS actor_code, p.kind, p.amount, p.shares, "
+        "       p.currency_code, p.ref, p.tx_id, p.created_at "
+        "  FROM stock_delisting_payouts p "
+        "  JOIN economic_actors a ON a.id = p.actor_id "
+        " WHERE p.case_id = %s ORDER BY p.kind, p.id",
+        (case_id,),
+    ).fetchall()
+
 
 
 def jsonb(value: dict) -> str:
@@ -871,3 +1028,63 @@ def company_shareholder(conn, actor_id: str, company_id: str) -> bool:
         (actor_id, company_id),
     ).fetchone()
     return row is not None
+
+
+# ------------------------------------------------------- first-day call auction
+
+
+def due_call_auctions(conn, limit: int = 50) -> list[dict]:
+    """Listings whose call-auction window closed but was never cleared."""
+    return conn.execute(
+        f"""
+        SELECT {LISTING_COLUMNS} FROM stock_listings
+         WHERE status = 'listed'
+           AND auction_ends_at IS NOT NULL
+           AND auction_ends_at <= now()
+           AND auction_cleared_at IS NULL
+         ORDER BY auction_ends_at
+         LIMIT %s
+        """,
+        (limit,),
+    ).fetchall()
+
+
+def open_limit_orders(conn, listing_id: str, limit: int = 1000) -> list[dict]:
+    """Every resting limit order on a listing, both sides, oldest first."""
+    return conn.execute(
+        f"SELECT {ORDER_COLUMNS} FROM stock_orders "
+        "WHERE listing_id = %s AND type = 'limit' AND status IN ('open','partial') "
+        "  AND quantity > filled "
+        "ORDER BY created_at ASC, id ASC LIMIT %s",
+        (listing_id, limit),
+    ).fetchall()
+
+
+def mark_auction_cleared(conn, listing_id: str, price: Decimal) -> dict:
+    return conn.execute(
+        """
+        UPDATE stock_listings
+           SET auction_cleared_at = now(),
+               last_price = %s,
+               prev_close = ipo_price
+         WHERE id = %s AND auction_cleared_at IS NULL
+        RETURNING id, ticker, last_price, ipo_price
+        """,
+        (price, listing_id),
+    ).fetchone()
+
+
+def adjust_listing_shares(
+    conn, listing_id: str, *, total_delta: int, float_delta: int
+) -> dict:
+    """Capital actions move a listing's share count without touching its price."""
+    return conn.execute(
+        """
+        UPDATE stock_listings
+           SET total_shares = GREATEST(total_shares + %s, 1),
+               free_float = GREATEST(free_float + %s, 0)
+         WHERE id = %s
+        RETURNING id, ticker, total_shares, free_float
+        """,
+        (int(total_delta), int(float_delta), listing_id),
+    ).fetchone()

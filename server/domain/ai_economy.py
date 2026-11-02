@@ -10,11 +10,13 @@ agent lives off its P&L like everybody else (06 §3).
 
 from __future__ import annotations
 
+import base64
 import time
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from ..infra.errors import ApiError, NotFound
+from ..infra.serialize import ts
+from ..infra.errors import ApiError, InvalidArgument, NotFound
 from ..repo import accounts as account_repo
 from ..repo import ai as ai_repo
 from ..repo import banks as bank_repo
@@ -423,20 +425,58 @@ def replay(conn, agent_id: str, tick_no: int) -> dict:
 
 
 # ------------------------------------------------------------------ directory
-def directory(conn, controller: str = "ai") -> list[dict]:
+DIRECTORY_MAX_PAGE = 200
+
+
+def directory(
+    conn,
+    controller: str = "ai",
+    limit: int = 50,
+    cursor: str | None = None,
+) -> dict:
+    """One keyset page of the player directory (10 §P2 #14).
+
+    Keyset on `(accounts.created_at, players.id)` rather than OFFSET: the directory is written
+    to while it is read (AI bootstrap), and OFFSET would both skip and repeat rows.
+    """
     wanted = "server_ai" if controller in ("ai", "server_ai") else "human"
-    rows = ai_repo.players_by_controller(conn, wanted)
-    return [
-        {
-            "id": str(row["id"]),
-            "display_name": row["display_name"],
-            "controller": "ai" if row["controller"] == "server_ai" else "human",
-            "persona": row["persona"],
-            "status": row["agent_status"] or "active",
-            "created_at": row["created_at"].isoformat(),
-        }
-        for row in rows
-    ]
+    capped = max(1, min(int(limit), DIRECTORY_MAX_PAGE))
+    after = _decode_cursor(cursor) if cursor else None
+    rows = ai_repo.players_by_controller(conn, wanted, limit=capped + 1, after=after)
+    has_more = len(rows) > capped
+    page = rows[:capped]
+    return {
+        "players": [
+            {
+                "id": str(row["id"]),
+                "display_name": row["display_name"],
+                "controller": "ai" if row["controller"] == "server_ai" else "human",
+                "persona": row["persona"],
+                "status": row["agent_status"] or "active",
+                "created_at": ts(row["created_at"]),
+            }
+            for row in page
+        ],
+        "limit": capped,
+        "has_more": has_more,
+        "next_cursor": _encode_cursor(page[-1]) if (has_more and page) else None,
+    }
+
+
+def _encode_cursor(row: dict) -> str:
+    created_at = row["created_at"] or datetime(1970, 1, 1, tzinfo=timezone.utc)
+    # Deterministic seed — changing the format would change every AI decision.
+    raw = f"{created_at.isoformat()}|{row['id']}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        stamp, player_id = raw.rsplit("|", 1)
+        return (datetime.fromisoformat(stamp), player_id)
+    except Exception:  # noqa: BLE001 - any malformed cursor is a client bug
+        raise InvalidArgument("cursor 无效，请从第一页重新拉取") from None
 
 
 def report(conn, player_id: str) -> dict:
@@ -457,13 +497,13 @@ def report(conn, player_id: str) -> dict:
         "faction_code": row["faction_code"],
         "council_seat": int(row["council_seat"]) if row["council_seat"] else None,
         "net_worth_q1": str(q4(net_worth)),
-        "created_at": row["created_at"].isoformat(),
+        "created_at": ts(row["created_at"]),
         "decisions": [
             {
                 "tick": int(item["tick"]),
                 "action": item["action"],
                 "status": item["status"],
-                "tick_at": item["tick_at"].isoformat(),
+                "tick_at": ts(item["tick_at"]),
             }
             for item in history
         ],

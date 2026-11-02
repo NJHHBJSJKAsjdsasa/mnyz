@@ -165,3 +165,14 @@ def recent(conn, player_id: str, limit: int = 12) -> list[dict]:
         """,
         (player_id, limit),
     ).fetchall()
+
+
+def open_ipo_motion(conn, ticker: str) -> dict | None:
+    """One live IPO review per ticker, regardless of who applied."""
+    return conn.execute(
+        """
+        SELECT id FROM council_motions
+         WHERE kind = 'ipo' AND status = 'open' AND cost->>'ticker' = %s
+        """,
+        (ticker.strip().upper(),),
+    ).fetchone()

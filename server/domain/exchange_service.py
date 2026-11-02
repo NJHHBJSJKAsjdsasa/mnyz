@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import stocks as stock_repo
-from . import currency_service
+from . import currency_service, events
 from .currency_service import Move, q4
 
 SUB_EXCHANGE_FEE = Decimal("5000")   # 03 §5: 交易所牌照成本
@@ -20,25 +20,31 @@ CODE_RE = re.compile(r"^[A-Z0-9]{3,8}$")
 
 def list_exchanges(conn) -> dict:
     rows = conn.execute(
-        "SELECT id, code, name, kind, currency_code, status, fee_bps, listing_fee, "
-        "operator_actor_id FROM exchanges ORDER BY kind DESC, code"
+        "SELECT e.id, e.code, e.name, e.kind, e.currency_code, e.status, e.fee_bps, "
+        "       e.listing_fee, e.max_listings, e.operator_actor_id, "
+        "       COALESCE(l.n, 0) AS listing_count "
+        "  FROM exchanges e "
+        "  LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM stock_listings s "
+        "                      WHERE s.exchange_id = e.id) l ON TRUE "
+        " ORDER BY e.kind DESC, e.code"
     ).fetchall()
+    return {"exchanges": [_payload(row) for row in rows]}
+
+
+def _payload(row: dict) -> dict:
+    cap = row.get("max_listings")
     return {
-        "exchanges": [
-            {
-                "id": str(row["id"]),
-                "code": row["code"],
-                "name": row["name"],
-                "kind": row["kind"],
-                "currency_code": row["currency_code"],
-                "status": row["status"],
-                "fee_bps": int(row["fee_bps"]),
-                "listing_fee": str(Decimal(row["listing_fee"])),
-                "operator_actor_id": str(row["operator_actor_id"])
-                if row["operator_actor_id"] else None,
-            }
-            for row in rows
-        ]
+        "id": str(row["id"]),
+        "code": row["code"],
+        "name": row["name"],
+        "kind": row["kind"],
+        "currency_code": row["currency_code"],
+        "status": row["status"],
+        "fee_bps": int(row["fee_bps"]),
+        "listing_fee": str(Decimal(row["listing_fee"])),
+        "max_listings": int(cap) if cap is not None else None,
+        "listing_count": row.get("listing_count"),
+        "operator_actor_id": str(row["operator_actor_id"]) if row["operator_actor_id"] else None,
     }
 
 
@@ -47,7 +53,8 @@ def by_code(conn, code: str) -> dict | None:
 
 
 def create_sub(conn, *, actor: dict, code: str, name: str, currency_code: str = "cc4",
-               fee_bps: int = 10, listing_fee: Decimal = Decimal(0)) -> dict:
+               fee_bps: int = 10, listing_fee: Decimal = Decimal(0),
+               max_listings: int | None = None) -> dict:
     code = (code or "").strip().upper()
     if not CODE_RE.match(code):
         raise InvalidArgument("交易所代码需为 3-8 位大写字母或数字")
@@ -58,6 +65,8 @@ def create_sub(conn, *, actor: dict, code: str, name: str, currency_code: str = 
     fee = q4(Decimal(str(listing_fee)))
     if fee < 0:
         raise InvalidArgument("上市费不能为负")
+    if max_listings is not None and int(max_listings) < 1:
+        raise InvalidArgument("挂牌上限必须为正整数")
 
     treasury = currency_service.system_actor(conn, currency_service.TREASURY)
     currency_service.post(
@@ -72,21 +81,24 @@ def create_sub(conn, *, actor: dict, code: str, name: str, currency_code: str = 
     row = conn.execute(
         """
         INSERT INTO exchanges (code, name, kind, operator_actor_id, currency_code,
-                               status, fee_bps, listing_fee)
-        VALUES (%s, %s, 'sub', %s, %s, 'active', %s, %s)
+                               status, fee_bps, listing_fee, max_listings)
+        VALUES (%s, %s, 'sub', %s, %s, 'active', %s, %s, %s)
         RETURNING id, code, name, kind, currency_code, status, fee_bps, listing_fee,
-                  operator_actor_id
+                  max_listings, operator_actor_id
         """,
-        (code, name[:80], str(actor["id"]), currency_code, int(fee_bps), fee),
+        (code, name[:80], str(actor["id"]), currency_code, int(fee_bps), fee,
+         int(max_listings) if max_listings is not None else None),
     ).fetchone()
-    return {
-        "id": str(row["id"]),
-        "code": row["code"],
-        "name": row["name"],
-        "fee_bps": int(row["fee_bps"]),
-        "listing_fee": str(Decimal(row["listing_fee"])),
-        "licence_fee": str(SUB_EXCHANGE_FEE),
-    }
+    payload = _payload({**row, "listing_count": 0})
+    payload["licence_fee"] = str(SUB_EXCHANGE_FEE)
+    events.publish(
+        conn,
+        type=events.EXCHANGE_CREATED,
+        aggregate=code,
+        payload={"code": code, "fee_bps": int(fee_bps), "listing_fee": str(fee)},
+        actor_id=str(actor["id"]),
+    )
+    return payload
 
 
 def require_active(conn, code: str) -> dict:

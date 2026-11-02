@@ -64,7 +64,7 @@ def finish_run(conn, name: str, detail: dict) -> None:
 
 
 def cleanup(conn) -> dict:
-    """Idempotency keys >24h, published outbox >7d, login attempts >30d."""
+    """Idempotency keys >24h, published outbox >7d, login attempts >30d, events >90d."""
     removed_keys = idem_repo.cleanup(conn, hours=24, batch=5000)
     outbox = conn.execute(
         "DELETE FROM outbox_events WHERE published_at < now() - interval '7 days' RETURNING id"
@@ -72,7 +72,15 @@ def cleanup(conn) -> dict:
     attempts = conn.execute(
         "DELETE FROM login_attempts WHERE created_at < now() - interval '30 days' RETURNING id"
     ).fetchall()
-    return {"idempotency": removed_keys, "outbox": len(outbox), "login_attempts": len(attempts)}
+    events = conn.execute(
+        "DELETE FROM domain_events WHERE created_at < now() - interval '90 days' RETURNING seq"
+    ).fetchall()
+    return {
+        "idempotency": removed_keys,
+        "outbox": len(outbox),
+        "login_attempts": len(attempts),
+        "domain_events": len(events),
+    }
 
 
 def ensure_partitions(conn, months: int = 3) -> dict:
@@ -138,6 +146,45 @@ def settle_sleeping(conn, limit: int = 500) -> dict:
     return {"settled": settled}
 
 
+def loan_overdue_tick(conn) -> dict:
+    """Advance the delinquency ladder and seize defaulted collateral (T-13).
+
+    One status step per run; the seizure of a *just*-defaulted loan's collateral
+    happens in the same run because it keys off the new status.
+    """
+    from ..domain import loan_collections
+
+    return loan_collections.overdue_tick(conn)
+
+
+def bank_rate_reset_tick(conn) -> dict:
+    """Monthly repricing of floating-rate loans against the policy rate (T-12)."""
+    from ..domain import bank_service
+
+    return bank_service.reset_floating_rates(conn)
+
+
+def licence_renewal_tick(conn) -> dict:
+    """Charge the monthly fee for licences whose paid term ended (T-15b)."""
+    from ..domain import licensing
+
+    return licensing.renew_due(conn)
+
+
+def property_dispute_tick(conn) -> dict:
+    """Lapse property disputes that outlived their 72h window (T-18)."""
+    from ..domain import property_disputes
+
+    return property_disputes.expire_disputes(conn)
+
+
+def stock_call_auction_tick(conn) -> dict:
+    """Strike the opening price for listings whose call auction closed (T-21)."""
+    from ..domain import stock_service
+
+    return stock_service.call_auction_tick(conn)
+
+
 def bank_interest_tick(conn) -> dict:
     """Daily accrual for every active loan (02 §6)."""
     return bank_service.accrue_interest(conn)
@@ -167,6 +214,11 @@ def currency_issuance_tick(conn) -> dict:
         "reward_budget": result["reward_budget"],
         "active_players": int(active["n"]),
     }
+
+
+def reward_distribution_tick(conn) -> dict:
+    """Pay the day's reward budget to active players (01 §4.1); idempotent per day."""
+    return currency_service.distribute_daily_reward(conn)
 
 
 def reconcile_currency(conn, hours: int = 24) -> dict:
@@ -214,6 +266,11 @@ def stock_daily_tick(conn) -> dict:
     return stock_service.daily_tick(conn)
 
 
+def delisting_tick(conn) -> dict:
+    """Advance 整理期 → 清算期 → 清算分配 for every open delisting case (T-22)."""
+    return stock_service.advance_delisting(conn)
+
+
 def stock_margin_tick(conn) -> dict:
     """Daily borrow fee and maintenance-margin check for short positions (05 §1.2)."""
     return stock_service.margin_tick(conn)
@@ -248,9 +305,23 @@ def candle_archive_tick(conn) -> dict:
     return stock_corporate.archive_candles(conn)
 
 
+def candle_partition_tick(conn) -> dict:
+    """Keep archive partitions ahead, and detach what fell out of retention (07 §4)."""
+    created = stock_corporate.ensure_archive_partitions(conn)
+    cold = stock_corporate.detach_cold(conn)
+    return {"created": created["created"], "detached": cold["detached"]}
+
+
 def mm_refresh_tick(conn) -> dict:
     """Re-quote every standing market-maker program (06 §6.1)."""
     return market_maker.refresh_all(conn)
+
+
+def antitrust_tick(conn) -> dict:
+    """Persist today's 30-day market-share snapshot (03 §6.3); re-running is idempotent."""
+    from ..domain import antitrust
+
+    return antitrust.snapshot(conn)
 
 
 def price_index_tick(conn) -> dict:
@@ -366,6 +437,7 @@ JOBS = {
     "property_tax_tick": property_tax_tick,
     "stock_daily_tick": stock_daily_tick,
     "stock_margin_tick": stock_margin_tick,
+    "delisting_tick": delisting_tick,
     "ai_economy_tick": ai_economy_tick,
     "court_deadlines": court_deadlines,
     "insolvency_plan_tick": insolvency_plan_tick,

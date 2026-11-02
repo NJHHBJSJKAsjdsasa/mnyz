@@ -197,7 +197,32 @@ def is_paused(conn) -> bool:
 
 
 # ------------------------------------------------------------------ directory
-def players_by_controller(conn, controller: str, limit: int = 200) -> list[dict]:
+def players_by_controller(
+    conn,
+    controller: str,
+    limit: int = 50,
+    after: tuple | None = None,
+) -> list[dict]:
+    """One page of the player directory.
+
+    Keyset pagination on `(accounts.created_at, players.id)`: the pair is stable, so paging
+    through a list that is being written to cannot skip or repeat a row (P2 #14).
+    """
+    if after is None:
+        return conn.execute(
+            """
+            SELECT p.id, p.display_name, p.controller, ac.created_at,
+                   act.code AS actor_code, ag.persona, ag.status AS agent_status
+              FROM players p
+              JOIN accounts ac ON ac.id = p.account_id
+              LEFT JOIN economic_actors act ON act.player_id = p.id AND act.kind = 'player'
+              LEFT JOIN ai_agents ag ON ag.player_id = p.id
+             WHERE p.controller = %s
+             ORDER BY ac.created_at, p.id
+             LIMIT %s
+            """,
+            (controller, limit),
+        ).fetchall()
     return conn.execute(
         """
         SELECT p.id, p.display_name, p.controller, ac.created_at,
@@ -206,11 +231,11 @@ def players_by_controller(conn, controller: str, limit: int = 200) -> list[dict]
           JOIN accounts ac ON ac.id = p.account_id
           LEFT JOIN economic_actors act ON act.player_id = p.id AND act.kind = 'player'
           LEFT JOIN ai_agents ag ON ag.player_id = p.id
-         WHERE p.controller = %s
+         WHERE p.controller = %s AND (ac.created_at, p.id) > (%s, %s)
          ORDER BY ac.created_at, p.id
          LIMIT %s
         """,
-        (controller, limit),
+        (controller, after[0], after[1], limit),
     ).fetchall()
 
 

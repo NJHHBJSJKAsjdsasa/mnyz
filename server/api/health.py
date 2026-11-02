@@ -6,6 +6,8 @@ balancer (2s budget), ``deep`` is internal-only and never fails a request.
 
 from __future__ import annotations
 
+from ..infra.serialize import ts
+
 import logging
 
 from flask import Blueprint, Response, current_app, jsonify
@@ -74,7 +76,7 @@ def deep():
         with db.connection() as conn:
             jobs = job_repo.last_success(conn)
         report["jobs"] = [
-            {"name": row["job_name"], "last_ok": row["last_ok"].isoformat() if row["last_ok"] else None}
+            {"name": row["job_name"], "last_ok": ts(row["last_ok"])}
             for row in jobs
         ]
     except Exception:  # noqa: BLE001

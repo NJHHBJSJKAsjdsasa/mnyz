@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import NotFound
 from ..repo import indices as index_repo
 from ..repo import stocks as stock_repo
@@ -96,11 +97,13 @@ def compute(conn, code: str = DEFAULT_INDEX) -> dict:
 
 def publish(conn, code: str = DEFAULT_INDEX, *, at: datetime | None = None) -> dict:
     snapshot = compute(conn, code)
-    ts = _minute(at or _now())
+    # NB: not `ts` — that name is the serializer imported from infra.serialize,
+    # and shadowing it made the return value below call a datetime.
+    minute = _minute(at or _now())
     point = index_repo.upsert_point(
         conn,
         code=code,
-        ts=ts,
+        ts=minute,
         value=Decimal(snapshot["value"]),
         change_pct=Decimal(snapshot["change_pct"]),
         sample_size=int(snapshot["sample_size"]),
@@ -108,7 +111,7 @@ def publish(conn, code: str = DEFAULT_INDEX, *, at: datetime | None = None) -> d
     )
     return {
         "code": code,
-        "ts": point["ts"].isoformat(),
+        "ts": ts(point["ts"]),
         "value": str(Decimal(point["value"])),
         "change_pct": str(Decimal(point["change_pct"])),
         "sample_size": int(point["sample_size"]),
@@ -142,7 +145,7 @@ def series(conn, code: str, limit: int = 120) -> dict:
         "name": row["name"],
         "points": [
             {
-                "t": item["ts"].isoformat(),
+                "t": ts(item["ts"]),
                 "v": str(Decimal(item["value"])),
                 "pct": str(Decimal(item["change_pct"])),
             }

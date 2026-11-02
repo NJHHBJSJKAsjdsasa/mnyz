@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from ..infra.serialize import day as day_of
 from ..infra.clock import iso
 from ..repo import assets as asset_repo
 from ..repo import calendar as calendar_repo
+from ..repo import currency as currency_repo
 from ..repo import reference as reference_repo
 from ..repo import ships as ship_repo
 from ..repo import wallets as wallet_repo
-from . import cooldown
+from . import cooldown, dashboard, travel as travel_domain
 from .ship import stats
 
 
@@ -24,6 +26,8 @@ def compose(conn, player: dict) -> dict:
     flags = ship_repo.flags(conn, player["id"]) or {"hull": 100, "vouchers": 0}
     day = calendar_repo.game_day(conn, player["timezone"])
     ship = _ship(conn, player["id"])
+    actor = currency_repo.actor_for_player(conn, str(player["id"]))
+    actor_id = str(actor["id"]) if actor else None
     return {
         "player": _player(player),
         "resources": _resources(codes, balances, int(ship["stats"].get("storage", 0))),
@@ -37,8 +41,15 @@ def compose(conn, player: dict) -> dict:
         },
         "contracts": asset_repo.contracts_for_day(conn, player["id"], day),
         "cooldowns": cooldown.pending_ms(conn, player["id"]),
+        # A jump in progress survives a refresh (11 §4.4); without it the client
+        # would snap the ship back to the origin after every reload.
+        "in_flight": travel_domain.in_flight(conn, player["id"]),
+        # Shell first-paint summaries (10 §P0-5): no extra round trips needed.
+        "wallet_summary": dashboard.wallet_summary(conn, actor_id),
+        "portfolio_summary": dashboard.portfolio_summary(conn, actor_id),
+        "obligations": dashboard.obligations(conn, actor_id),
         "server_time": iso(),
-        "game_day": day.isoformat(),
+        "game_day": day_of(day),
     }
 
 
@@ -65,12 +76,17 @@ def _number(value: Decimal) -> int | float:
 def _ship(conn, player_id: str) -> dict:
     ship = ship_repo.flagship(conn, player_id)
     if not ship:
-        return {"level": 0, "type": None, "modules": [], "stats": {}}
+        return {"level": 0, "type": None, "modules": [], "stats": {}, "shield": 0, "shield_max": 0}
     ship_stats = stats(ship["level"])
+    module_rows = ship_repo.modules(conn, player_id)
     modules = [
         {"code": row["module_code"], "level": row["level"], "overclock": row["overclock"]}
-        for row in ship_repo.modules(conn, player_id).values()
+        for row in module_rows.values()
     ]
+    # Standing shield only. ``GET /ship`` reads the live battle session and can
+    # therefore report a lower value (09 §3.1 ``shield.offline``); the first-paint
+    # summary deliberately stays one query cheaper.
+    shield_max = 4 + 3 * int((module_rows.get("shieldMatrix") or {"level": 0})["level"])
     return {
         "id": str(ship["id"]),
         "level": int(ship["level"]),
@@ -78,6 +94,8 @@ def _ship(conn, player_id: str) -> dict:
         "appearance": ship["appearance"],
         "stats": ship_stats,
         "modules": modules,
+        "shield": shield_max,
+        "shield_max": shield_max,
     }
 
 

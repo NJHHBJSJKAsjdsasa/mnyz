@@ -97,9 +97,13 @@ const main = async () => {
   const hullFull = mod.ShipModuleSystem.miningMultiplier();
   mod.HullSystem.damage(50);
   const hullHalf = mod.ShipModuleSystem.miningMultiplier();
-  check("hull damage lowers gathering", hullHalf < hullFull, `${hullFull.toFixed(2)} -> ${hullHalf.toFixed(2)}`);
+  // T-61: local damage is a no-op — the server settles hull and the bridge pushes it.
+  check("local hull damage is ignored", hullHalf === hullFull, `${hullFull.toFixed(2)} -> ${hullHalf.toFixed(2)}`);
+  mod.HullSystem.applyServerHull(50);
+  const hullDamaged = mod.ShipModuleSystem.miningMultiplier();
+  check("server hull value lowers gathering", hullDamaged < hullFull, `${hullFull.toFixed(2)} -> ${hullDamaged.toFixed(2)}`);
   check("travel cost rises with damage", mod.HullSystem.travelFactor() > 1, mod.HullSystem.travelFactor().toFixed(2));
-  mod.HullSystem.repair();
+  mod.HullSystem.applyServerHull(100);
 
   check("station builds", mod.StationSystem.build({ planetKey: "planet_3,3,3_0_s", planetName: "S", coordinates: "3,3,3", systemIndex: 0 }));
   mod.StationSystem.upgrade("planet_3,3,3_0_s", "production");
@@ -143,12 +147,14 @@ const main = async () => {
   check("challenge code round-trips", decoded !== null && decoded.weaponLevel === mod.ShipModuleSystem.level("weaponArray"));
   check("tampered challenge code is rejected", mod.ChallengeSystem.decode(code.slice(0, -3) + "AAA") === null);
 
-  // --- production line ---
+  // --- production line (server-authoritative since 0130) ---
   mod.SpaceshipResourceManager.addResources({ quantumAlloy: 200, plasmaCell: 200 });
-  check("craft starts", mod.FabricatorSystem.craft("alloy"));
-  check("craft cooldown blocks", mod.FabricatorSystem.canCraft("alloy").ok === false);
-  fakeNow += 3 * 60 * 60 * 1000;
-  check("craft ready after cooldown", mod.FabricatorSystem.canCraft("alloy").ok === true);
+  check(
+    "craft has no local write path",
+    typeof mod.FabricatorSystem.craft !== "function" && typeof mod.FabricatorSystem.run === "function"
+  );
+  check("craft recipes are declared client-side for display only", mod.FabricatorSystem.recipes().length === 3);
+  check("craft affordability is still computed for the button", mod.FabricatorSystem.canCraft("alloy").ok === true);
 
   // --- world systems ---
   const event = mod.CosmicEvents.current();

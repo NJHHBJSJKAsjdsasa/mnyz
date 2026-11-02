@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, g
 
-from ...domain import contract_service, market_service, shipyard_service
+from ...domain import contract_service, market_service, ship_state, shipyard_service
 from ...infra.context import db
 from ...models.explore import MarketOrderRequest, RefitRequest
 from ...repo import players as player_repo
@@ -70,6 +70,16 @@ def contract_accept(contract_id: str):
 @rate_limit("contract_claim", 60, 60)
 def contract_claim(contract_id: str):
     return _contract_action(contract_id, "claim")
+
+
+@bp.get("/ship")
+@require_auth()
+@rate_limit("ship_view", 120, 60)
+def ship_view():
+    with db().transaction() as conn:
+        player = player_repo.get(conn, g.player_id)
+        data = ship_state.view(conn, player)
+    return success(data, int(data["state_version"]))
 
 
 @bp.post("/ship/upgrade")

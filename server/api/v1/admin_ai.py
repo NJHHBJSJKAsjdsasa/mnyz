@@ -6,22 +6,17 @@ Public responses never expose the decision provider, model or prompt hash
 
 from __future__ import annotations
 
-from flask import Blueprint, g, request
+from flask import Blueprint, request
 
 from ...domain import ai_economy
 from ...repo import ai as ai_repo
 from ...infra.context import db
-from ...infra.errors import Forbidden, NotFound
+from ...infra.serialize import ts
+from ...infra.errors import InvalidArgument, NotFound
 from ...models.ai import AiTickRequest, ProviderUpdateRequest, RuntimePauseRequest
-from ..deps import parse_model, rate_limit, require_auth, success
+from ..deps import parse_model, rate_limit, require_admin, require_auth, success
 
 bp = Blueprint("ai_admin", __name__)
-
-
-def _require_admin() -> None:
-    role = str(getattr(g, "player", {}).get("account_role") or "")
-    if role not in ("admin", "ops"):
-        raise Forbidden("需要运维/管理员权限")
 
 
 @bp.get("/players")
@@ -29,8 +24,15 @@ def _require_admin() -> None:
 @rate_limit("players_directory", 120, 60)
 def players():
     controller = (request.args.get("controller") or "ai").strip().lower()
+    # Keyset pagination (10 §P2 #14): limit <= 200, cursor from the previous response
+    raw_limit = (request.args.get("limit") or "50").strip()
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        raise InvalidArgument("limit 必须是整数") from None
+    cursor = request.args.get("cursor") or None
     with db().connection() as conn:
-        return success({"players": ai_economy.directory(conn, controller)})
+        return success(ai_economy.directory(conn, controller, limit=limit, cursor=cursor))
 
 
 @bp.get("/players/<player_id>")
@@ -45,7 +47,7 @@ def player(player_id: str):
 @require_auth(write=True)
 @rate_limit("admin_ai_tick", 30, 60)
 def run_tick():
-    _require_admin()
+    require_admin()
     body = parse_model(AiTickRequest)
     with db().transaction() as conn:
         created = 0
@@ -61,7 +63,7 @@ def run_tick():
 @require_auth(write=True)
 @rate_limit("admin_ai_pause", 30, 60)
 def runtime_pause():
-    _require_admin()
+    require_admin()
     body = parse_model(RuntimePauseRequest)
     with db().transaction() as conn:
         return success(ai_economy.set_pause(conn, body.paused))
@@ -72,7 +74,7 @@ def runtime_pause():
 @rate_limit("admin_ai_providers", 60, 60)
 def providers():
     """Ops-only view: modes and audit knobs, never exposed to players (10 §4.2)."""
-    _require_admin()
+    require_admin()
     with db().connection() as conn:
         rows = ai_repo.providers(conn)
     return success({
@@ -87,7 +89,7 @@ def providers():
                 "max_actions": int(row["max_actions"]),
                 "allowlist": row["allowlist"],
                 "has_endpoint": bool(row["endpoint"]),
-                "updated_at": row["updated_at"].isoformat(),
+                "updated_at": ts(row["updated_at"]),
             }
             for row in rows.values()
         ]
@@ -98,7 +100,7 @@ def providers():
 @require_auth(write=True)
 @rate_limit("admin_ai_provider_update", 30, 60)
 def update_provider(name: str):
-    _require_admin()
+    require_admin()
     body = parse_model(ProviderUpdateRequest)
     with db().transaction() as conn:
         row = ai_repo.set_provider(

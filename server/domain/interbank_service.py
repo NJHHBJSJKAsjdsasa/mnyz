@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from ..infra.serialize import ts
 from ..infra.errors import Forbidden, InvalidArgument, NotFound, Unprocessable
 from ..repo import banks as bank_repo
 from . import currency_service
@@ -96,7 +97,7 @@ def accept(conn, *, borrower_bank_id: str, order_id: str, idem_key: str | None =
         **_payload(order),
         "borrower_bank_id": str(borrower["id"]),
         "status": updated["status"],
-        "matures_at": updated["matures_at"].isoformat(),
+        "matures_at": ts(updated["matures_at"]),
         "tx_id": tx["tx_id"],
     }
 
@@ -150,7 +151,7 @@ def orders(conn, status: str = "open") -> list[dict]:
             "borrower_bank_id": str(row["borrower_bank_id"]) if row["borrower_bank_id"] else None,
             "lender_code": row["lender_code"],
             "borrower_code": row["borrower_code"],
-            "matures_at": row["matures_at"].isoformat() if row["matures_at"] else None,
+            "matures_at": ts(row["matures_at"]),
         }
         for row in bank_repo.interbank_orders(conn, status=status)
     ]
@@ -164,5 +165,5 @@ def _payload(row: dict) -> dict:
         "rate_bps": int(row["rate_bps"]),
         "term_days": int(row["term_days"]),
         "status": row["status"],
-        "created_at": row["created_at"].isoformat(),
+        "created_at": ts(row["created_at"]),
     }

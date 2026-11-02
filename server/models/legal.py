@@ -19,7 +19,7 @@ class MeetingRequest(StrictModel):
 
 class ResolutionRequest(StrictModel):
     kind: str = Field(
-        pattern="^(charter_amendment|officer_appointment|dividend|buyback|issuance|"
+        pattern="^(charter_amendment|officer_appointment|dividend|buyback|issuance|reduction|"
                 "related_party|dissolution|other)$"
     )
     payload: dict = Field(default_factory=dict)

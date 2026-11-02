@@ -186,15 +186,22 @@ def insert_action(conn, company_id: str, kind: str, payload: dict) -> dict:
 # ------------------------------------------------------------------ licences
 def issue_license(
     conn, *, actor_id: str, kind: str, fee_currency: str, monthly_fee: Decimal,
-    reviewed_by: str, expires_at=None
+    reviewed_by: str, expires_at=None, status: str = "active"
 ) -> dict:
+    """Insert a licence row.
+
+    ``status`` defaults to ``active`` because that is the table default and the
+    historical behaviour (grants were issued directly). Applications go through
+    ``status="pending"`` so the review step has something to act on.
+    """
     return conn.execute(
         """
-        INSERT INTO commerce_licenses (actor_id, kind, fee_currency, monthly_fee, reviewed_by, expires_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO commerce_licenses
+               (actor_id, kind, status, fee_currency, monthly_fee, reviewed_by, expires_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING id, actor_id, kind, status, fee_currency, monthly_fee, issued_at, expires_at
         """,
-        (actor_id, kind, fee_currency, monthly_fee, reviewed_by, expires_at),
+        (actor_id, kind, status, fee_currency, monthly_fee, reviewed_by, expires_at),
     ).fetchone()
 
 
@@ -215,6 +222,56 @@ def licenses_of(conn, actor_id: str) -> list[dict]:
         "SELECT id, kind, status, fee_currency, monthly_fee, issued_at, expires_at "
         "FROM commerce_licenses WHERE actor_id = %s ORDER BY issued_at DESC",
         (actor_id,),
+    ).fetchall()
+
+
+def license_by_id(conn, license_id: str) -> dict | None:
+    return conn.execute(
+        """
+        SELECT id, actor_id, kind, status, fee_currency, monthly_fee, reviewed_by,
+               issued_at, expires_at
+          FROM commerce_licenses WHERE id = %s
+        """,
+        (license_id,),
+    ).fetchone()
+
+
+def pending_license(conn, actor_id: str, kind: str) -> dict | None:
+    return conn.execute(
+        """
+        SELECT id, actor_id, kind, status, fee_currency, monthly_fee, issued_at
+          FROM commerce_licenses
+         WHERE actor_id = %s AND kind = %s AND status = 'pending'
+         LIMIT 1
+        """,
+        (actor_id, kind),
+    ).fetchone()
+
+
+def decide_license(conn, license_id: str, *, status: str, reviewed_by: str, expires_at=None) -> dict:
+    return conn.execute(
+        """
+        UPDATE commerce_licenses
+           SET status = %s, reviewed_by = %s, expires_at = %s,
+               issued_at = CASE WHEN %s = 'active' THEN now() ELSE issued_at END
+         WHERE id = %s
+        RETURNING id, actor_id, kind, status, fee_currency, monthly_fee,
+                  reviewed_by, issued_at, expires_at
+        """,
+        (status, reviewed_by, expires_at, status, license_id),
+    ).fetchone()
+
+
+def pending_licenses(conn, limit: int = 100) -> list[dict]:
+    return conn.execute(
+        """
+        SELECT id, actor_id, kind, status, fee_currency, monthly_fee, issued_at
+          FROM commerce_licenses
+         WHERE status = 'pending'
+         ORDER BY issued_at
+         LIMIT %s
+        """,
+        (limit,),
     ).fetchall()
 
 
@@ -254,3 +311,38 @@ def insert_share_snapshot(conn, *, actor_id: str, sector_key: str, period, share
         """,
         (actor_id, sector_key, period, share, hhi),
     )
+
+
+def update_capital(conn, company_id: str, *, shares_total: int, free_float: int) -> dict:
+    """Buyback / issuance / reduction move the share count; voting quorums read it."""
+    return conn.execute(
+        """
+        UPDATE companies
+           SET shares_total = %s, free_float = %s
+         WHERE id = %s
+        RETURNING id, ticker, shares_total, free_float
+        """,
+        (int(shares_total), int(free_float), company_id),
+    ).fetchone()
+
+
+def due_licenses(conn, limit: int = 500) -> list[dict]:
+    """Active licences whose paid term has ended; the renewal job owns them."""
+    return conn.execute(
+        """
+        SELECT id, actor_id, kind, status, fee_currency, monthly_fee, expires_at
+          FROM commerce_licenses
+         WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= now()
+         ORDER BY expires_at
+         LIMIT %s
+        """,
+        (limit,),
+    ).fetchall()
+
+
+def extend_license(conn, license_id: str, *, expires_at) -> dict:
+    return conn.execute(
+        "UPDATE commerce_licenses SET expires_at = %s WHERE id = %s "
+        "RETURNING id, actor_id, kind, status, fee_currency, monthly_fee, expires_at",
+        (expires_at, license_id),
+    ).fetchone()

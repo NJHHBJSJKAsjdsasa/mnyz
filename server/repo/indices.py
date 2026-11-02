@@ -137,7 +137,14 @@ def touch_program(conn, program_id: str, *, error: str = "") -> None:
     )
 
 
-def programs_of_actor(conn, actor_id: str) -> list[dict]:
+def programs_of_actor(conn, actor_id: str, ticker: str | None = None) -> list[dict]:
+    if ticker:
+        return conn.execute(
+            "SELECT p.id, p.quantity, p.status, p.last_run_at, p.last_error, l.ticker "
+            "  FROM mm_programs p JOIN stock_listings l ON l.id = p.listing_id "
+            " WHERE p.actor_id = %s AND l.ticker = %s ORDER BY l.ticker",
+            (actor_id, ticker.strip().upper()),
+        ).fetchall()
     return conn.execute(
         "SELECT p.id, p.quantity, p.status, p.last_run_at, p.last_error, l.ticker "
         "  FROM mm_programs p JOIN stock_listings l ON l.id = p.listing_id "

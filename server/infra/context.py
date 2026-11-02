@@ -19,3 +19,13 @@ def cache() -> RedisFacade:
 
 def keys() -> KeyRing:
     return current_app.extensions["keys"]
+
+
+def request_id() -> str:
+    """Current request id, or ``""`` when running outside a request (jobs/tests)."""
+    from flask import g
+
+    try:
+        return str(getattr(g, "request_id", "") or "")
+    except RuntimeError:
+        return ""

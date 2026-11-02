@@ -245,18 +245,18 @@ def loan(conn, loan_id: str, *, for_update: bool = False) -> dict | None:
     return conn.execute(sql, (loan_id,)).fetchone()
 
 
-def loans_of(conn, actor_id: str, *, status: str = "active") -> list[dict]:
-    return conn.execute(
-        """
-        SELECT l.id, l.bank_id, b.code AS bank_code, l.currency_code, l.principal,
-               l.outstanding, l.accrued_interest, l.rate_bps, l.status, l.issued_at, l.due_at
-          FROM bank_loans l
-          JOIN banks b ON b.id = l.bank_id
-         WHERE l.actor_id = %s AND l.status = %s
-         ORDER BY l.issued_at DESC
-        """,
-        (actor_id, status),
-    ).fetchall()
+def loans_of(conn, actor_id: str, *, status: str | None = "active") -> list[dict]:
+    sql = (
+        "SELECT l.id, l.bank_id, b.code AS bank_code, l.currency_code, l.principal, "
+        "l.outstanding, l.accrued_interest, l.rate_bps, l.status, l.issued_at, l.due_at "
+        "FROM bank_loans l JOIN banks b ON b.id = l.bank_id WHERE l.actor_id = %s"
+    )
+    params: list = [actor_id]
+    if status:
+        sql += " AND l.status = %s"
+        params.append(status)
+    sql += " ORDER BY l.issued_at DESC"
+    return conn.execute(sql, params).fetchall()
 
 
 def active_loans(conn, bank_id: str | None = None) -> list[dict]:
@@ -718,4 +718,148 @@ def insert_bribe(
             audit_probability,
             status,
         ),
+    ).fetchone()
+
+
+# --------------------------------------------------------------- loan collateral
+
+
+def insert_collateral(
+    conn, *, loan_id: str, asset_id: str, pledged_value: Decimal, encumbrance_id: str | None = None
+) -> dict:
+    return conn.execute(
+        """
+        INSERT INTO bank_loan_collateral (loan_id, asset_id, pledged_value, encumbrance_id)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, loan_id, asset_id, pledged_value, status, encumbrance_id, created_at
+        """,
+        (loan_id, asset_id, pledged_value, encumbrance_id),
+    ).fetchone()
+
+
+def collaterals_of(conn, loan_id: str, *, status: str | None = None) -> list[dict]:
+    sql = (
+        "SELECT c.id, c.loan_id, c.asset_id, c.pledged_value, c.status, c.listing_id, "
+        "c.encumbrance_id, c.seized_at, c.settled_at, a.asset_key, a.name, a.appraised_value "
+        "FROM bank_loan_collateral c JOIN property_assets a ON a.id = c.asset_id "
+        "WHERE c.loan_id = %s"
+    )
+    params: list = [loan_id]
+    if status:
+        sql += " AND c.status = %s"
+        params.append(status)
+    sql += " ORDER BY c.created_at"
+    return conn.execute(sql, params).fetchall()
+
+
+def collateral(conn, collateral_id: str, *, for_update: bool = False) -> dict | None:
+    sql = (
+        "SELECT id, loan_id, asset_id, pledged_value, status, listing_id, encumbrance_id, "
+        "seized_at, settled_at, created_at FROM bank_loan_collateral WHERE id = %s"
+    )
+    if for_update:
+        sql += " FOR UPDATE"
+    return conn.execute(sql, (collateral_id,)).fetchone()
+
+
+def collateral_by_listing(conn, listing_id: str, *, for_update: bool = False) -> dict | None:
+    sql = (
+        "SELECT id, loan_id, asset_id, pledged_value, status, listing_id, encumbrance_id, "
+        "seized_at, settled_at FROM bank_loan_collateral WHERE listing_id = %s"
+    )
+    if for_update:
+        sql += " FOR UPDATE"
+    return conn.execute(sql, (listing_id,)).fetchone()
+
+
+def seize_collateral(conn, collateral_id: str, listing_id: str) -> dict:
+    return conn.execute(
+        """
+        UPDATE bank_loan_collateral
+           SET status = 'seized', listing_id = %s, seized_at = now()
+         WHERE id = %s AND status = 'pledged'
+        RETURNING id, loan_id, asset_id, status, listing_id
+        """,
+        (listing_id, collateral_id),
+    ).fetchone()
+
+
+def settle_collateral(conn, collateral_id: str, status: str) -> dict:
+    return conn.execute(
+        """
+        UPDATE bank_loan_collateral
+           SET status = %s, settled_at = now()
+         WHERE id = %s
+        RETURNING id, loan_id, asset_id, status
+        """,
+        (status, collateral_id),
+    ).fetchone()
+
+
+def release_collateral_of(conn, loan_id: str) -> list[dict]:
+    """Repaid loans release every pledged deed (and its lien)."""
+    return conn.execute(
+        """
+        UPDATE bank_loan_collateral
+           SET status = 'released', settled_at = now()
+         WHERE loan_id = %s AND status = 'pledged'
+        RETURNING id, asset_id, encumbrance_id
+        """,
+        (loan_id,),
+    ).fetchall()
+
+
+def liquidate(conn, loan_id: str, *, principal: Decimal, written_off: Decimal) -> dict:
+    """Close a defaulted loan after its collateral auction settled."""
+    return conn.execute(
+        """
+        UPDATE bank_loans
+           SET outstanding = outstanding - %s,
+               accrued_interest = accrued_interest - %s,
+               status = 'liquidated',
+               last_accrual_at = now()
+         WHERE id = %s
+        RETURNING id, outstanding, accrued_interest, status
+        """,
+        (principal, written_off, loan_id),
+    ).fetchone()
+
+
+def write_down(conn, loan_id: str, *, principal: Decimal, interest: Decimal) -> dict:
+    """Partial recovery: reduce the debt but keep the loan in default."""
+    return conn.execute(
+        """
+        UPDATE bank_loans
+           SET outstanding = outstanding - %s,
+               accrued_interest = accrued_interest - %s,
+               last_accrual_at = now()
+         WHERE id = %s
+        RETURNING id, outstanding, accrued_interest, status
+        """,
+        (principal, interest, loan_id),
+    ).fetchone()
+
+
+def floating_due(conn, limit: int = 500) -> list[dict]:
+    """Loans whose floating rate is due for a reset (30-day cycle)."""
+    return conn.execute(
+        """
+        SELECT id, bank_id, actor_id, currency_code, principal, outstanding, rate_bps,
+               spread_bps, rate_type, issued_at, due_at, next_reset_at
+          FROM bank_loans
+         WHERE rate_type = 'floating'
+           AND status IN ('active','overdue')
+           AND (next_reset_at IS NULL OR next_reset_at <= now())
+         ORDER BY id
+         LIMIT %s
+        """,
+        (limit,),
+    ).fetchall()
+
+
+def set_loan_rate(conn, loan_id: str, *, rate_bps: int, next_reset_at) -> dict:
+    return conn.execute(
+        "UPDATE bank_loans SET rate_bps = %s, next_reset_at = %s WHERE id = %s "
+        "RETURNING id, rate_bps, next_reset_at",
+        (int(rate_bps), next_reset_at, loan_id),
     ).fetchone()
