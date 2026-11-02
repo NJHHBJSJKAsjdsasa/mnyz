@@ -35,7 +35,7 @@ infra/      db / cache / errors / metrics / ownership。谁都可以依赖，它
 
 ## 3. 模块清单
 
-`owned_tables` 的机器可读版本在 `server/infra/ownership.py`（本表是它的人类可读镜像）。
+`owned_tables` 的机器可读版本在 `server/infra/ownership.py`（本表是它的人类可读镜像，当前 **14** 个模块）。<!--fact:modules.count=14-->
 
 | 模块 | 拥有的表（节选） | 允许调用（同步） | 通过事件消费 |
 |---|---|---|---|
@@ -83,7 +83,7 @@ python scripts/check_boundaries.py
 python scripts/check_boundaries.py --write-baseline
 ```
 
-基线文件 `scripts/boundaries_baseline.json` 记录**当前 7 条历史越界**（2026-10-28 冻结；
+基线文件 `scripts/boundaries_baseline.json` 记录**当前 7 条历史越界** <!--fact:boundaries.baseline=7-->（2026-10-28 冻结；
 拆分 `company_governance` 后从 15 条降到 7 条）：
 
 | 越界 | 现状 | 修法 |

@@ -17,7 +17,7 @@
 **「轨道仪表台（Orbital Instrument）」**：单一信号色、三层材质、功能化动效、
 资产/市场/银行/公司/法务五个**已有后端但无入口**的经济界面补齐。
 
-后端 **255 个** `/api/v1` 端点（26 个子蓝图），前端 `ServerApi.tsx` 里 **63 处** v1 调用（2026-11-02 实测），
+后端 **255 个** `/api/v1` 端点（26 个子蓝图）<!--fact:api.endpoints=255--> <!--fact:api.blueprints=26-->，前端 `ServerApi.tsx` 里 **63 处** v1 调用（2026-11-02 实测），
 对 255 个端点覆盖约 1/4。这次重设计的最大增量不是"换个皮"，
 而是**把已经写好、但玩家看不见的经济系统接出来**。全部用现有端点，零后端改动。
 
@@ -158,20 +158,25 @@
 ### 复核命令（每次后端有新增时跑一遍）
 
 ```bash
-# 端点总数（当前 255 / 26 子蓝图，2026-11-02 复测；权威清单见 docs/api/endpoints.md）
+# 端点总数（权威清单见 docs/api/endpoints.md；实测值见本节末）
 grep -rh "^\s*@bp\.\(get\|post\|put\|delete\|patch\|route\)" server/api/v1/*.py | wc -l
 ls server/api/v1/*.py | grep -v __init__ | wc -l
 
 # 契约一致性（生成的 openapi.json / endpoints.md 与代码是否同步）
 python scripts/gen_api_docs.py --check
 
-# 前端规模（2026-11-02：全量 387 文件 / 94,659 行；ts/tsx 374 文件 / 91,307 行）
+# 前端规模（实测值见本节末）
 find atlas-ui/react/static -type f | wc -l
 find atlas-ui/react/static -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.css" \) -print0 | xargs -0 cat | wc -l
 find atlas-ui/react/static/js \( -name "*.ts" -o -name "*.tsx" \) -print0 | xargs -0 cat | wc -l
 
-# 迁移 head（当前 0140_investor_protection）
+# 迁移 head（必须与 server/config.py 的 DEFAULT_REVISION 一致）
 grep DEFAULT_REVISION server/config.py
 ```
 
 > 行数统计用 `xargs -0 cat | wc -l`（`-exec wc -l {} + | tail -1` 只取到最后一个 `total`，会严重偏小）。
+>
+> **2026-11-02 实测**：端点 **255** 个 / 蓝图 **26** 个、`ts/tsx` **374** 文件 / **91,307** 行
+> （全量含 js/css 为 387 文件 / 94,659 行）、迁移 head `0140_investor_protection`。
+>
+> <!--fact:api.endpoints=255--> <!--fact:api.blueprints=26--> <!--fact:frontend.ts_files=374--> <!--fact:frontend.ts_lines=91,307--> <!--fact:migrations.head=0140_investor_protection-->

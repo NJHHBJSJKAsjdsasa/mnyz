@@ -24,7 +24,7 @@
 |---|---|
 | 整体 merge 上游 3.0 | 3.0 是前端推倒重写：单一 3D 探索器替代 index/galaxy/system/planet 四页，删除 `3DEffects/`、`EffectRegistry`、`PlanetLayerSystem`，并移除资源采集/每日挑战/飞船进阶 |
 | 删除 2.x 的 `3DComponents/` 与 `3DEffects/`（56 文件） | 59 个文件 import `3DEffects`、15 个 import `PlanetLayerSystem`、8 个 import `Layouts/__*`，删了整站白屏 |
-| 改动 `server/`（212 文件 / 218 端点） | 它是独立 Flask app（`server/__init__.py` 只注册 health + `/api/v1`，不挂 UI），与渲染完全解耦，迁移上游无收益 |
+| 改动 `server/`（212 文件 / 255 端点 <!--fact:api.endpoints=255-->） | 它是独立 Flask app（`server/__init__.py` 只注册 health + `/api/v1`，不挂 UI），与渲染完全解耦，迁移上游无收益 |
 | 修改 `realistic3/` 里 vendored 的 14 个文件 | 逐字节复制才能 `git show` 重同步；要改就改我方文件（`adapter.ts` / `systemAdapter.ts` / 各 `*View`、`*Stage`） |
 
 **三方资产边界**
@@ -38,7 +38,7 @@
 我方适配 ────────────────> realistic3/{adapter,systemAdapter,systemTypes,variantCache,
                                           moons,perf}.ts + 各 View/Stage 组件                  我方代码
 2.x 页面/面板 ───────────> 行星页 / 恒星系页挂载点（flag 后二选一）                            我方代码
-server/ ──(不动)──────────> /api/v1 218 端点                                                  后端
+server/ ──(不动)──────────> /api/v1 255 端点                                                  后端
 ```
 
 ---

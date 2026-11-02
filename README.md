@@ -41,6 +41,11 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 
 ### 2.2 宇宙经济系统（迁移 0110 → 0140）
 
+迁移链共 **50** 个版本，当前 head 是 `0140_investor_protection`；`api/v1` 对外 **26** 个蓝图、**255** 个端点
+（权威清单 [`docs/api/endpoints.md`](docs/api/endpoints.md)，由代码生成）。
+
+<!--fact:migrations.count=50--> <!--fact:migrations.head=0140_investor_protection--> <!--fact:api.blueprints=26--> <!--fact:api.endpoints=255-->
+
 | 迁移 | 能力 | 集成测试 |
 |---|---|---|
 | `0110_currency_bank` | 九级货币、复式账本、Q4+ 转账、逐级兑换（上 5:1 / 下 1:4.60）、存取款、贷款计息、发行与利率、存单/转让/兑付、同业拆借、存款保险、关系费与合规基金 | 14 |
@@ -75,11 +80,11 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 | `0139_delisting_consolidation` | 退市三阶段（T-22）：`consolidation` 30 天照常交易让持有人有出口 → `auction` 3 天停牌、清算价取整理期 VWAP → 先还银行再按股分 | 5 |
 | `0140_investor_protection` | 投资者保护基金理赔（T-23）：0119 已把股票手续费 20% 划入 `insurance_fund`，本迁移补索赔窗口；每人同时最多一条未决 + 单笔上限 1 万，`pending`→`approved`/`partial` | 6 |
 
-当前迁移 head：`0140_investor_protection`（与 `server/config.py::DEFAULT_REVISION` 同步）。
+当前 head 与 `server/config.py::DEFAULT_REVISION` 同步（启动自检，不匹配时 `/health/ready` 报错）。
 
 > 「集成测试」列 = 对应 `tests/integration/test_*.py` 里的测试函数数
 > （`grep -c 'def test_' <file>`，2026-11-02 复测）；一个测试文件覆盖多个迁移时归主迁移。
-> 全仓测试函数共 **323** 个（含 unit 与参数化未展开部分）。
+> 全仓测试函数共 **323** 个（含 unit 与参数化未展开部分）。<!--fact:tests.functions=323-->
 
 ### 2.3 测试
 
@@ -112,7 +117,7 @@ PostgreSQL（账户 / 账本 / 订单 / 持仓 / 案件）    Redis（缓存 / �
 
 ```
 server/                权威后端（本分支核心）
-  api/v1/              接口：26 个蓝图 / 255 个端点（清单见 docs/api/endpoints.md）
+  api/v1/              接口：蓝图与端点清单见 docs/api/endpoints.md（由代码生成）
                          · 身份与世界：auth、session、meta、universe、travel、assets、explore、tasks
                          · 经济：economy、ledger、bank、stocks、brokers、market、revenue、
                            commerce、properties、protection

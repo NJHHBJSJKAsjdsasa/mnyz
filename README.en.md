@@ -45,6 +45,12 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 
 ### 2.2 Cosmic economy (migrations 0110 → 0140)
 
+The chain holds **50** versioned migrations with head `0140_investor_protection`; `api/v1` exposes
+**26** blueprints and **255** endpoints (authoritative list in [`docs/api/endpoints.md`](docs/api/endpoints.md),
+generated from the code).
+
+<!--fact:migrations.count=50--> <!--fact:migrations.head=0140_investor_protection--> <!--fact:api.blueprints=26--> <!--fact:api.endpoints=255-->
+
 | Migration | Capabilities | Integration tests |
 |---|---|---|
 | `0110_currency_bank` | Nine currency tiers, double-entry ledger, Q4+ transfers, tier-by-tier exchange (5:1 up, 1:4.60 down), deposits/withdrawals, loans with accrual, issuance and rates, CDs (issue/quote/transfer/redeem), interbank lending, deposit insurance, relationship fees and compliance fund | 14 |
@@ -79,12 +85,12 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 | `0139_delisting_consolidation` | Three delisting phases (T-22): `consolidation` trades normally for 30 days so holders get an exit → `auction` halts for 3 days and clears at the consolidation VWAP → banks are repaid first, the rest is split pro rata | 5 |
 | `0140_investor_protection` | Investor protection fund claims (T-23): 0119 already sends 20 % of stock fees to `insurance_fund`; this adds the claim window — one open claim per actor plus a per-claim cap of 10,000, `pending`→`approved`/`partial` | 6 |
 
-Current migration head: `0140_investor_protection` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+The head above is kept in sync with `server/config.py::DEFAULT_REVISION` (startup self-check; `/health/ready` fails on mismatch).
 
 > The "Integration tests" column counts test functions in the matching
 > `tests/integration/test_*.py` (`grep -c 'def test_' <file>`, re-measured 2026-11-02);
 > when one file covers several migrations it is attributed to the primary one.
-> The repository holds **323** test functions in total (unit + parametrised not expanded).
+> The repository holds **323** test functions in total (unit + parametrised not expanded).<!--fact:tests.functions=323-->
 
 ### 2.3 Tests
 
@@ -119,7 +125,7 @@ PostgreSQL (accounts / ledger / orders / positions / cases)    Redis (cache / lo
 
 ```
 server/                authoritative back end (the core of this fork)
-  api/v1/              26 blueprints / 255 endpoints (see docs/api/endpoints.md)
+  api/v1/              blueprint and endpoint list: docs/api/endpoints.md (generated from code)
                          · identity & world: auth, session, meta, universe, travel, assets, explore, tasks
                          · economy: economy, ledger, bank, stocks, brokers, market, revenue,
                            commerce, properties, protection

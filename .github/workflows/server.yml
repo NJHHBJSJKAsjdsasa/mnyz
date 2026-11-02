@@ -6,12 +6,24 @@ on:
       - "server/**"
       - "pymodules/**"
       - "tests/**"
+      - "atlas-ui/**"
+      - "scripts/**"
+      - "docs/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tailwind.config.js"
       - "requirements-server.txt"
       - ".github/workflows/server.yml"
   pull_request:
     paths:
       - "server/**"
       - "tests/**"
+      - "atlas-ui/**"
+      - "scripts/**"
+      - "docs/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tailwind.config.js"
 
 jobs:
   boundaries:
@@ -30,10 +42,40 @@ jobs:
           cache: pip
       - name: Install
         run: pip install -r requirements-server.txt
-      - name: Module boundaries (R1: no cross-module writes)
+      - name: "Module boundaries (R1: no cross-module writes)"
         run: python scripts/check_boundaries.py
       - name: API docs are generated, not hand-edited
         run: python scripts/gen_api_docs.py --check
+      - name: Doc facts match the code
+        run: python scripts/doc_facts.py --check
+
+  frontend:
+    # Pure static checks — no database, no browser. Runs in parallel with `boundaries`.
+    # These gates existed before but only ran locally, so regressions slipped through.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: npm ci
+      - name: Type check (must stay at zero errors)
+        run: npx tsc --noEmit
+      - name: Frontend gates (v1 direct / Shell fetch / blur budget / file size)
+        run: python scripts/check_frontend_gates.py
+      - name: Logic smoke (deterministic gameplay modules)
+        run: npm run test:frontend
+      - name: Shader + system variant snapshots
+        run: npm run check:render
+      - name: Arecibo fingerprint snapshots
+        run: npm run check:arecibo
+      - name: Production build
+        run: npx vite build --outDir dist_check --emptyOutDir
 
   test:
     needs: boundaries

@@ -40,6 +40,17 @@ frontend:
 **判据**：故意把一处 `fetch('/api/...')` 写进 `Shell/`，PR 必须变红。
 **验证**：开一个测试 PR，把 `Shell/GameFrame.tsx` 加一行 `fetch(`，看 `frontend` job 是否失败。
 
+> **实施状态（2026-11-02）：已落地，并顺带修了一个更严重的问题。**
+> `frontend` job 已加入（tsc / 闸门 / test:frontend / check:render / check:arecibo / build），
+> `paths` 已补 `atlas-ui/**`、`scripts/**`、`docs/**`、`package*.json`、`tailwind.config.js`。
+>
+> **但原来的 workflow 根本无法被 GitHub 解析**：`- name: Module boundaries (R1: no cross-module writes)`
+> 里的裸 `name: value: value` 是非法 YAML（未加引号的标量中出现 `: `），
+> `yaml.safe_load` 直接抛 `mapping values are not allowed here`。
+> 也就是说 CI 一直是**幽灵闸门**——文件在仓库里，但从未真正跑过。
+> 已给该 `name` 加引号，三个 job 现在都能被解析（`yaml.safe_load` 通过，jobs = boundaries / frontend / test）。
+> 教训：**workflow 文件本身也要被校验**，建议在 PR 模板或本地钩子里跑一次 YAML 解析。
+
 ---
 
 ## 2. `dist` 该不该入库（P1，最影响历史可读性）
