@@ -63,6 +63,27 @@ def finish_run(conn, name: str, detail: dict) -> None:
     )
 
 
+def fail_run(conn, name: str, error: str, duration_ms: float | None = None) -> None:
+    """Record a failed run.
+
+    Must be called in its own transaction: the job's transaction rolls back, and with it
+    the `start_run` row — which is why a crashing job used to leave no trace at all in
+    `job_runs` (004 §"定时任务"). The row keeps `ok = false` plus the error text.
+    """
+    detail: dict = {"error": error[:500]}
+    if duration_ms is not None:
+        detail["duration_ms"] = duration_ms
+    conn.execute(
+        """
+        INSERT INTO job_runs (job_name, run_date, started_at, finished_at, ok, detail)
+        VALUES (%s, %s, now(), now(), false, %s::jsonb)
+        ON CONFLICT (job_name, run_date)
+        DO UPDATE SET finished_at = now(), ok = false, detail = EXCLUDED.detail
+        """,
+        (name, date.today(), _json(detail)),
+    )
+
+
 def cleanup(conn) -> dict:
     """Idempotency keys >24h, published outbox >7d, login attempts >30d, events >90d."""
     removed_keys = idem_repo.cleanup(conn, hours=24, batch=5000)

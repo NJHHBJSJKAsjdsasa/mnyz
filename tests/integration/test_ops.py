@@ -171,3 +171,60 @@ def test_dashboard_shape(client, test_dsn):
     }
     assert isinstance(data["currency"], list)
     assert isinstance(data["resources"], list)
+
+
+# --------------------------------------------------------------- job health
+def test_health_jobs_starts_all_never_ran_then_tracks_ok_and_failing(client, test_dsn):
+    """`/health/jobs` is the only way to tell "job is dead" from "job had nothing to do"."""
+    from server.jobs.beat_schedule import SCHEDULE
+
+    body = client.get("/health/jobs")
+    assert body.status_code == 503
+    data = body.get_json()
+    assert data["expected"] == len(SCHEDULE)
+    assert {j["state"] for j in data["jobs"]} == {"never-ran"}
+
+    with psycopg.connect(test_dsn, autocommit=True) as conn:
+        for name, ok, detail in (
+            ("cleanup", True, "{}"),
+            ("ai_economy_tick", False, '{"error": "ValueError: boom"}'),
+        ):
+            conn.execute(
+                """
+                INSERT INTO job_runs (job_name, run_date, started_at, finished_at, ok, detail)
+                VALUES (%s, current_date, now(), now(), %s, %s::jsonb)
+                ON CONFLICT (job_name, run_date)
+                DO UPDATE SET finished_at = now(), ok = EXCLUDED.ok, detail = EXCLUDED.detail
+                """,
+                (name, ok, detail),
+            )
+
+    data = client.get("/health/jobs").get_json()
+    states = {j["job"]: j["state"] for j in data["jobs"]}
+    assert states["cleanup"] == "ok"
+    assert states["ai_economy_tick"] == "failing"
+    assert [f["job"] for f in data["failing"]] == ["ai_economy_tick"]
+    # a job that only ever failed must not advertise a success time
+    failing = next(j for j in data["jobs"] if j["job"] == "ai_economy_tick")
+    assert failing["last_ok"] is None
+
+
+def test_failed_job_still_leaves_a_row_when_its_transaction_rolls_back(test_dsn):
+    """The job body runs in a transaction; a crash rolls it back — including `start_run`.
+
+    So the failure record has to be written separately, otherwise a crashing job is
+    invisible to /health/jobs (the bug this guards against).
+    """
+    from server.jobs.tasks import fail_run
+
+    with psycopg.connect(test_dsn, row_factory=dict_row) as conn:
+        fail_run(conn, "cleanup", "ValueError: boom", duration_ms=12.5)
+        conn.commit()
+        row = conn.execute(
+            "SELECT ok, detail, finished_at FROM job_runs WHERE job_name = 'cleanup'"
+        ).fetchone()
+    assert row is not None
+    assert row["ok"] is False
+    assert row["detail"]["error"] == "ValueError: boom"
+    assert row["detail"]["duration_ms"] == 12.5
+    assert row["finished_at"] is not None

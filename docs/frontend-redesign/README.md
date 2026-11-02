@@ -176,7 +176,7 @@ grep DEFAULT_REVISION server/config.py
 
 > 行数统计用 `xargs -0 cat | wc -l`（`-exec wc -l {} + | tail -1` 只取到最后一个 `total`，会严重偏小）。
 >
-> **2026-11-02 实测**：端点 **255** 个 / 蓝图 **26** 个、`ts/tsx` **374** 文件 / **91,307** 行
+> **2026-11-02 实测**：端点 **255** 个 / 蓝图 **26** 个、`ts/tsx` **368** 文件 / **89,738** 行
 > （全量含 js/css 为 387 文件 / 94,659 行）、迁移 head `0140_investor_protection`。
 >
-> <!--fact:api.endpoints=255--> <!--fact:api.blueprints=26--> <!--fact:frontend.ts_files=374--> <!--fact:frontend.ts_lines=91,307--> <!--fact:migrations.head=0140_investor_protection-->
+> <!--fact:api.endpoints=255--> <!--fact:api.blueprints=26--> <!--fact:frontend.ts_files=368--> <!--fact:frontend.ts_lines=89,738--> <!--fact:migrations.head=0140_investor_protection-->

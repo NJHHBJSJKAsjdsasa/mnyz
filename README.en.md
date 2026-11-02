@@ -90,7 +90,7 @@ The head above is kept in sync with `server/config.py::DEFAULT_REVISION` (startu
 > The "Integration tests" column counts test functions in the matching
 > `tests/integration/test_*.py` (`grep -c 'def test_' <file>`, re-measured 2026-11-02);
 > when one file covers several migrations it is attributed to the primary one.
-> The repository holds **323** test functions in total (unit + parametrised not expanded).<!--fact:tests.functions=323-->
+> The repository holds **325** test functions in total (unit + parametrised not expanded).<!--fact:tests.functions=325-->
 
 ### 2.3 Tests
 

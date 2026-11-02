@@ -1,6 +1,6 @@
 # 02 · 前端
 
-> 基线（2026-11-02）：**374 文件 / 91,307 行**（`ts/tsx`）<!--fact:frontend.ts_files=374--> <!--fact:frontend.ts_lines=91,307-->，`dist` 3.3 MB / 89 个 js，
+> 基线（2026-11-02）：**368 文件 / 89,738 行**（`ts/tsx`）<!--fact:frontend.ts_files=368--> <!--fact:frontend.ts_lines=89,738-->，`dist` 3.3 MB / 89 个 js，
 > 闸门全过（`blur` 11 处计入 2、循环动画源码 38 处、最大非冻结文件 930 行）。
 > 壳已统一（`Shell/GameFrame` 四区 + 经济坞），**现在的问题不再是"乱"，而是"重"**。
 

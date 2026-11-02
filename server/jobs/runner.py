@@ -6,7 +6,7 @@ import logging
 import time
 
 from ..infra.context import cache, db
-from .tasks import JOBS, finish_run, start_run
+from .tasks import JOBS, fail_run, finish_run, start_run
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +63,18 @@ def run_job(name: str) -> dict:
         elapsed = round((time.perf_counter() - started) * 1000, 2)
         log.info("job ok", extra={"job": name, "duration_ms": elapsed})
         return {"job": name, "ok": True, "duration_ms": elapsed, "result": result}
+    except Exception as exc:
+        elapsed = round((time.perf_counter() - started) * 1000, 2)
+        log.exception("job failed", extra={"job": name, "duration_ms": elapsed})
+        # The job body's transaction is gone (and with it start_run's row), so the failure
+        # has to be written in a fresh transaction — otherwise a crashing job leaves no
+        # trace in job_runs and /health/jobs cannot see it at all.
+        try:
+            with db().transaction() as conn:
+                fail_run(conn, name, f"{type(exc).__name__}: {exc}", elapsed)
+        except Exception:  # pragma: no cover - recording must never mask the real error
+            log.exception("could not record job failure", extra={"job": name})
+        raise
     finally:
         cache().release_lock(f"job:{name}", holder)
 

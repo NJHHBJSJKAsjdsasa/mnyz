@@ -84,7 +84,7 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 
 > 「集成测试」列 = 对应 `tests/integration/test_*.py` 里的测试函数数
 > （`grep -c 'def test_' <file>`，2026-11-02 复测）；一个测试文件覆盖多个迁移时归主迁移。
-> 全仓测试函数共 **323** 个（含 unit 与参数化未展开部分）。<!--fact:tests.functions=323-->
+> 全仓测试函数共 **325** 个（含 unit 与参数化未展开部分）。<!--fact:tests.functions=325-->
 
 ### 2.3 测试
 

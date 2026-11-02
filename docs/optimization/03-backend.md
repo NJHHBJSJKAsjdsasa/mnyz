@@ -43,6 +43,17 @@
 
 **验证**：手动 kill 一个 job 的执行（或注入异常），确认 503 + 告警路径。
 
+> **实施状态（2026-11-02）：前两项已落地，第三项待做。**
+>
+> 1. **`GET /health/jobs` 已上线**：按 `beat_schedule.SCHEDULE` 逐个对比 `job_runs`，
+>    标出 `never-ran` / `failing` / `stale`（无成功运行超过 2× 周期）/ `ok`，
+>    有任一异常直接 503。测试库空表时返回 34 条 `never-ran` —— 这正是以前看不见的状态。
+> 2. **失败记录丢失的问题已修**：原来 job 在事务里跑，异常回滚会把 `start_run` 写的行一起带走，
+>    **崩溃的 job 在 `job_runs` 里完全没有痕迹**。现在 `runner.run_job` 捕获异常后在
+>    **独立事务**里调 `fail_run()`，写入 `{"error": "ValueError: ...", "duration_ms": ...}`。
+> 3. 未做：`catch_up`（重启补偿）与 `atlas_job_duration_ms` 直方图。
+>    前者要改 `job_runs` 结构（新迁移），后者要在 job 结束时 `metrics.observe`，可以一起做。
+
 ---
 
 ## 3. 迁移：可逆、可测、可回滚（P1–P2）
