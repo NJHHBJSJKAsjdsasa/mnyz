@@ -51,7 +51,9 @@ jobs:
           OUT=$(python scripts/gen_api_docs.py --check 2>&1); CODE=$?
           echo "$OUT"
           if [ $CODE -ne 0 ]; then
-            MSG=$(printf '%s' "$OUT" | head -30 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            BODY=$(printf '%s' "$OUT" | sed -n '/--- drift/,$p' | head -45)
+            [ -z "$BODY" ] && BODY=$(printf '%s' "$OUT" | tail -25)
+            MSG=$(printf '%s' "$BODY" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error title=api-docs drift::$MSG"
             exit 1
           fi
@@ -62,7 +64,7 @@ jobs:
           OUT=$(python scripts/doc_facts.py --check 2>&1); CODE=$?
           echo "$OUT"
           if [ $CODE -ne 0 ]; then
-            MSG=$(printf '%s' "$OUT" | head -30 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            MSG=$(printf '%s' "$OUT" | tail -25 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error title=doc-facts drift::$MSG"
             exit 1
           fi

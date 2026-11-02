@@ -5,8 +5,8 @@
 // The modules import React/pako, so they are bundled with the local esbuild
 // first, then exercised against a fake localStorage.
 
-import { execFileSync } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";
+import { build } from "esbuild";
 
 const ENTRY = ".smoke-entry.ts";
 const BUNDLE = ".smoke-bundle.mjs";
@@ -59,9 +59,15 @@ const check = (name, condition, detail = "") => {
 
 const main = async () => {
   writeFileSync(ENTRY, ENTRY_SOURCE);
-  // Run the local esbuild binary through node: no shell quoting issues on Windows.
-  execFileSync(process.execPath, ["node_modules/esbuild/bin/esbuild", ENTRY, "--bundle", "--format=esm", `--outfile=${BUNDLE}`, "--log-level=error"], {
-    stdio: "inherit",
+  // Use esbuild's JS API rather than spawning `node node_modules/esbuild/bin/esbuild`:
+  // that path is a JS shim only on Windows — on Linux the package installs a native ELF
+  // binary there, and running it through node fails with "Invalid or unexpected token".
+  await build({
+    entryPoints: [ENTRY],
+    bundle: true,
+    format: "esm",
+    outfile: BUNDLE,
+    logLevel: "error",
   });
 
   installStorageShim();
