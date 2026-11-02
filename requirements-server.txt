@@ -7,7 +7,9 @@ alembic==1.20.1
 SQLAlchemy==2.1.6
 PyJWT==2.15.1
 argon2-cffi==25.1.0
-redis==8.1.0
+# redis must stay <6: `celery[redis]` 5.x pins `redis<6.0.0`, so an 8.x pin makes the
+# whole file unsatisfiable (this is what kept CI red on the Install step).
+redis>=5.0,<6
 cryptography==46.0.5
 
 # Production process manager (Linux containers only)
