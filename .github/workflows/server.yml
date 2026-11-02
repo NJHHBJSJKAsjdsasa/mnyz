@@ -150,7 +150,7 @@ jobs:
           python -m pytest tests -q > pytest.log 2>&1; CODE=$?
           tail -40 pytest.log
           if [ $CODE -ne 0 ]; then
-            BODY=$(grep -E "^(FAILED|ERROR)" pytest.log | head -25)
+            BODY=$(grep -E "^(FAILED|ERROR) +tests/" pytest.log | head -25)
             [ -z "$BODY" ] && BODY=$(tail -25 pytest.log)
             MSG=$(printf '%s' "$BODY" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error title=pytest failed::$MSG"

@@ -23,6 +23,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from ..infra.serialize import day
+
 from ..repo import antitrust as antitrust_repo
 
 SHARE_LIMIT = Decimal("0.40")
