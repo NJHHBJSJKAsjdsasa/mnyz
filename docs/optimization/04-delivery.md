@@ -53,6 +53,32 @@ frontend:
 
 ---
 
+## 1.5 首次真正跑通的记录（2026-11-02，值得留着）
+
+> 上面那段「幽灵闸门」的判断**是错的，已更正**：GitHub 一直能解析这个 workflow。
+> 远端实际有 9 次运行记录（2026-10-27 → 10-28），**9 次全红**，全部卡在 `Install` 步。
+> 真正的坑是下面这五个，修完才第一次全绿（run `41412962886`，head `2c3a23d`，三个 job 全 success）。
+
+| # | 症状 | 真因 | 修法 |
+|---|---|---|---|
+| 1 | 9 次运行全挂在 `Install` | `redis==8.1.0` 与 `celery[redis]<6` 互斥（celery 要求 `redis<6`），pip `ResolutionImpossible` | `redis>=5.0,<6` |
+| 2 | `frontend` 的 Logic smoke 红 | `node_modules/esbuild/bin/esbuild` 在 Linux 是**原生 ELF**，被 `node` 执行报 `Invalid or unexpected token`（Windows 上是 JS shim，本地永远绿）| 改用 esbuild JS API，并把 esbuild 写进 devDependencies |
+| 3 | `api docs drift`（本地却绿）| 4 个**重名请求模型**（`SplitRequest` ×2、`ClaimRequest` ×2）用类名做 schema key，后加载覆盖先加载；**覆盖方向取决于 `glob()` 顺序，Windows 与 Linux 不同** | 改名 4 个类 + `_import_models` 加重名检测 |
+| 4 | 25 个集成测试 setup 就失败 | `.env.server` 在 .gitignore 里，CI 没有 JWT 密钥 | conftest 会话级生成 RSA 密钥 |
+| 5 | 4 个 antitrust 测试红，端点 500 | `domain/antitrust.py` 漏 `from ..infra.serialize import day` | 补导入 |
+
+**方法论沉淀（比这 5 个修复更值钱）**
+
+1. **远端日志匿名用户 403** —— 但 `GET /repos/{o}/{r}/check-runs/{id}/annotations` 是公开的。
+   所以把失败步骤包一层，用 `::error title=xxx::$MSG` 把日志转成 annotation，就能远程定位。
+   workflow 里 API docs / doc facts / frontend smoke / pytest 四处都这么做。
+2. **本地绿 + CI 红，先怀疑环境差异，不要怀疑逻辑**：文件系统顺序、行尾、`bin` 是 JS 还是 ELF、
+   有没有本地才存在的 dotfile。这次 3 个问题里有 2 个属于这一类。
+3. **集合类的东西要用「同名冲突」检测兜住**：schema/注册表按名字做 key 时，重名不会报错，只会静默覆盖。
+4. **不要在同一个测试库上并发跑两个 pytest**：会因事务重试耗尽返回 503，看起来像业务 bug。
+
+---
+
 ## 2. `dist` 该不该入库（P1，最影响历史可读性）
 
 **现状**：`atlas-ui/react/dist` 在版本库里，3.3 MB / 89 个 js。
