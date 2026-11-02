@@ -75,9 +75,9 @@ const EffectsControl: React.FC<EffectsControlProps> = ({ effects, onToggleEffect
       {showEffects && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           {localEffects.map((effect) => (
-            <div key={effect.id} className="bg-white/5 rounded p-2 flex items-center justify-between">
+            <div key={effect.id} className="bg-white/[0.04] rounded p-2 flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer flex-1">
-                <input type="checkbox" checked={effect.enabled} onChange={(e) => handleToggle(effect.id, e.target.checked)} className="rounded border-gray-400 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-white/10" />
+                <input type="checkbox" checked={effect.enabled} onChange={(e) => handleToggle(effect.id, e.target.checked)} className="rounded border-gray-400 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-plate-2" />
                 <span className={`${effect.enabled ? "text-white" : "text-gray-500"} transition-colors`}>{formatEffectName(effect.type)}</span>
               </label>
               <span className={`text-[10px] ${effect.enabled ? "text-green-400" : "text-gray-600"}`}>{effect.enabled ? "ON" : "OFF"}</span>

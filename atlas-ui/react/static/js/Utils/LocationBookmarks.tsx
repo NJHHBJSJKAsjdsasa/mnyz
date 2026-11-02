@@ -217,19 +217,26 @@ export class LocationBookmarks {
   private static async showSlotFullDialog(maxSlots: number): Promise<boolean> {
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
-      overlay.className = "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300 opacity-0";
-      overlay.style.backdropFilter = "blur(8px)";
+      overlay.className = "fixed inset-0 z-50 flex items-center justify-center transition-all duration-300 opacity-0";
+      overlay.style.background = "rgba(4, 5, 7, 0.78)";
+      overlay.style.backdropFilter = "none";
 
       const modal = document.createElement("div");
-      modal.className = "relative bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-slate-600/50 rounded-2xl p-8 max-w-md mx-4 text-white shadow-2xl backdrop-blur-xl transform scale-95 transition-all duration-300";
-      modal.style.backdropFilter = "blur(20px)";
-      modal.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)";
+      modal.className = "relative rounded-none p-8 max-w-md mx-4 transition-all duration-300 transform scale-95";
+      modal.style.background = "var(--atlas-plate-2)";
+      modal.style.border = "1px solid var(--atlas-line-strong)";
+      modal.style.borderTopColor = "var(--atlas-signal)";
+      modal.style.color = "var(--atlas-n-900)";
+      modal.style.backdropFilter = "none";
+      modal.style.boxShadow = "0 32px 64px -32px rgba(0, 0, 0, 0.95)";
 
       const container = document.createElement("div");
       container.className = "text-center";
 
       const iconContainer = document.createElement("div");
-      iconContainer.className = "inline-flex items-center justify-center w-16 h-16 bg-amber-500/20 rounded-full mb-6";
+      iconContainer.className = "inline-flex items-center justify-center w-14 h-14 mb-6";
+      iconContainer.style.background = "var(--atlas-signal-dim)";
+      iconContainer.style.boxShadow = "inset 0 0 0 1px var(--atlas-signal)";
 
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("class", "w-8 h-8 text-amber-400");
@@ -281,12 +288,12 @@ export class LocationBookmarks {
 
       const cancelButton = document.createElement("button");
       cancelButton.id = "cancelSave";
-      cancelButton.className = "px-6 py-3 bg-slate-700/80 hover:bg-slate-600/80 border border-slate-600/50 hover:border-slate-500/50 rounded-xl transition-all duration-200 font-medium text-slate-200 hover:text-white transform hover:scale-105 hover:shadow-lg";
+      cancelButton.className = "px-6 py-3 bg-slate-700/80 hover:bg-slate-600/80 border border-slate-600/50 hover:border-slate-500/50 rounded-none transition-all duration-200 font-medium text-slate-200 hover:text-white transform hover:scale-105 hover:shadow-lg";
       cancelButton.textContent = "取消";
 
       const confirmButton = document.createElement("button");
       confirmButton.id = "confirmOverwrite";
-      confirmButton.className = "px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 rounded-xl transition-all duration-200 font-semibold text-white transform hover:scale-105 hover:shadow-lg border border-amber-400/30";
+      confirmButton.className = "px-6 py-3 bg-amber-600 hover:bg-amber-500 rounded-none transition-all duration-200 font-semibold text-white transform hover:scale-105 hover:shadow-lg border border-amber-400/30";
       confirmButton.textContent = "覆盖";
 
       buttonContainer.appendChild(cancelButton);

@@ -109,7 +109,7 @@ export class PlanetScanSystem {
     ContractSystem.increment("scans", 1, coordinates);
     if (outcome.kind === "relic") {
       ContractSystem.increment("relicScans", 1, coordinates);
-      RelicLore.record(key);
+      void RelicLore.record(key);
     }
     ResourceEventManager.emit("resources_updated", outcome);
     return outcome;

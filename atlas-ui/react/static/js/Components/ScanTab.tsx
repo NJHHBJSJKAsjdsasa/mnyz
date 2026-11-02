@@ -8,6 +8,7 @@ import { RelicLore } from "../Utils/RelicLore.tsx";
 import { WreckSystem } from "../Utils/WreckSystem.tsx";
 import { ServerApi } from "../Utils/ServerApi.tsx";
 import SurfaceSurvey from "./SurfaceSurvey.tsx";
+import { subscribeClock } from "../Utils/clock.tsx";
 
 interface ScanTabProps {
   planetKey: string;
@@ -54,8 +55,7 @@ const ScanTab: React.FC<ScanTabProps> = ({ planetKey, planetName, planetType, co
         .then((data) => setWreck((data?.wrecks || []).some((row: any) => row.planet_key === planetKey)))
         .catch(() => setWreck(false));
     }
-    const timer = setInterval(() => setRemaining(PlanetScanSystem.cooldownRemaining(planetKey)), 1000);
-    return () => clearInterval(timer);
+    return subscribeClock(() => setRemaining(PlanetScanSystem.cooldownRemaining(planetKey)));
   }, [planetKey]);
 
   const handleScan = async () => {
@@ -98,7 +98,7 @@ const ScanTab: React.FC<ScanTabProps> = ({ planetKey, planetName, planetType, co
       if (result) {
         setOutcome(result);
         refresh();
-        setRelicProgress(RelicLore.progress());
+        void RelicLore.sync().then(() => setRelicProgress(RelicLore.progress()));
       } else {
         setMessage("扫描失败，请稍后再试");
       }
@@ -151,7 +151,7 @@ const ScanTab: React.FC<ScanTabProps> = ({ planetKey, planetName, planetType, co
 
   return (
     <div className="space-y-4">
-      <div className="relative h-28 rounded-xl border border-cyan-500/30 bg-black/40 overflow-hidden">
+      <div className="relative h-28 rounded-none border border-cyan-500/30 bg-black/40 overflow-hidden">
         <div className={`absolute inset-0 ${scanning ? "animate-scan-horizontal" : ""}`}>
           <div className="absolute inset-x-0 top-1/2 h-px bg-gradient-to-r from-transparent via-cyan-400/80 to-transparent" />
         </div>
@@ -164,22 +164,22 @@ const ScanTab: React.FC<ScanTabProps> = ({ planetKey, planetName, planetType, co
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center text-xs">
-        <div className="bg-white/5 rounded p-2 border border-cyan-500/20">
+        <div className="bg-white/[0.04] rounded p-2 border border-cyan-500/20">
           <div className="text-gray-400">扫描次数</div>
           <div className="text-white font-semibold">{scanCount}</div>
         </div>
-        <div className="bg-white/5 rounded p-2 border border-cyan-500/20">
+        <div className="bg-white/[0.04] rounded p-2 border border-cyan-500/20">
           <div className="text-gray-400">采集加成</div>
           <div className={bonus > 1 ? "text-green-400 font-semibold" : "text-white font-semibold"}>×{bonus.toFixed(2)}</div>
         </div>
-        <div className="bg-white/5 rounded p-2 border border-cyan-500/20">
+        <div className="bg-white/[0.04] rounded p-2 border border-cyan-500/20">
           <div className="text-gray-400">氘储备</div>
           <div className="text-white font-semibold">{Math.round(deuterium)}</div>
         </div>
       </div>
 
       {outcome && (
-        <div className={`rounded-lg border bg-white/5 p-3 ${KIND_STYLE[outcome.kind] ?? "border-white/10 text-gray-300"}`}>
+        <div className={`rounded-lg border bg-white/[0.04] p-3 ${KIND_STYLE[outcome.kind] ?? "border-white/10 text-gray-300"}`}>
           <div className="flex items-center justify-between">
             <span className="font-semibold">{outcome.title}</span>
             {outcome.kind === "enriched" && <span className="text-xs">×{outcome.miningBonus.toFixed(2)}</span>}
@@ -222,7 +222,7 @@ const ScanTab: React.FC<ScanTabProps> = ({ planetKey, planetName, planetType, co
 
       <button
         onClick={() => setSurveyOpen(true)}
-        className="w-full py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all"
+        className="w-full py-1.5 rounded-lg text-xs font-medium bg-white/[0.04] border border-white/10 text-gray-300 hover:bg-plate-2 transition-all"
       >
         地表采样（在丰度图上选点，每日 3 次）
       </button>
@@ -230,7 +230,7 @@ const ScanTab: React.FC<ScanTabProps> = ({ planetKey, planetName, planetType, co
       <button
         onClick={handleScan}
         disabled={scanning || remaining > 0}
-        className="w-full py-2.5 rounded-lg font-semibold text-sm bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full py-2.5 rounded-lg font-semibold text-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {scanning ? "扫描中…" : remaining > 0 ? `冷却 ${formatRemaining(remaining)}` : `启动扫描（消耗 ${ShipModuleSystem.scanCost()} 氘）`}
       </button>

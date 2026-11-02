@@ -4,6 +4,7 @@
 
 import { getItem, setItem } from "./b64.tsx";
 import { hashText, makeRng } from "./Deterministic.tsx";
+import { ServerApi } from "./ServerApi.tsx";
 import { SpaceshipResourceManager } from "./SpaceshipResources.tsx";
 import { RefitVoucherSystem } from "./RefitVoucher.tsx";
 import { ResourceEventManager } from "./ResourceEventManager.tsx";
@@ -72,19 +73,39 @@ export class RelicLore {
     return { index, title: TITLES[index - 1], text };
   }
 
-  /** Called on a relic scan; returns whether this scan completed the archive. */
-  static record(planetKey: string): { index: number; completed: boolean } {
-    const store = RelicLore.load();
-    const index = RelicLore.fragmentFor(planetKey).index;
-
-    if (!store.found.includes(index)) {
-      store.found = [...store.found, index].sort((a, b) => a - b);
-      RelicLore.save(store);
+  /**
+   * Record a relic scan on the server (T-63).
+   *
+   * The server owns both the fragment index and the one-time reward, so a
+   * hand-edited `_atlasRelics` can no longer fake a completed archive. The local
+   * store is written only from the response.
+   */
+  static async record(planetKey: string): Promise<{ index: number; completed: boolean }> {
+    try {
+      const result = await ServerApi.request(`/api/v1/relics/${encodeURIComponent(planetKey)}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
+        body: "{}",
+      });
+      const found = Array.isArray(result?.found) ? result.found.map((value: number) => Number(value)) : [];
+      RelicLore.save({ version: 1, found, claimed: Boolean(result?.complete) });
+      if (result?.reward_granted) ResourceEventManager.emit("resources_updated");
+      return { index: Number(result?.fragment_index ?? 0), completed: Boolean(result?.complete) };
+    } catch (error) {
+      console.warn("[atlas] relic record failed", error);
+      return { index: 0, completed: false };
     }
+  }
 
-    const complete = store.found.length >= TOTAL_FRAGMENTS;
-    if (complete && !store.claimed) RelicLore.grant();
-    return { index, completed: complete && !store.claimed };
+  /** Pull the authoritative archive; the local copy is a render cache. */
+  static async sync(): Promise<void> {
+    try {
+      const data = await ServerApi.request("/api/v1/relics");
+      const found = Array.isArray(data?.found) ? data.found.map((value: number) => Number(value)) : [];
+      RelicLore.save({ version: 1, found, claimed: Boolean(data?.claimed) });
+    } catch (error) {
+      console.warn("[atlas] relic view failed", error);
+    }
   }
 
   static progress(): RelicProgress {
@@ -95,17 +116,6 @@ export class RelicLore {
       complete: store.found.length >= TOTAL_FRAGMENTS,
       claimed: store.claimed,
     };
-  }
-
-  private static grant(): void {
-    const store = RelicLore.load();
-    if (store.claimed) return;
-
-    SpaceshipResourceManager.addResources(REWARD);
-    RefitVoucherSystem.earn(1);
-    store.claimed = true;
-    RelicLore.save(store);
-    ResourceEventManager.emit("resources_updated");
   }
 
   private static load(): RelicStore {

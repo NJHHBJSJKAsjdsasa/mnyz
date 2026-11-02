@@ -37,12 +37,17 @@ export class HullSystem {
     return 2 - HullSystem.factor();
   }
 
+  /**
+   * No-op on purpose (T-61).
+   *
+   * Hull damage is settled server-side now: ``POST /combat/<id>/action`` writes
+   * ``player_flags.hull`` and the bridge calls :meth:`applyServerHull`. Keeping a
+   * local write here would let a console call refund damage — the exact hole this
+   * migration closed. The method survives only so old call sites keep compiling.
+   */
   static damage(amount: number): number {
-    const store = HullSystem.load();
-    store.hull = clamp(store.hull - Math.max(0, amount));
-    HullSystem.save(store);
-    ResourceEventManager.emit("resources_updated");
-    return store.hull;
+    console.warn(`[atlas] local hull damage ignored (${amount}); hull is server-authoritative`);
+    return HullSystem.value();
   }
 
   static repairCost(): Partial<SpaceshipResource> {

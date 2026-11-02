@@ -6,6 +6,7 @@ import { ResourceEventManager } from "../Utils/ResourceEventManager.tsx";
 import { resourceLabel } from "../Utils/ResourceLabels.tsx";
 import { RefitVoucherSystem } from "../Utils/RefitVoucher.tsx";
 import { ServerApi } from "../Utils/ServerApi.tsx";
+import { subscribeClock } from "../Utils/clock.tsx";
 
 const METRIC_LABEL: Record<string, string> = {
   scans: "次扫描",
@@ -70,10 +71,10 @@ const ContractTab: React.FC = () => {
   useEffect(() => {
     void refresh();
     const unsubscribe = ResourceEventManager.subscribe("resources_updated", () => void refresh());
-    const timer = setInterval(() => setTick((value) => value + 1), 1000);
+    const stopClock = subscribeClock(() => setTick((value) => value + 1));
     return () => {
       unsubscribe();
-      clearInterval(timer);
+      stopClock();
     };
   }, []);
 
@@ -254,9 +255,9 @@ const ContractTab: React.FC = () => {
               </span>
             </div>
 
-            <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="mt-2 h-1.5 rounded-full bg-plate-2 overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${done ? "bg-green-400" : expired ? "bg-red-500/60" : "bg-gradient-to-r from-purple-500 to-blue-500"}`}
+                className={`h-full rounded-full transition-all duration-500 ${done ? "bg-green-400" : expired ? "bg-red-500/60" : "bg-purple-500 hover:bg-blue-500"}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -279,14 +280,14 @@ const ContractTab: React.FC = () => {
                   onClick={() => accept(contract)}
                   disabled={activeCount >= MAX_ACTIVE_CONTRACTS}
                   title={activeCount >= MAX_ACTIVE_CONTRACTS ? `同时只能进行 ${MAX_ACTIVE_CONTRACTS} 份` : ""}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   接取
                 </button>
               ) : done ? (
                 <button
                   onClick={() => claim(contract)}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transition-all"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-all"
                 >
                   领取奖励
                 </button>

@@ -56,6 +56,19 @@ const StarfieldWarpReveal: React.FC<StarfieldWarpRevealProps> = ({ seedData, onC
   const [needsTransparency, setNeedsTransparency] = useState(false);
   const [canvasOpacity, setCanvasOpacity] = useState(1);
   const [blurAmount, setBlurAmount] = useState(0);
+  // Escape hatch. This overlay is `fixed inset-0 z-[9999]`; while it is up, it eats
+  // every click on the page — and it used to run for 15.5 seconds with no way out,
+  // so the home screen was unusable on arrival. The countdown is now 6s, and a
+  // click or Esc ends it immediately.
+  const skippedRef = useRef(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") skippedRef.current = true;
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const rawPrimordialSeed = seedData?.primordial_seed || "COSMOS-" + Date.now() + "-GENESIS";
   const primordialSeed = contentFilter.getDisplayText(rawPrimordialSeed);
   const sha256Seed =
@@ -265,7 +278,7 @@ const StarfieldWarpReveal: React.FC<StarfieldWarpRevealProps> = ({ seedData, onC
       const DECELERATION_START = 8;
       const COMPLETE_STOP = 12;
       const STAR_FADEOUT_START = 9;
-      const TOTAL_DURATION = 15;
+      const TOTAL_DURATION = 6;
       const initialWarpPass = composerRef.current?.passes[2] as ShaderPass;
       if (initialWarpPass) {
         initialWarpPass.uniforms.warpAmount.value = 0.0005;
@@ -524,7 +537,7 @@ const StarfieldWarpReveal: React.FC<StarfieldWarpRevealProps> = ({ seedData, onC
           renderer.render(scene, camera);
         }
 
-        if (elapsed > TOTAL_DURATION + 0.5) {
+        if (skippedRef.current || elapsed > TOTAL_DURATION + 0.5) {
           setIsFadingOut(true);
           setTimeout(() => {
             if (onComplete) onComplete();
@@ -688,6 +701,10 @@ const StarfieldWarpReveal: React.FC<StarfieldWarpRevealProps> = ({ seedData, onC
   return (
     <div
       className={`fixed inset-0 z-[9999] overflow-hidden ${isFadingOut ? "animate-fadeOut" : "animate-fadeIn"}`}
+      onClick={() => {
+        skippedRef.current = true;
+      }}
+      title="点击跳过"
       style={{
         backgroundColor: containerBackgroundOpacity > 0 ? `rgba(0, 0, 0, ${containerBackgroundOpacity})` : "transparent",
         backdropFilter: blurAmount > 0 ? `blur(${blurAmount}px)` : "none",

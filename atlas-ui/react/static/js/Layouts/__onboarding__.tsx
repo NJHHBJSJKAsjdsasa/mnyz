@@ -111,7 +111,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ version }) => {
         </div>
       )}
 
-      <div className={`w-full min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white transition-opacity duration-500 flex flex-col ${animationState !== "selection" ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
+      <div className={`w-full min-h-screen atlas-page text-white transition-opacity duration-500 flex flex-col ${animationState !== "selection" ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
         <div
           className="absolute inset-0 opacity-20"
           style={{
@@ -120,11 +120,11 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ version }) => {
         ></div>
 
         <div className="relative z-10 flex-1 flex flex-col">
-          <header className="bg-black/20 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-6">
+          <header className="bg-black/20 border-b border-white/10 px-4 sm:px-6 py-6">
             <div className="w-full flex flex-col items-center space-y-4">
               <img src="/static/atlas-logo.jpg" alt="Atlas Logo" className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border-2 border-cyan-400 shadow-lg animate-pulse" />
               <div className="text-center">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">阿特拉斯初始化协议</h1>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-[0.04em]">阿特拉斯初始化协议</h1>
               <p className="text-sm sm:text-base text-gray-300 mt-2">量子导航系统启动序列</p>
             </div>
             </div>
@@ -147,7 +147,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ version }) => {
                         ${selectedUniverse === option.value ? "shadow-2xl shadow-cyan-400/25 scale-105" : "hover:shadow-xl hover:shadow-blue-500/20"}
                       `}
                     >
-                      <div className="bg-gradient-to-br from-slate-800/80 via-slate-700/80 to-slate-800/80 backdrop-blur-lg rounded-2xl border border-white/10 p-6 sm:p-8 h-full">
+                      <div className="bg-slate-800/80 rounded-none border border-white/10 p-6 sm:p-8 h-full">
                         <div className="absolute top-4 right-4">
                           <div
                             className={`
@@ -164,7 +164,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ version }) => {
                         </div>
 
                         <div className="space-y-4">
-                          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">{option.title}</h2>
+                          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-[0.04em]">{option.title}</h2>
                           <p className="text-gray-300 leading-relaxed text-sm sm:text-base">{option.description}</p>
 
                           {option.value === "custom" && selectedUniverse === "custom" && (
@@ -181,8 +181,8 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ version }) => {
 
                         <div
                           className={`
-                          absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none
-                          bg-gradient-to-br from-cyan-500/10 via-blue-500/10 to-purple-500/10
+                          absolute inset-0 rounded-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none
+                          bg-cyan-500/10 hover:bg-purple-500/10
                           ${selectedUniverse === option.value ? "opacity-20" : ""}
                         `}
                         ></div>
@@ -196,11 +196,11 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ version }) => {
                     type="submit"
                     disabled={!selectedUniverse || animationState !== "selection" || isInitializing || (selectedUniverse === "custom" && !!seedError)}
                     className={`
-                      relative overflow-hidden group px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-500 transform
-                      ${selectedUniverse && animationState === "selection" && !isInitializing && !(selectedUniverse === "custom" && seedError) ? "bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 text-white shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-110 active:scale-95" : "bg-gray-600 text-gray-400 cursor-not-allowed"}
+                      relative overflow-hidden group px-8 py-4 rounded-none font-semibold text-lg transition-all duration-500 transform
+                      ${selectedUniverse && animationState === "selection" && !isInitializing && !(selectedUniverse === "custom" && seedError) ? "bg-cyan-500 hover:bg-purple-500 text-white shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-110 active:scale-95" : "bg-gray-600 text-gray-400 cursor-not-allowed"}
                     `}
                   >
-                    {selectedUniverse && animationState === "selection" && !isInitializing && !(selectedUniverse === "custom" && seedError) && <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 opacity-20 group-hover:opacity-40 transition-opacity duration-300"></div>}
+                    {selectedUniverse && animationState === "selection" && !isInitializing && !(selectedUniverse === "custom" && seedError) && <div className="absolute inset-0 bg-cyan-400 hover:bg-purple-400 opacity-20 group-hover:opacity-40 transition-opacity duration-300"></div>}
 
                     <span className="relative z-10 flex items-center justify-center space-x-3">
                       {isInitializing ? (

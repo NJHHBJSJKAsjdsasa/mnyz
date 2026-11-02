@@ -22,7 +22,7 @@ const AllySection: React.FC = () => {
   };
 
   return (
-    <div className="rounded-lg border border-amber-500/20 bg-white/5 p-2 space-y-1">
+    <div className="rounded-lg border border-amber-500/20 bg-white/[0.04] p-2 space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="text-gray-200">联盟（离线邀请码）</span>
         <span className="text-amber-300">成员 {members.length}/{MAX_ALLIES} · 采集 +{Math.round((AllySystem.bonus() - 1) * 100)}%</span>
@@ -44,7 +44,7 @@ const AllySection: React.FC = () => {
                 setInvite("");
                 setMessage("已退出联盟");
               }}
-              className="px-2 py-1 rounded text-[11px] bg-white/10 hover:bg-white/20 text-gray-300"
+              className="px-2 py-1 rounded text-[11px] bg-plate-2 hover:bg-[var(--atlas-line-strong)] text-gray-300"
             >
               退出
             </button>
@@ -70,7 +70,7 @@ const AllySection: React.FC = () => {
               placeholder={`粘贴 ${ALLY_PREFIX}… 邀请码`}
               className="flex-1 min-w-0 text-[11px] bg-black/40 rounded px-2 py-1 text-gray-200"
             />
-            <button onClick={join} className="px-2 py-1 rounded text-[11px] bg-white/10 hover:bg-white/20 text-white shrink-0">
+            <button onClick={join} className="px-2 py-1 rounded text-[11px] bg-plate-2 hover:bg-[var(--atlas-line-strong)] text-white shrink-0">
               加入
             </button>
           </div>

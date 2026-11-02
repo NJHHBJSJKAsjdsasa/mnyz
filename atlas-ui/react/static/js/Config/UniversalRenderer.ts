@@ -61,7 +61,7 @@ export const defaultUniversalRendererConfig: UniversalRendererConfig = {
     autoRotateSpeed: 0.5,
   },
 
-  supportedPlanetTypes: ["Gas Giant", "Anomaly", "Rocky", "Icy", "Oceanic", "Desert", "Lava", "Arid", "Swamp", "Tundra", "Forest", "Savannah", "Cave", "Crystalline", "Metallic", "Toxic", "Radioactive", "Magma", "Molten Core", "Carbon", "Diamond", "Super Earth", "Sub Earth", "Frozen Gas Giant", "Nebulous", "Aquifer", "Exotic"],
+  supportedPlanetTypes: ["Gas Giant", "Anomaly", "Rocky", "Icy", "Oceanic", "Desert", "Lava", "Arid", "Swamp", "Tundra", "Forest", "Savannah", "Cave", "Crystalline", "Metallic", "Toxic", "Radioactive", "Magma", "Molten Core", "Carbon", "Diamond", "Super Earth", "Sub Earth", "Frozen Gas Giant", "Nebulous", "Aquifer", "Exotic", "Super Puff", "Super Ringed", "Mirror", "Ruby Cloud"],
 
   features: {
     rings: true,

@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from "react";
 import { markPlanetAsVisited, markSystemAsVisited } from "../Utils/VisitHistory.tsx";
 import { SpaceshipTravelManager } from "../Utils/SpaceshipTravelCosts.tsx";
+import { go } from "../Utils/PageNavigation.ts";
+import LevelStepper from "../Shell/LevelStepper.tsx";
 
 interface Planet {
   name: string;
@@ -71,17 +73,26 @@ const PlanetNavigation: React.FC<PlanetNavigationProps> = ({ currentPlanet, syst
     return name.replace(/_/g, " ");
   };
 
+  // In-system moves keep the galaxy coordinates, but a server quote needs a
+  // non-zero distance, so the target is nudged by one unit on the last axis.
+  const travelTarget = (coords: number[]): number[] => {
+    const [x, y, z] = coords;
+    if (z < 10000000) return [x, y, z + 1];
+    if (y < 10000000) return [x, y + 1, z];
+    return [Math.min(10000000, x + 1), y, z];
+  };
+
   const handlePrevious = async () => {
     const coordinates = galaxy.coordinates.join(",");
 
     if (prevPlanet === "__prev_system__") {
-      const distance = 1;
-      if (!SpaceshipTravelManager.canAffordTravel("system", distance)) {
-        SpaceshipTravelManager.executeTravel("system", distance);
-        return;
-      }
-
-      if (!SpaceshipTravelManager.executeTravel("system", distance)) {
+      const outcome = await SpaceshipTravelManager.chargeTravel(
+        "system",
+        galaxy.coordinates,
+        travelTarget(galaxy.coordinates),
+        1
+      );
+      if (outcome === "emergency") {
         return;
       }
       try {
@@ -98,26 +109,26 @@ const PlanetNavigation: React.FC<PlanetNavigationProps> = ({ currentPlanet, syst
             markPlanetAsVisited(coordinates, system.index - 1, planetName, data.system.planets);
             markSystemAsVisited(coordinates, system.index - 1);
 
-            window.location.href = `/planet/${planetName}`;
+            void go(`/planet/${planetName}`);
             return;
           }
         }
-        window.location.href = `/system/${system.index - 1}`;
+        void go(`/system/${system.index - 1}`);
       } catch (error) {
-        window.location.href = `/system/${system.index - 1}`;
+        void go(`/system/${system.index - 1}`);
       }
     } else if (prevPlanet) {
-      const distance = 1;
-      if (!SpaceshipTravelManager.canAffordTravel("planet", distance)) {
-        SpaceshipTravelManager.executeTravel("planet", distance);
-        return;
-      }
-
-      if (!SpaceshipTravelManager.executeTravel("planet", distance)) {
+      const outcome = await SpaceshipTravelManager.chargeTravel(
+        "planet",
+        galaxy.coordinates,
+        travelTarget(galaxy.coordinates),
+        1
+      );
+      if (outcome === "emergency") {
         return;
       }
       markPlanetAsVisited(coordinates, system.index, prevPlanet, systemPlanets);
-      window.location.href = `/planet/${prevPlanet}`;
+      void go(`/planet/${prevPlanet}`);
     }
   };
 
@@ -125,13 +136,13 @@ const PlanetNavigation: React.FC<PlanetNavigationProps> = ({ currentPlanet, syst
     const coordinates = galaxy.coordinates.join(",");
 
     if (nextPlanet === "__next_system__") {
-      const distance = 1;
-      if (!SpaceshipTravelManager.canAffordTravel("system", distance)) {
-        SpaceshipTravelManager.executeTravel("system", distance);
-        return;
-      }
-
-      if (!SpaceshipTravelManager.executeTravel("system", distance)) {
+      const outcome = await SpaceshipTravelManager.chargeTravel(
+        "system",
+        galaxy.coordinates,
+        travelTarget(galaxy.coordinates),
+        1
+      );
+      if (outcome === "emergency") {
         return;
       }
       try {
@@ -148,26 +159,26 @@ const PlanetNavigation: React.FC<PlanetNavigationProps> = ({ currentPlanet, syst
             markPlanetAsVisited(coordinates, system.index + 1, planetName, data.system.planets);
             markSystemAsVisited(coordinates, system.index + 1);
 
-            window.location.href = `/planet/${planetName}`;
+            void go(`/planet/${planetName}`);
             return;
           }
         }
-        window.location.href = `/system/${system.index + 1}`;
+        void go(`/system/${system.index + 1}`);
       } catch (error) {
-        window.location.href = `/system/${system.index + 1}`;
+        void go(`/system/${system.index + 1}`);
       }
     } else if (nextPlanet) {
-      const distance = 1;
-      if (!SpaceshipTravelManager.canAffordTravel("planet", distance)) {
-        SpaceshipTravelManager.executeTravel("planet", distance);
-        return;
-      }
-
-      if (!SpaceshipTravelManager.executeTravel("planet", distance)) {
+      const outcome = await SpaceshipTravelManager.chargeTravel(
+        "planet",
+        galaxy.coordinates,
+        travelTarget(galaxy.coordinates),
+        1
+      );
+      if (outcome === "emergency") {
         return; // Travel failed
       }
       markPlanetAsVisited(coordinates, system.index, nextPlanet, systemPlanets);
-      window.location.href = `/planet/${nextPlanet}`;
+      void go(`/planet/${nextPlanet}`);
     }
   };
 
@@ -176,21 +187,15 @@ const PlanetNavigation: React.FC<PlanetNavigationProps> = ({ currentPlanet, syst
   }
 
   return (
-    <div className="relative">
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={handlePrevious} disabled={!hasPrev} className={`flex items-center justify-center px-3 py-1.5 rounded-lg transition-all duration-200 ${hasPrev ? "bg-white/10 hover:bg-white/20 border border-white/20 text-white hover:text-blue-300" : "bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed"}`}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <button onClick={handleNext} disabled={!hasNext} className={`flex items-center justify-center px-3 py-1.5 rounded-lg transition-all duration-200 ${hasNext ? "bg-white/10 hover:bg-white/20 border border-white/20 text-white hover:text-blue-300" : "bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed"}`}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-    </div>
+    <LevelStepper
+      prevLabel={hasPrev ? "上一颗" : null}
+      nextLabel={hasNext ? "下一颗" : null}
+      prevTitle="上一颗行星（跨恒星系会消耗燃料）"
+      nextTitle="下一颗行星（跨恒星系会消耗燃料）"
+      onPrev={() => void handlePrevious()}
+      onNext={() => void handleNext()}
+      hint="行星"
+    />
   );
 };
 

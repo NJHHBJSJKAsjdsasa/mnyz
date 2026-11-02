@@ -129,7 +129,7 @@ export const DebugPlanetData: React.FC<DebugPlanetDataProps> = ({ planetData, sh
         top: 10,
         right: 10,
         background: "rgba(0, 0, 0, 0.9)",
-        color: "#00ff00",
+        color: "var(--atlas-signal)",
         padding: "10px",
         borderRadius: "5px",
         fontFamily: "monospace",
@@ -141,7 +141,7 @@ export const DebugPlanetData: React.FC<DebugPlanetDataProps> = ({ planetData, sh
         border: "1px solid #00ff00",
       }}
     >
-      <h3 style={{ margin: "0 0 10px 0", color: "#00ff00" }}>🔍 Planet Debug: {planetData.planet_info?.name}</h3>
+      <h3 style={{ margin: "0 0 10px 0", color: "var(--atlas-signal)" }}>🔍 Planet Debug: {planetData.planet_info?.name}</h3>
 
       <div style={{ marginBottom: "10px" }}>
         <strong>Type:</strong> {planetData.planet_info?.type}

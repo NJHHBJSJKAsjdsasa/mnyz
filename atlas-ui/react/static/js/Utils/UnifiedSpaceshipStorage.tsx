@@ -2,6 +2,7 @@
 
 import React from "react";
 import { getItem, setItem, removeItem } from "./b64.tsx";
+import { ResourceEventManager } from "./ResourceEventManager.tsx";
 
 export interface SpaceshipData {
   r: {
@@ -378,6 +379,8 @@ export class UnifiedSpaceshipStorage {
     data.u.st = Math.floor(next <= 20 ? 1000 + (next - 1) * 400 : 8600 + (next - 20) * 45);
     data.u.m = next <= 100 ? 1.0 + (next - 1) * 0.242 : 24.958 + (next - 100) * 0.02;
     this.saveData(data);
+    // Hydration replaces the whole ship, storage cap included.
+    ResourceEventManager.emit("resources_updated");
   }
 
   static upgradeShip(cost: { antimatter: number; element115: number; deuterium: number }): boolean {
@@ -418,6 +421,9 @@ export class UnifiedSpaceshipStorage {
       data.u.sk = skills;
 
       this.saveData(data);
+      // Level changes also move `storage`, so watchers that only track the
+      // wallet must be told: they used to poll every 5s as a safety net.
+      ResourceEventManager.emit("resources_updated");
       return true;
     }
 

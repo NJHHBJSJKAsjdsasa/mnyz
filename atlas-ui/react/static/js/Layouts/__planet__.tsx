@@ -1,11 +1,31 @@
-// atlas-ui/react/static/js/Layouts/__planet__.tsx
-import React, { useState, useEffect } from "react";
-import Header from "../Components/Header.tsx";
+// atlas-ui/react/static/js/Layouts/__planet__.tsx — a planet, as a view in the
+// shell.
+//
+// 2026-10-31 (P1 of 16-shell-unification). Same surgery as the other two inner
+// pages: own header, own centred title, grey "← 返回系统" button and footer all
+// gone; the frame owns the chrome. The rail lists the sibling planets of the
+// system (the one you are on is lit), which is the first time this page has had
+// any sense of *where* the planet sits.
+//
+// Behavior preserved verbatim: renderer switch (classic / realistic), the
+// effects-control debug switch, moon selection, and the key sequence. Nothing in
+// this file touches the renderer itself.
+
+import React, { useEffect, useState } from "react";
+import GameFrame from "../Shell/GameFrame.tsx";
+import GameTopBar from "../Shell/GameTopBar.tsx";
+import Breadcrumb from "../Shell/Breadcrumb.tsx";
+import { RailHeading, StageHeading } from "../Shell/StageHeading.tsx";
+import RailSearch from "../Shell/RailSearch.tsx";
+import BackLinks from "../Shell/BackLinks.tsx";
+import ModelHover from "../Components/ModelHover.tsx";
+import { matchesPlanet, normalizeQuery } from "../Shell/railFilter.ts";
+import InfoDrawer from "../Shell/InfoDrawer.tsx";
 import PlanetInfo from "../Components/PlanetInfo.tsx";
-import PlanetVisualization from "../Components/PlanetVisualization.tsx";
 import PlanetVisualizationUniversal from "../Components/PlanetVisualizationUniversal.tsx";
+import RealisticPlanetStage from "../Components/RealisticPlanetStage.tsx";
 import PlanetNavigation from "../Components/PlanetNavigation.tsx";
-import VersionFooter from "../Components/VersionFooter.tsx";
+import PlanetsList from "../Components/PlanetsList.tsx";
 import SpaceshipPanel from "../Components/SpaceshipPanel.tsx";
 import TreasureChest from "../Components/TreasureChest.tsx";
 import FuelBars from "../Components/FuelBars.tsx";
@@ -13,9 +33,13 @@ import MultiverseBanner from "../Components/MultiverseBanner.jsx";
 import TaskPanel from "../Components/TaskPanel.tsx";
 import { markPlanetAsVisited, markSystemAsVisited } from "../Utils/VisitHistory.tsx";
 import { debugConfig } from "../Utils/DebugConfig.tsx";
+import { readRenderer, writeRenderer } from "../Utils/RendererFlag.tsx";
 import { useAtlasKeySequence } from "../Hooks/useAtlasKeySequence.tsx";
 import DidYouKnow from "../Components/DidYouKnow.tsx";
 import ExplorationLab from "../Components/ExplorationLab.tsx";
+import EconomyShell from "../economy/EconomyShell.tsx";
+import { AuthButton } from "../Components/ServerAuthPanel.tsx";
+import { UniverseDetection } from "../Utils/UniverseDetection.tsx";
 import SystemIcon from "../Icons/SystemIcon.tsx";
 import GalaxyIcon from "../Icons/GalaxyIcon.tsx";
 import CoordinatesIcon from "../Icons/CoordinatesIcon.tsx";
@@ -42,9 +66,7 @@ interface Planet {
 interface System {
   name: string;
   index: number;
-  planets?: Array<{
-    name: string;
-  }>;
+  planets?: Array<{ name: string }>;
 }
 
 interface Galaxy {
@@ -52,7 +74,7 @@ interface Galaxy {
   coordinates: number[];
 }
 
-interface PlanetLayoutProps {
+export interface PlanetLayoutProps {
   planet: Planet;
   system: System;
   galaxy: Galaxy;
@@ -63,11 +85,25 @@ interface PlanetLayoutProps {
   initial_angle_rotation: number;
 }
 
-const PlanetLayout: React.FC<PlanetLayoutProps> = ({ planet, system, galaxy, planet_url, version, image_url, cosmic_origin_time, initial_angle_rotation }) => {
+const formatName = (name: string) => name.replace(/_/g, " ");
+
+const PlanetLayout: React.FC<PlanetLayoutProps> = ({
+  planet,
+  system,
+  galaxy,
+  planet_url,
+  version,
+  cosmic_origin_time,
+  initial_angle_rotation,
+}) => {
   const [coordinates] = useState<string>(galaxy.coordinates.join(","));
+  const [isRemoteUniverse] = useState(() => UniverseDetection.isRemoteUniverse());
   const [effects, setEffects] = useState<any[]>([]);
   const [effectsControlEnabled, setEffectsControlEnabled] = useState(debugConfig.ENABLE_EFFECTS_CONTROL);
   const [selectedMoon, setSelectedMoon] = useState<any | null>(null);
+  // 3.0 realistic renderer is opt-in until step 4 perf sign-off (docs/render-transplant §8).
+  const [renderer] = useState(() => readRenderer());
+  const [query, setQuery] = useState("");
 
   useAtlasKeySequence();
 
@@ -104,94 +140,210 @@ const PlanetLayout: React.FC<PlanetLayoutProps> = ({ planet, system, galaxy, pla
     };
   }, []);
 
-  const formatPlanetName = (name: string) => {
-    return name.replace(/_/g, " ");
-  };
-
-  const formatSystemName = (name: string) => {
-    return name.replace(/_/g, " ");
-  };
-
-  const formatGalaxyName = (name: string) => {
-    return name.replace(/_/g, " ");
-  };
+  const needle = normalizeQuery(query);
+  const siblings = system.planets || [];
+  const matched = needle ? siblings.filter((item) => matchesPlanet(item, needle)).length : siblings.length;
+  const [x, y, z] = galaxy.coordinates;
 
   return (
     <>
       <MultiverseBanner />
-      <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col">
-        <div
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        ></div>
+      <FuelBars />
 
-        <FuelBars />
-
-        <div className="relative z-10 pt-1 flex-1 flex flex-col">
-          <Header />
-
-          <div className="w-full px-2 sm:px-4 lg:px-6 py-4 sm:py-8 flex-1">
-            <div className="text-center mb-2">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">行星 '{formatPlanetName(planet.name)}'</h1>
-              <p className="text-[10px] sm:text-xs text-gray-300 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap">
-                <span className="flex items-center gap-1">
-                  <SystemIcon size={15} color="#ffffffff" />
-                  {formatSystemName(system.name)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <GalaxyIcon size={15} color="#ffffffff" />
-                  {formatGalaxyName(galaxy.name)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <CoordinatesIcon size={15} color="#ffffffff" />
+      <GameFrame
+        topbar={
+          <GameTopBar
+            coordinates={{ x, y, z }}
+            isRemoteUniverse={isRemoteUniverse}
+            version={version}
+            trail={
+              <Breadcrumb
+                items={[
+                  { label: formatName(galaxy.name), href: "/galaxy" },
+                  { label: formatName(system.name), href: `/system/${system.index}` },
+                  { label: formatName(planet.name) },
+                ]}
+              />
+            }
+            trailing={<AuthButton />}
+          />
+        }
+        rail={
+          <>
+            <RailHeading label="行星" count={siblings.length} />
+            {siblings.length > 6 ? (
+              <RailSearch
+                value={query}
+                onChange={setQuery}
+                placeholder="搜索行星…"
+                matched={needle ? matched : undefined}
+                total={siblings.length}
+              />
+            ) : null}
+            <PlanetsList
+              planets={siblings}
+              coordinates={coordinates}
+              systemIndex={system.index}
+              activeName={planet.name}
+              query={query}
+            />
+          </>
+        }
+        stageRows="1fr"
+        stage={
+          <section
+            className="atlas-hud hud-corners"
+            style={{ position: "relative", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}
+          >
+            <StageHeading
+              kicker="PLANET"
+              title={formatName(planet.name)}
+              leading={
+                <BackLinks
+                  items={[
+                    {
+                      label: "返回",
+                      icon: "‹",
+                      href: `/system/${system.index}`,
+                      title: `返回 ${formatName(system.name)}`,
+                    },
+                    {
+                      label: "星系",
+                      icon: "‹‹",
+                      href: "/galaxy",
+                      title: `返回星系 ${formatName(galaxy.name)}`,
+                    },
+                  ]}
+                />
+              }
+              meta={
+                <>
+                  <SystemIcon size={11} color="currentColor" />
+                  {formatName(system.name)}
+                  <span aria-hidden style={{ width: 1, height: 9, background: "var(--atlas-line-strong)" }} />
+                  <GalaxyIcon size={11} color="currentColor" />
+                  {formatName(galaxy.name)}
+                  <span aria-hidden style={{ width: 1, height: 9, background: "var(--atlas-line-strong)" }} />
+                  <CoordinatesIcon size={11} color="currentColor" />
                   {galaxy.coordinates.join(", ")}
-                </span>
-              </p>
-            </div>
+                </>
+              }
+            >
+              <PlanetNavigation
+                currentPlanet={planet.name}
+                system={system}
+                galaxy={galaxy}
+                systemPlanets={system.planets || []}
+              />
+            </StageHeading>
 
-            <PlanetNavigation currentPlanet={planet.name} system={system} galaxy={galaxy} systemPlanets={system.planets || []} />
-
-            <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 mb-8 shadow-2xl p-4 sm:p-6">
-              <div className="flex flex-col lg:grid lg:grid-cols-[400px_1fr] gap-6 lg:gap-8 relative">
-                <div className="order-1 lg:order-1">
-                  <PlanetVisualizationUniversal planetUrl={planet_url} planet={{ ...planet, name: formatPlanetName(planet.name) }} cosmicOriginTime={cosmic_origin_time} initialAngleRotation={initial_angle_rotation} onEffectsCreated={handleEffectsCreated} effects={effects} onToggleEffect={handleToggleEffect} onMoonSelected={handleMoonSelected} />
-                </div>
-
-                <div className="hidden lg:block absolute left-[416px] top-0 bottom-0 w-1 rounded-full bg-white/10 -translate-x-1.5"></div>
-
-                <div className="order-2 lg:order-2">
-                  <PlanetInfo planet={planet} system={system} galaxy={galaxy} cosmicOriginTime={cosmic_origin_time} initialAngleRotation={initial_angle_rotation} effects={effectsControlEnabled ? effects : undefined} onToggleEffect={effectsControlEnabled ? handleToggleEffect : undefined} selectedMoon={selectedMoon} />
-                </div>
+            <div style={{ position: "relative", flex: 1, minHeight: 0, marginRight: 34 }}>  {/* 34px is the collapsed drawer spine. Reserved as margin so the 3D view's
+      own corner controls (speed buttons, expand, download) are not covered. It is
+      a fixed reserve, not conditional on the drawer state: changing it would resize
+      the canvas, and the renderers only listen for window resizes.
+      `margin`, not `padding`: absolutely positioned children resolve against the
+      padding box, so padding would leave them sitting *under* the spine. */}
+              {renderer === "realistic" ? (
+                <RealisticPlanetStage
+                  planet={{
+                    name: planet.name,
+                    planet_type: planet.planet_type,
+                    atmosphere: planet.atmosphere,
+                    life_forms: planet.life_forms,
+                    surface_temperature: planet.surface_temperature,
+                    rotation_period_seconds: planet.rotation_period_seconds,
+                  }}
+                  seedKey={planet.name}
+                  cosmicOriginTime={cosmic_origin_time}
+                  height="100%"
+                />
+              ) : (
+                <PlanetVisualizationUniversal
+                  fill
+                  planetUrl={planet_url}
+                  planet={{ ...planet, name: formatName(planet.name) }}
+                  cosmicOriginTime={cosmic_origin_time}
+                  initialAngleRotation={initial_angle_rotation}
+                  onEffectsCreated={handleEffectsCreated}
+                  effects={effects}
+                  onToggleEffect={handleToggleEffect}
+                  onMoonSelected={handleMoonSelected}
+                />
+              )}
+              {/* Station preview: hover the chip, the mesh loads on first use. */}
+              <div style={{ position: "absolute", left: 10, bottom: 10, zIndex: 6 }}>
+                <ModelHover url="/static/models/station.glb" label="轨道空间站" icon="◈" />
               </div>
+
+              <InfoDrawer
+                label="行星档案"
+                width={440}
+                tabs={[
+                  {
+                    id: "info",
+                    label: "档案",
+                    content: (
+                      <>
+                        {renderer !== "realistic" ? (
+                          <button
+                            type="button"
+                            onClick={() => writeRenderer("realistic")}
+                            className="mb-2 text-xs text-cyan-300/70 hover:text-cyan-200 transition-colors"
+                            title="试用 3.0 真实渲染（可随时切回）"
+                          >
+                            试用真实渲染 →
+                          </button>
+                        ) : null}
+                        <PlanetInfo
+                          planet={planet}
+                          system={system}
+                          galaxy={galaxy}
+                          cosmicOriginTime={cosmic_origin_time}
+                          initialAngleRotation={initial_angle_rotation}
+                          effects={effectsControlEnabled ? effects : undefined}
+                          onToggleEffect={effectsControlEnabled ? handleToggleEffect : undefined}
+                          selectedMoon={selectedMoon}
+                        />
+                      </>
+                    ),
+                  },
+                  {
+                    id: "lab",
+                    label: "实验舱",
+                    // The lab was a full-width panel under the planet, and it is tall:
+                    // twelve tool tabs plus whatever tab is open. Under the planet it
+                    // ate 46% of the stage and squeezed the planet into a strip. It is
+                    // an action surface, so it belongs beside the thing, one click away.
+                    content: (
+                      <ExplorationLab
+                        embedded
+                        planetName={planet.name}
+                        planetType={planet.planet_type}
+                        systemIndex={system.index}
+                        coordinates={coordinates}
+                      />
+                    ),
+                  },
+                ]}
+              />
             </div>
+          </section>
+        }
+        dock={<EconomyShell />}
+      />
 
-            <ExplorationLab planetName={planet.name} planetType={planet.planet_type} systemIndex={system.index} coordinates={coordinates} />
-
-            <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 mb-8 shadow-2xl p-4 sm:p-6 text-center">
-              <button onClick={() => (window.location.href = `/system/${system.index}`)} className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-gray-600 via-gray-700 to-gray-600 hover:from-gray-700 hover:via-gray-800 hover:to-gray-700 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg backdrop-blur-sm">
-                <span className="text-base sm:text-lg">← 返回系统 '{formatSystemName(system.name)}'</span>
-              </button>
-            </div>
-          </div>
-
-          <VersionFooter version={version} />
-        </div>
-
-        <TreasureChest />
-        <SpaceshipPanel
-          currentLocation={{
-            type: "planet",
-            name: planet.name,
-            coordinates: galaxy.coordinates.join(","),
-            systemIndex: system.index,
-            planetName: planet.name,
-          }}
-        />
-        <TaskPanel />
-        <DidYouKnow currentView="planet" />
-      </div>
+      <TreasureChest />
+      <SpaceshipPanel
+        currentLocation={{
+          type: "planet",
+          name: planet.name,
+          coordinates,
+          systemIndex: system.index,
+          planetName: planet.name,
+        }}
+      />
+      <TaskPanel />
+      <DidYouKnow currentView="planet" />
     </>
   );
 };

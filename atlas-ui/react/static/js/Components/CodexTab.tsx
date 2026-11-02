@@ -38,7 +38,7 @@ const EntryGrid: React.FC<EntryGridProps> = ({ section, found }) => {
           <div
             key={entry}
             className={`rounded px-2 py-1 text-[11px] border truncate ${
-              owned ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200" : "bg-white/5 border-dashed border-white/15 text-gray-500"
+              owned ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200" : "bg-white/[0.04] border-dashed border-white/15 text-gray-500"
             }`}
             title={owned || !hideLocked ? entry : "未发现"}
           >
@@ -84,7 +84,7 @@ const CodexSectionBlock: React.FC<{
   const claimed = serverSection ? serverSection.claimed : CodexSystem.claimed(section.id);
 
   return (
-    <div className="rounded-lg border border-yellow-500/20 bg-white/5 p-3">
+    <div className="rounded-lg border border-yellow-500/20 bg-white/[0.04] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm text-white font-medium">
           <span className="text-base">{section.icon}</span>
@@ -109,8 +109,8 @@ const CodexSectionBlock: React.FC<{
         </span>
       </div>
 
-      <div className="mt-2 h-1.5 rounded bg-white/10 overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-yellow-500 to-emerald-500 transition-all" style={{ width: `${progress.percent}%` }} />
+      <div className="mt-2 h-1.5 rounded bg-plate-2 overflow-hidden">
+        <div className="h-full bg-yellow-500 hover:bg-emerald-500 transition-all" style={{ width: `${progress.percent}%` }} />
       </div>
 
       <EntryGrid section={section.id} found={found} />

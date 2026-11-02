@@ -37,6 +37,32 @@ const write = (key: string, value: string): void => {
 
 export class ServerApi {
   private static token: string | null = read(TOKEN_KEY);
+  /** Last `state_version` the server reported; drives `If-Match` (11 §4.3). */
+  private static version: number | null = null;
+
+  /**
+   * Read-modify-write routes that opt into optimistic locking (10 §P1-2).
+   *
+   * Everything else stays unlocked on purpose: a stale `If-Match` on a harmless
+   * write would only produce 412s without protecting anything.
+   */
+  private static readonly GUARDED: RegExp[] = [
+    /^\/api\/v1\/wallet\/transfer$/,
+    /^\/api\/v1\/banks\/[^/]+\/deposit$/,
+    /^\/api\/v1\/bank\/loans\/[^/]+\/repay$/,
+    /^\/api\/v1\/stocks\/[^/]+\/orders$/,
+    /^\/api\/v1\/stocks\/[^/]+\/split$/,
+    /^\/api\/v1\/properties\/listings\/[^/]+\/bid$/,
+    /^\/api\/v1\/council\/motions\/[^/]+\/vote$/,
+  ];
+
+  static stateVersion(): number | null {
+    return this.version;
+  }
+
+  static applyStateVersion(value: unknown): void {
+    if (typeof value === "number" && Number.isFinite(value)) this.version = value;
+  }
 
   static baseUrl(): string {
     return (read(BASE_KEY) || DEFAULT_BASE).replace(/\/+$/, "");
@@ -44,6 +70,19 @@ export class ServerApi {
 
   static mode(): ServerMode {
     return "server";
+  }
+
+  /**
+   * Is this a signed-in player?
+   *
+   * `mode()` is always "server", so it cannot tell. Neither can `token` alone:
+   * `forgetToken()` clears the token but a stale one can also survive an expired
+   * session, and a truthy token then sends the home screen into `chargeTravel`,
+   * whose `ensureSession` pops the sign-in dialog — which reads as "the jump
+   * button does nothing". The account status is the honest source.
+   */
+  static hasSession(): boolean {
+    return this.accountStatus() !== "guest" && Boolean(this.token);
   }
 
   static setMode(_mode: ServerMode): void {
@@ -108,7 +147,16 @@ export class ServerApi {
     return id;
   }
 
-  static async ensureSession(): Promise<void> {
+  /**
+   * Make sure the stored token still belongs to this device + universe.
+   *
+   * `notify` decides whether a missing session is shouted about. Before
+   * 2026-10-29 every call dispatched `atlas:login-required`, so a guest merely
+   * loading the home page got a login modal on top of the coordinate selector —
+   * the dispatch came from a background `/state` poll, not from anything the
+   * player did. Reads stay quiet; writes (POST/PUT/DELETE) still raise it.
+   */
+  static async ensureSession(notify = false): Promise<void> {
     const desired = this.universeSeedName();
     const used = read(UNIVERSE_KEY);
     const device = this.deviceId();
@@ -119,10 +167,12 @@ export class ServerApi {
     // Registered accounts may refresh; guests are never auto-created.
     if (status !== "guest" && used === desired && usedDevice === device && (await this.refresh())) return;
     this.forgetToken();
-    try {
-      window.dispatchEvent(new CustomEvent("atlas:login-required"));
-    } catch {
-      // non-browser context
+    if (notify) {
+      try {
+        window.dispatchEvent(new CustomEvent("atlas:login-required"));
+      } catch {
+        // non-browser context
+      }
     }
     throw new Error("请先登录后操作");
   }
@@ -195,10 +245,14 @@ export class ServerApi {
   }
 
   static async request(path: string, init: RequestInit = {}, retry = true): Promise<any> {
-    await this.ensureSession();
+    const method = (init.method || "GET").toUpperCase();
+    await this.ensureSession(method !== "GET");
     const headers = new Headers(init.headers || {});
     headers.set("Content-Type", "application/json");
     if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+    if (this.version !== null && method !== "GET" && this.GUARDED.some((rule) => rule.test(path))) {
+      headers.set("If-Match", `"${this.version}"`);
+    }
     const response = await fetch(`${this.baseUrl()}${path}`, {
       ...init,
       headers,
@@ -209,12 +263,46 @@ export class ServerApi {
       return this.request(path, init, false);
     }
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body?.detail || body?.code || `http_${response.status}`);
+    if (!response.ok) {
+      if (response.status === 412) {
+        // Drop the stale pointer so the next read re-syncs instead of looping.
+        this.version = null;
+        throw new Error("已有更新，请刷新后重试");
+      }
+      throw new Error(body?.detail || body?.code || `http_${response.status}`);
+    }
+    this.applyStateVersion(body?.state_version ?? body?.data?.state_version);
     return body.data ?? body;
   }
 
   static async state(): Promise<any> {
     return this.request("/api/v1/state");
+  }
+
+  /** Server-side ship view: hull/shield plus the 09 §3.1 status ids. */
+  static async shipView(): Promise<any> {
+    return this.request("/api/v1/ship");
+  }
+
+  /** Price a jump on the server; the returned quote_id is single-use (11 §4.1). */
+  static async travelQuote(
+    kind: "galaxy" | "system" | "planet",
+    origin: { x: number; y: number; z: number },
+    target: { x: number; y: number; z: number }
+  ): Promise<any> {
+    return this.request("/api/v1/travel/quote", {
+      method: "POST",
+      body: JSON.stringify({ kind, origin, target }),
+    });
+  }
+
+  /** Spend a quote. Retries are safe: one quote never debits twice. */
+  static async travelCommit(quoteId: string): Promise<any> {
+    return this.request("/api/v1/travel/commit", {
+      method: "POST",
+      headers: { "Idempotency-Key": globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
+      body: JSON.stringify({ quote_id: quoteId }),
+    });
   }
 
   static async collect(planetKey: string, coordinates: string): Promise<any> {

@@ -2849,7 +2849,7 @@ export class EffectRegistry {
       const isAnomalyPlanet = planetType === "anomaly" || pythonData.surface_elements?.type === "anomaly";
 
       if (pythonData.atmosphere && !isAnomalyPlanet) {
-        if (pythonData.atmosphere.streaks || ["Gas Giant", "Frozen Gas Giant"].includes(pythonData.planet_info?.type)) {
+        if (pythonData.atmosphere.streaks || ["Gas Giant", "Frozen Gas Giant", "Super Puff", "Super Ringed", "Mirror", "Ruby Cloud"].includes(pythonData.planet_info?.type)) {
           const glowEffect = createAtmosphereGlowFromPythonData(planetRadius, pythonData.atmosphere || {}, pythonData.seeds?.shape_seed + 2000);
 
           if (glowEffect) {

@@ -54,7 +54,7 @@ const AreciboModal: React.FC<AreciboModalProps> = ({ isOpen, onClose, lifeForm, 
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       style={{
         opacity: isVisible ? 1 : 0,
         transition: "opacity 300ms ease-in-out",
@@ -62,7 +62,7 @@ const AreciboModal: React.FC<AreciboModalProps> = ({ isOpen, onClose, lifeForm, 
       onClick={handleClose}
     >
       <div
-        className="bg-black/90 backdrop-blur-xl border border-purple-400/30 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] relative"
+        className="bg-black/90 border border-purple-400/30 rounded-none shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] relative"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "scale(1)" : "scale(0.95)",
@@ -70,7 +70,7 @@ const AreciboModal: React.FC<AreciboModalProps> = ({ isOpen, onClose, lifeForm, 
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-t-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-purple-600/20 hover:bg-blue-600/20 rounded-t-2xl">
           <div className="flex-1">
             <h3 className="text-white font-bold text-lg flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width={20} height={20} viewBox="0 0 24 24" className="animate-spin">
@@ -91,8 +91,8 @@ const AreciboModal: React.FC<AreciboModalProps> = ({ isOpen, onClose, lifeForm, 
           <div className="flex justify-center mb-4">
             <div
               style={{
-                filter: "drop-shadow(0 0 1px rgba(147, 51, 234, 0.4)) drop-shadow(0 0 2px rgba(59, 130, 246, 0.25))",
-                boxShadow: "0 0 24px rgba(147, 51, 234, 0.25), 0 0 40px rgba(59, 130, 246, 0.2)",
+                filter: "none",
+                boxShadow: "inset 0 0 0 1px var(--atlas-line-strong)",
               }}
             >
               <AreciboMessage lifeForm={lifeForm} planetName={planetName} scale={6} className="" showControls={false} showInfo={false} />

@@ -60,9 +60,10 @@ const SaveLocationButton: React.FC<SaveLocationButtonProps> = ({ type, name, coo
     };
 
     checkUniverseType();
-    const interval = setInterval(checkUniverseType, 1000);
-
-    return () => clearInterval(interval);
+    // One-shot on purpose (2026-10-29): `#data-universe-config` is a static
+    // server-rendered element, so this value cannot change without a full page
+    // load — and that remounts the component anyway. The old 1 s timer re-parsed
+    // the same JSON 86,400 times a day for a value that never moved.
   }, []);
 
   const handleSaveLocation = async () => {
@@ -112,8 +113,8 @@ const SaveLocationButton: React.FC<SaveLocationButtonProps> = ({ type, name, coo
             : isLoading
             ? "bg-blue-500/20 border border-blue-500/50 text-blue-400 cursor-wait"
             : isDifferentPage
-            ? "bg-white/10 hover:bg-white/20 border text-white hover:text-green-300 border-green-500/60 hover:border-green-400/80"
-            : "bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 text-white hover:text-blue-300"
+            ? "bg-plate-2 hover:bg-[var(--atlas-line-strong)] border text-white hover:text-green-300 border-green-500/60 hover:border-green-400/80"
+            : "bg-plate-2 hover:bg-[var(--atlas-line-strong)] border border-white/20 hover:border-white/40 text-white hover:text-blue-300"
         } ${className}`}
         style={
           isDifferentPage && !isRemoteUniverse

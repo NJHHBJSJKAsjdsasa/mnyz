@@ -170,18 +170,27 @@ const DidYouKnow: React.FC<DidYouKnowProps> = ({ currentView }) => {
 
   return (
     <>
-      <div className={`fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-50 ${isCircleFading ? "animate-didYouKnowCircleFadeOut" : showCircle ? "animate-didYouKnowCircleFadeIn" : "opacity-0"}`}>
-        <button onClick={handleOpenModal} className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-yellow-600 via-orange-600 to-yellow-800 hover:from-yellow-500 hover:via-orange-500 hover:to-yellow-700 text-white rounded-full shadow-2xl border-2 border-yellow-400/30 transition-all duration-300 transform hover:scale-105 backdrop-blur-sm animate-pulse" title="你知道吗？- 宇宙事实">
+      {/* `pointer-events-none` on the wrapper (2026-10-29): the fading container is
+          larger than the 56px circle and used to swallow clicks on whatever sat
+          under its corners. Only the button itself stays interactive.
+          The two infinite loops (pulse on the button, ping halo) are gone — they
+          ran forever on every page for decoration only; hover still scales. */}
+      <div className={`fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-50 pointer-events-none ${isCircleFading ? "animate-didYouKnowCircleFadeOut" : showCircle ? "animate-didYouKnowCircleFadeIn" : "opacity-0"}`}>
+        <button
+          onClick={handleOpenModal}
+          aria-label="你知道吗？打开一条宇宙事实"
+          className="pointer-events-auto w-12 h-12 sm:w-14 sm:h-14 bg-yellow-600 hover:bg-yellow-500 text-white rounded-full shadow-2xl border-2 border-yellow-400/30 transition-all duration-300 transform hover:scale-105"
+          title="你知道吗？- 宇宙事实"
+        >
           <div className="flex items-center justify-center">
             <span className="text-xl sm:text-2xl font-bold">?</span>
           </div>
-          <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping"></div>
         </button>
       </div>
 
       {isModalOpen && (
-        <div ref={modalRef} className={`fixed bottom-20 sm:bottom-24 left-2 sm:left-6 w-[calc(100vw-1rem)] sm:w-96 max-w-md bg-black/90 backdrop-blur-xl rounded-2xl border border-yellow-400/30 shadow-2xl z-40 overflow-hidden transition-all duration-300 ease-out ${isClosing ? "animate-slideDownFadeOut" : "animate-slideUpFadeIn"}`}>
-          <div className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 p-4 border-b border-white/10">
+        <div ref={modalRef} className={`fixed bottom-20 sm:bottom-24 left-2 sm:left-6 w-[calc(100vw-1rem)] sm:w-96 max-w-md bg-black/90 rounded-none border border-yellow-400/30 shadow-2xl z-40 overflow-hidden transition-all duration-300 ease-out ${isClosing ? "animate-slideDownFadeOut" : "animate-slideUpFadeIn"}`}>
+          <div className="bg-yellow-600/20 hover:bg-orange-600/20 p-4 border-b border-white/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
@@ -200,7 +209,7 @@ const DidYouKnow: React.FC<DidYouKnowProps> = ({ currentView }) => {
               <label className="flex items-center space-x-2 cursor-pointer">
                 <div className="relative">
                   <input type="checkbox" checked={dontShowAgain} onChange={(e) => handleDontShowAgainChange(e.target.checked)} className="sr-only" />
-                  <div className={`w-3 h-3 rounded border transition-all duration-200 flex items-center justify-center ${dontShowAgain ? "bg-gradient-to-r from-yellow-600 to-orange-600 border-yellow-400" : "bg-transparent border-gray-500 hover:border-yellow-400/60"}`}>
+                  <div className={`w-3 h-3 rounded border transition-all duration-200 flex items-center justify-center ${dontShowAgain ? "bg-yellow-600 hover:bg-orange-600 border-yellow-400" : "bg-transparent border-gray-500 hover:border-yellow-400/60"}`}>
                     {dontShowAgain && (
                       <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -211,7 +220,7 @@ const DidYouKnow: React.FC<DidYouKnowProps> = ({ currentView }) => {
                 <span className="text-xs text-gray-400 hover:text-yellow-400/80 transition-colors">不再显示</span>
               </label>
 
-              <a href="/universe-faq" className="px-4 py-2 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white text-sm font-semibold rounded-lg transition-all duration-300 transform hover:scale-105">
+              <a href="/universe-faq" className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-semibold rounded-lg transition-all duration-300 transform hover:scale-105">
                 了解更多 →
               </a>
             </div>

@@ -42,7 +42,7 @@ const TreasureChest: React.FC = () => {
     if (reward.antimatter + reward.element115 + reward.deuterium === 0) return;
 
     const toast = document.createElement("div");
-    toast.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-yellow-900/90 to-amber-900/90 text-white px-4 py-3 rounded-lg shadow-lg border border-yellow-500/50 w-[90vw] max-w-lg";
+    toast.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-900/90 hover:bg-amber-900/90 text-white px-4 py-3 rounded-lg shadow-lg border border-yellow-500/50 w-[90vw] max-w-lg";
     toast.style.animation = "slideInDown 0.3s ease-out";
 
     const container = document.createElement("div");
@@ -171,7 +171,7 @@ const TreasureChest: React.FC = () => {
 
   return (
     <>
-      <button onClick={isButtonDisappearing ? undefined : handleTreasureChestClick} disabled={isButtonDisappearing} className={`fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-yellow-600 via-amber-600 to-yellow-800 text-white rounded-full shadow-2xl border-2 border-yellow-400/30 backdrop-blur-sm ${isButtonDisappearing ? "animate-popAndFadeOut cursor-not-allowed" : "hover:from-yellow-500 hover:via-amber-500 hover:to-yellow-700 transition-all duration-300 transform hover:scale-105 cursor-pointer"}`} title={isButtonDisappearing ? "Treasure chest is disappearing..." : "Treasure Chest - Click for random resources!"}>
+      <button onClick={isButtonDisappearing ? undefined : handleTreasureChestClick} disabled={isButtonDisappearing} className={`fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-yellow-600 hover:bg-yellow-800 text-white rounded-full shadow-2xl border-2 border-yellow-400/30 ${isButtonDisappearing ? "animate-popAndFadeOut cursor-not-allowed" : "hover:from-yellow-500 hover:via-amber-500 hover:to-yellow-700 transition-all duration-300 transform hover:scale-105 cursor-pointer"}`} title={isButtonDisappearing ? "Treasure chest is disappearing..." : "Treasure Chest - Click for random resources!"}>
         <div className="flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24">
             <path fill="currentColor" d="M2 20h20V7c0-.8-.32-1.56-.88-2.12S19.8 4 19 4H5c-.8 0-1.56.32-2.12.88S2 6.2 2 7zm18-9h-5V9H9v2H4V7c0-.26.11-.5.29-.71C4.5 6.11 4.74 6 5 6h14c.27 0 .5.11.71.29c.19.21.29.45.29.71zm-5 2h5v5H4v-5h5l2 2h2zm-4-2h2v2h-2z"></path>
@@ -181,9 +181,9 @@ const TreasureChest: React.FC = () => {
       </button>
 
       {showChestPopup && treasureReward && (
-        <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 ${isClosing ? "animate-fadeOut" : "animate-fadeIn"}`} style={{ zIndex: 10000 }} onClick={isClosing ? undefined : handleCloseWithoutCollecting}>
-          <div className={`bg-gradient-to-br from-yellow-900/90 via-amber-900/90 to-yellow-800/90 backdrop-blur-xl rounded-2xl border-2 border-yellow-400/50 shadow-2xl w-full max-w-md ${isClosing ? "animate-slideDown" : "animate-slideUp"}`} style={{ zIndex: 10001 }} onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-yellow-600/30 to-amber-600/30 p-4 border-b border-yellow-400/30 rounded-t-2xl">
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center p-4 ${isClosing ? "animate-fadeOut" : "animate-fadeIn"}`} style={{ zIndex: 10000 }} onClick={isClosing ? undefined : handleCloseWithoutCollecting}>
+          <div className={`bg-yellow-900/90 hover:bg-yellow-800/90 rounded-none border-2 border-yellow-400/50 shadow-2xl w-full max-w-md ${isClosing ? "animate-slideDown" : "animate-slideUp"}`} style={{ zIndex: 10001 }} onClick={(e) => e.stopPropagation()}>
+            <div className="bg-yellow-600/30 hover:bg-amber-600/30 p-4 border-b border-yellow-400/30 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <h3 className="text-yellow-100 font-bold text-xl flex items-center gap-2">🎉 Treasure Found! 🎉</h3>
                 <button onClick={isClosing ? undefined : handleCloseWithoutCollecting} disabled={isClosing} className={`transition-colors duration-200 ${isClosing ? "text-yellow-600 cursor-not-allowed" : "text-yellow-400 hover:text-yellow-200 cursor-pointer"}`}>
@@ -227,7 +227,7 @@ const TreasureChest: React.FC = () => {
                 <button onClick={isClosing ? undefined : handleCloseWithoutCollecting} disabled={isClosing} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-200 ${isClosing ? "bg-gray-700/30 text-gray-500 border-gray-600/30 cursor-not-allowed" : "bg-gray-700/50 text-gray-300 hover:bg-gray-700/70 border-gray-600/50 hover:border-gray-500 cursor-pointer"}`}>
                   Close
                 </button>
-                <button onClick={isClosing ? undefined : handleCollectRewards} disabled={isClosing} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-200 ${isClosing ? "bg-yellow-600/20 text-yellow-500 border-yellow-500/30 cursor-not-allowed" : "bg-gradient-to-r from-yellow-600/30 to-amber-600/30 hover:from-yellow-600/40 hover:to-amber-600/40 text-yellow-300 border-yellow-500/50 hover:border-yellow-400/70 cursor-pointer"}`}>
+                <button onClick={isClosing ? undefined : handleCollectRewards} disabled={isClosing} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-200 ${isClosing ? "bg-yellow-600/20 text-yellow-500 border-yellow-500/30 cursor-not-allowed" : "bg-yellow-600/30 hover:bg-yellow-600/40 text-yellow-300 border-yellow-500/50 hover:border-yellow-400/70 cursor-pointer"}`}>
                   🎉 Collect
                 </button>
               </div>

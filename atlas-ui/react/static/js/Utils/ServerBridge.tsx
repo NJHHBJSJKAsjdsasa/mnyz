@@ -1,6 +1,7 @@
 // atlas-ui/react/static/js/Utils/ServerBridge.tsx
 // Starts shadow writes and exposes the feature flags for the cutover phases.
 
+import { DailyChallengesManager } from "./DailyChallenges.tsx";
 import { FactionSystem } from "./FactionSystem.tsx";
 import { HullSystem } from "./HullSystem.tsx";
 import { ResourceEventManager } from "./ResourceEventManager.tsx";
@@ -81,6 +82,9 @@ export class ServerBridge {
         }
       });
       (state.progress?.sectors || []).forEach((key: string) => SectorSystem.applyServerUnlock(key));
+      // Milestones are a derived scoreboard (T-62); refresh them with the same
+      // first paint that hydrates the wallet, so the panel is never stale.
+      void DailyChallengesManager.sync();
       localStorage.setItem(HYDRATED_KEY, playerId);
     } catch (error) {
       console.warn("[atlas-server] state hydrate failed", error);

@@ -97,10 +97,10 @@ const PhotosensitivityWarning: React.FC<PhotosensitivityWarningProps> = ({ onPro
 
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-4 px-2">
-            <button onClick={handleProceedAndSave} className="flex-1 bg-white hover:bg-gray-100 text-black font-bold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 text-base sm:text-lg">
+            <button onClick={handleProceedAndSave} className="flex-1 bg-white hover:bg-gray-100 text-black font-bold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-none transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 text-base sm:text-lg">
               继续
             </button>
-            <button onClick={handleEnablePhotosensitivityMode} className="flex-1 bg-gray-800 hover:bg-gray-700 border-2 border-gray-600 text-white font-bold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-600/50 text-base sm:text-lg">
+            <button onClick={handleEnablePhotosensitivityMode} className="flex-1 bg-gray-800 hover:bg-gray-700 border-2 border-gray-600 text-white font-bold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-none transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-600/50 text-base sm:text-lg">
               我有光敏性
             </button>
           </div>

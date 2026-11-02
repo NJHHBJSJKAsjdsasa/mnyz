@@ -1,65 +1,24 @@
 // atlas-ui/react/static/js/MountPoints/__system__.ts
+// Thin mount since P2 (16-shell-unification, 2026-10-31). See `__galaxy__.ts`.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import SystemLayout from '../Layouts/__system__.tsx';
+import GameRouter from '../Shell/GameRouter.tsx';
+import { ensureAuthPanel } from '../Components/ServerAuthPanel.tsx';
+import { viewFromCurrentDocument } from '../Shell/viewData.ts';
 
-interface SystemProps {
-  system: {
-    name: string;
-    index: number;
-    star_system_type: string;
-    num_planets: number;
-    stars: Array<{
-      Type: string;
-      Size: string;
-      Color: string;
-    }>;
-    // Planets arrive from the server payload; the layout consumes the full shape.
-    planets: any[];
-  };
-  galaxy: {
-    name: string;
-    coordinates: number[];
-  };
-  system_url: string;
-  version: string;
-  system_index: number;
-  image_url?: string;
-  page: number;
-  cosmic_origin_time: number;
-}
+document.addEventListener('DOMContentLoaded', () => {
+  // 登录框必须在游戏页存在，否则 401 的 atlas:login-required 无人接收。
+  ensureAuthPanel();
 
-document.addEventListener('DOMContentLoaded', async () => {
-  
-  try {
-    const systemDataElement = document.getElementById('system-data');
-    const galaxyDataElement = document.getElementById('galaxy-data');
-    const metaDataElement = document.getElementById('meta-data');
-    
-    if (!systemDataElement || !galaxyDataElement || !metaDataElement) {
-      return;
-    }
+  const container = document.getElementById('atlas-react-root');
+  const view = viewFromCurrentDocument();
 
-    const systemData = JSON.parse(systemDataElement.textContent || '{}');
-    const galaxyData = JSON.parse(galaxyDataElement.textContent || '{}');
-    const metaData = JSON.parse(metaDataElement.textContent || '{}');
+  if (!container) return;
 
-    const props: SystemProps = {
-      system: systemData,
-      galaxy: galaxyData,
-      system_url: metaData.system_url,
-      version: metaData.version,
-      system_index: metaData.system_index,
-      image_url: metaData.image_url,
-      page: metaData.page || 1,
-      cosmic_origin_time: metaData.cosmic_origin_time
-    };
-
-    const container = document.getElementById('atlas-react-root');
-    if (container) {
-      const root = createRoot(container);
-      root.render(React.createElement(SystemLayout, props));
-    }
-  } catch (error) {
+  if (!view) {
+    container.textContent = '此页面缺少数据块，请刷新重试。';
+    return;
   }
+
+  createRoot(container).render(React.createElement(GameRouter, { initial: view }));
 });

@@ -16,37 +16,37 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ value, max, label, color = "i
   const colorClasses = {
     indigo: {
       bg: "bg-indigo-500/20",
-      fill: "bg-gradient-to-r from-indigo-500 to-indigo-400",
+      fill: "bg-indigo-500 hover:bg-indigo-400",
       text: "text-indigo-400",
     },
     blue: {
       bg: "bg-blue-500/20",
-      fill: "bg-gradient-to-r from-blue-500 to-blue-400",
+      fill: "bg-blue-500 hover:bg-blue-400",
       text: "text-blue-400",
     },
     purple: {
       bg: "bg-purple-500/20",
-      fill: "bg-gradient-to-r from-purple-500 to-purple-400",
+      fill: "bg-purple-500 hover:bg-purple-400",
       text: "text-purple-400",
     },
     cyan: {
       bg: "bg-cyan-500/20",
-      fill: "bg-gradient-to-r from-cyan-500 to-cyan-400",
+      fill: "bg-cyan-500 hover:bg-cyan-400",
       text: "text-cyan-400",
     },
     green: {
       bg: "bg-green-500/20",
-      fill: "bg-gradient-to-r from-green-500 to-green-400",
+      fill: "bg-green-500 hover:bg-green-400",
       text: "text-green-400",
     },
     orange: {
       bg: "bg-orange-500/20",
-      fill: "bg-gradient-to-r from-orange-500 to-orange-400",
+      fill: "bg-orange-500 hover:bg-orange-400",
       text: "text-orange-400",
     },
     yellow: {
       bg: "bg-yellow-500/20",
-      fill: "bg-gradient-to-r from-yellow-500 to-yellow-400",
+      fill: "bg-yellow-500 hover:bg-yellow-400",
       text: "text-yellow-400",
     },
   };

@@ -106,7 +106,7 @@ const FleetPanel: React.FC = () => {
     : FleetSystem.canBuild();
 
   return (
-    <div className="rounded-lg border border-sky-500/20 bg-white/5 p-3" data-fleet-version={version}>
+    <div className="rounded-lg border border-sky-500/20 bg-white/[0.04] p-3" data-fleet-version={version}>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <span className="text-gray-300">
           舰队 {ships.length}/{MAX_SHIPS} · 每 30 分钟 1 tick，最多累积 6 小时
@@ -130,7 +130,7 @@ const FleetPanel: React.FC = () => {
                   onClick={() => void setTask(ship, task.id as FleetTask)}
                   title={task.detail}
                   className={`px-2 py-0.5 rounded text-[11px] border transition-all ${
-                    ship.task === task.id ? "bg-sky-600/70 border-sky-400/50 text-white" : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+                    ship.task === task.id ? "bg-sky-600/70 border-sky-400/50 text-white" : "bg-white/[0.04] border-white/10 text-gray-300 hover:bg-plate-2"
                   }`}
                 >
                   {task.label}
@@ -151,7 +151,7 @@ const FleetPanel: React.FC = () => {
         onClick={() => void build()}
         disabled={!check.ok}
         title={check.reason ?? ""}
-        className="mt-2 px-3 py-1 rounded-md text-[11px] font-semibold bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+        className="mt-2 px-3 py-1 rounded-md text-[11px] font-semibold bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
         建造舰船
       </button>

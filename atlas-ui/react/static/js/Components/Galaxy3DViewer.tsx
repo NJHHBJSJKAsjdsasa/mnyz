@@ -90,7 +90,12 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
     const container = mountRef.current;
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
-    const size = Math.min(containerWidth, containerHeight);
+
+    // The server says "spiral" (lowercase, `__atlas_cache_proxy` default). The
+    // branch table below compared "Spiral" — so *every* galaxy, of every type,
+    // fell through to the fallback and rendered as a few dozen loose points. That
+    // is the whole reason the stage looked empty. Normalise once, compare lower.
+    const kind = String(galaxyType || "").trim().toLowerCase();
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000011);
@@ -102,7 +107,13 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(size, size);
+    // 2026-10-31 (P1c): fill the container instead of forcing a square. The stage
+    // is now wide, and a square canvas centred in it meant the galaxy only ever
+    // occupied the middle third with dead space either side — which read as "the
+    // galaxy is a few dots". `camera.aspect` must track it or the disc stretches.
+    renderer.setSize(containerWidth, containerHeight);
+    camera.aspect = containerWidth / Math.max(1, containerHeight);
+    camera.updateProjectionMatrix();
     renderer.setClearColor(0x000011, 1);
     rendererRef.current = renderer;
 
@@ -145,6 +156,20 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
     const rng = new SeededRandom(seed);
     const rotationAngle = rng.uniform(0, 2 * Math.PI);
 
+    // Viewing angle also belongs to the galaxy.
+    //
+    // Every galaxy was framed from the same 27° elevation, so even with different
+    // arm counts and disc thickness they all read as "the same disc, rotated". A
+    // face-on Sc galaxy and an edge-on one are different pictures before any
+    // detail is drawn, and that difference costs one call to the RNG we already
+    // have.
+    const elevation = rng.uniform(0.18, 1.25); // radians above the disc plane
+    const framing = rng.uniform(420, 500);
+    camera.position.set(0, framing * Math.sin(elevation), framing * Math.cos(elevation));
+    camera.lookAt(0, 0, 0);
+    controls.maxDistance = Math.max(controls.maxDistance, framing * 2);
+    controls.update();
+
     const starsGeometry = new THREE.BufferGeometry();
     const positions: number[] = [];
     const colors: number[] = [];
@@ -153,19 +178,28 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
     let maxRadius = 300;
     let numPoints = numSystems;
 
-    if (galaxyType === "Spiral") {
+    if (kind === "spiral") {
       ({ numPoints, maxRadius } = scaleGalaxyParams(numSystems, 50000, 350000, 300, 600));
 
-      const numArms = 4;
+      // Shape varies per galaxy, from the seed.
+      //
+      // These five were constants (4 arms, spread .15, tightness .5, core .1), so
+      // every spiral galaxy in the universe was the same picture at a different
+      // rotation — 11,038 systems or 17,475, it read as "I have seen this one".
+      // The seed was already there; it just only fed the point jitter.
+      const numArms = 2 + Math.floor(rng.uniform(0, 5)); // 2..6
       const armOffset = (2 * Math.PI) / numArms;
-      const spread = 0.15;
-      const armTightness = 0.5;
-      const coreDensity = 0.1;
+      const spread = rng.uniform(0.08, 0.24);
+      const armTightness = rng.uniform(0.32, 0.92);
+      const coreDensity = rng.uniform(0.06, 0.2);
+      // A tighter galaxy also reads as a thinner one; tying the two keeps the
+      // extremes from looking like separate generators.
+      const diskHeight = rng.uniform(2.2, 5.5) * (1.2 - armTightness * 0.5);
 
       for (let i = 0; i < numPoints * coreDensity; i++) {
         const angle = rng.uniform(0, 2 * Math.PI);
         const radius = rng.gauss(maxRadius * 0.1, maxRadius * 0.05);
-        const height = rng.gauss(0, 5);
+        const height = rng.gauss(0, diskHeight);
 
         const x = radius * Math.cos(angle);
         const z = radius * Math.sin(angle);
@@ -200,7 +234,7 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
 
         const x = radius * Math.cos(theta + armAngle + rotationAngle) + rng.uniform(-spread * radius, spread * radius);
         const z = radius * Math.sin(theta + armAngle + rotationAngle) + rng.uniform(-spread * radius, spread * radius);
-        const y = rng.gauss(0, 3);
+        const y = rng.gauss(0, diskHeight * 0.6);
 
         positions.push(x, y, z);
         colors.push(1, 1, 0.8);
@@ -219,7 +253,7 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
 
         sizes.push(Math.min(finalSize * 1.3, 8));
       }
-    } else if (galaxyType === "Elliptical") {
+    } else if (kind === "elliptical") {
       ({ numPoints, maxRadius } = scaleGalaxyParams(numSystems, 100000, 350000, 300, 600));
 
       for (let i = 0; i < numPoints; i++) {
@@ -256,7 +290,7 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
 
         sizes.push(Math.min(finalSize * 1.4, 7));
       }
-    } else if (galaxyType === "Dwarf") {
+    } else if (kind === "dwarf") {
       ({ numPoints, maxRadius } = scaleGalaxyParams(numSystems, 30000, 150000, 150, 300));
 
       for (let i = 0; i < numPoints; i++) {
@@ -283,7 +317,7 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
 
         sizes.push(Math.min(finalSize * 1.6, 8));
       }
-    } else if (galaxyType === "Singularity Void") {
+    } else if (kind === "singularity void") {
       numPoints = 10000;
 
       for (let i = 0; i < numPoints; i++) {
@@ -718,7 +752,7 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
 
       const starMaterial = new THREE.ShaderMaterial({
         uniforms: {
-          viewportHeight: { value: size },
+          viewportHeight: { value: containerHeight },
           bhPositions: { value: bhPosVectors },
           bhCount: { value: Math.min(blackHolePositions.length, 20) },
           cameraPos: { value: camera.position.clone() },
@@ -819,10 +853,12 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
       starsGeometry.setAttribute("size", new THREE.Float32BufferAttribute(sizes, 1));
 
       const starMaterial = new THREE.PointsMaterial({
-        size: 2,
+        // 2 → 3.4: at the old square-canvas camera distance a 2px attenuated point
+        // was a single lit pixel, so a 1,000-system galaxy read as a dozen dots.
+        size: 3.4,
         vertexColors: true,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         blending: THREE.AdditiveBlending,
         sizeAttenuation: true,
       });
@@ -1253,13 +1289,14 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
     const handleResize = () => {
       if (!mountRef.current || !renderer) return;
       const container = mountRef.current;
-      const size = Math.min(container.clientWidth, container.clientHeight);
-      renderer.setSize(size, size);
-      camera.aspect = 1;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      renderer.setSize(width, height);
+      camera.aspect = width / Math.max(1, height);
       camera.updateProjectionMatrix();
       galaxyGroup.traverse((obj: any) => {
         if (obj.isPoints && obj.material?.uniforms?.viewportHeight) {
-          obj.material.uniforms.viewportHeight.value = size;
+          obj.material.uniforms.viewportHeight.value = height;
         }
       });
     };
@@ -1429,11 +1466,11 @@ const Galaxy3DViewer = forwardRef<{ captureScreenshot: () => void; isGeneratingI
 
         {sceneLoaded && (
           <div className="absolute top-2 right-2 flex gap-2 z-10">
-            <button onClick={handleDownloadScreenshot} disabled={isGeneratingImage} className={`p-2 border border-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`} title={isGeneratingImage ? "Generating image..." : "Download 4K screenshot"}>
+            <button onClick={handleDownloadScreenshot} disabled={isGeneratingImage} className={`p-2 border border-white/30 rounded-lg transition-all duration-200  shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`} title={isGeneratingImage ? "Generating image..." : "Download 4K screenshot"}>
               {isGeneratingImage ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <DownloadIcon className="w-4 h-4 text-white" />}
             </button>
             {onExpandClick && (
-              <button onClick={onExpandClick} disabled={isGeneratingImage} className={`p-2 border border-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`} title={isGeneratingImage ? "Please wait..." : "Expand to fullscreen"}>
+              <button onClick={onExpandClick} disabled={isGeneratingImage} className={`p-2 border border-white/30 rounded-lg transition-all duration-200  shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`} title={isGeneratingImage ? "Please wait..." : "Expand to fullscreen"}>
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                 </svg>

@@ -1,6 +1,20 @@
-// atlas-ui/react/static/js/Components/SystemsList.tsx
+// atlas-ui/react/static/js/Components/SystemsList.tsx — the systems of a galaxy,
+// as rail rows instead of a grid of cards.
+//
+// 2026-10-31 (P1 of docs/frontend-redesign/16-shell-unification.md): the list used
+// to be the page body — a 2-to-6 column card grid with a hover overlay, sitting
+// under a 90px centred title. It is now the left rail's content, so it is a
+// single column of rows divided by the deck seam (`.rail-row` in tokens.css).
+// Nothing moved out of the component: visit state, the eye markers and the
+// click target are all unchanged.
+//
+// Navigation is still a full page load. P2 replaces this `window.location` with
+// the shell's `navigate()`; do not convert it piecemeal before then.
+
 import React, { useEffect, useState } from "react";
 import { getSystemVisitStatus } from "../Utils/VisitHistory.tsx";
+import { go } from "../Utils/PageNavigation.ts";
+import { matchesSystem, normalizeQuery } from "../Shell/railFilter.ts";
 import EyeOpenIcon from "../Icons/EyeOpenIcon.tsx";
 import EyeClosedIcon from "../Icons/EyeClosedIcon.tsx";
 
@@ -14,9 +28,13 @@ interface System {
 interface SystemsListProps {
   systems: System[];
   coordinates: string;
+  /** Current system index, when the rail is showing the system you are in. */
+  activeIndex?: number;
+  /** Substring filter from the rail's search box (P3). Empty shows everything. */
+  query?: string;
 }
 
-const SystemsList: React.FC<SystemsListProps> = ({ systems, coordinates }) => {
+const SystemsList: React.FC<SystemsListProps> = ({ systems, coordinates, activeIndex, query = "" }) => {
   const [systemVisitStates, setSystemVisitStates] = useState<Map<number, "none" | "partial" | "complete">>(new Map());
 
   useEffect(() => {
@@ -36,47 +54,52 @@ const SystemsList: React.FC<SystemsListProps> = ({ systems, coordinates }) => {
     loadHistoricalData();
   }, [coordinates, systems]);
 
-  return (
-    <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-6">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
-        {systems.map((system) => (
-          <div key={system.index} className="relative bg-white/10 rounded-lg border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all duration-300 group">
-            {(() => {
-              const visitStatus = systemVisitStates.get(system.index) || "none";
-              if (visitStatus === "complete") {
-                return (
-                  <div className="absolute top-1 right-1 z-10" title="System fully explored">
-                    <EyeOpenIcon className="text-green-400" />
-                  </div>
-                );
-              } else if (visitStatus === "partial") {
-                return (
-                  <div className="absolute top-1 right-1 z-10" title="System partially explored">
-                    <EyeClosedIcon className="text-yellow-400" />
-                  </div>
-                );
-              }
-              return null;
-            })()}
+  const needle = normalizeQuery(query);
+  const visible = needle ? systems.filter((system) => matchesSystem(system, needle)) : systems;
 
-            <button onClick={() => (window.location.href = `/system/${system.index}`)} className="w-full text-left block p-2 sm:p-3 text-gray-200 hover:text-white transition-colors duration-300 rounded-lg">
-              <div className="text-center">
-                <div className="text-xs text-gray-400 mb-1">#{system.number}</div>
-                <div className="text-sm font-semibold text-white truncate group-hover:text-blue-300 transition-colors duration-300">{system.name}</div>
-              </div>
-
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </button>
-          </div>
-        ))}
+  if (systems.length === 0) {
+    return (
+      <div style={{ display: "grid", gap: 4, padding: "16px 0", textAlign: "center" }}>
+        <span style={{ fontSize: 11.5, color: "var(--atlas-n-700)" }}>未找到系统</span>
+        <span style={{ fontSize: 10.5, color: "var(--atlas-n-600)" }}>该星系似乎为空</span>
       </div>
+    );
+  }
 
-      {systems.length === 0 && (
-        <div className="col-span-full text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">未找到系统</div>
-          <div className="text-gray-500 text-sm">该星系似乎为空</div>
-        </div>
-      )}
+  if (visible.length === 0) {
+    return (
+      <div style={{ display: "grid", gap: 4, padding: "16px 0", textAlign: "center" }}>
+        <span style={{ fontSize: 11.5, color: "var(--atlas-n-700)" }}>本页无匹配</span>
+        <span style={{ fontSize: 10.5, color: "var(--atlas-n-600)" }}>搜索只覆盖当前页的 {systems.length} 个系统</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rail-list">
+      {visible.map((system) => {
+        const visitStatus = systemVisitStates.get(system.index) || "none";
+        return (
+          <button
+            key={system.index}
+            type="button"
+            className="rail-row"
+            data-active={system.index === activeIndex ? "true" : undefined}
+            onClick={() => void go(`/system/${system.index}`)}
+            title={system.name}
+          >
+            <span className="rail-row__idx">#{system.number}</span>
+            <span className="rail-row__name">{system.name}</span>
+            {visitStatus === "complete" ? (
+              <EyeOpenIcon className="w-3 h-3 text-green-400" />
+            ) : visitStatus === "partial" ? (
+              <EyeClosedIcon className="w-3 h-3 text-yellow-400" />
+            ) : (
+              <span aria-hidden style={{ width: 12 }} />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 };

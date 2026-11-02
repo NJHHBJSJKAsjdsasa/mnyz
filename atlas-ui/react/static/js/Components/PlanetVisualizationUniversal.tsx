@@ -40,9 +40,11 @@ interface PlanetVisualizationUniversalProps {
   effects?: any[];
   onToggleEffect?: (effectId: string, enabled: boolean) => void;
   onMoonSelected?: (moon: any | null) => void;
+  /** Fill the parent instead of sitting in a 384px square (see P1b of 16-shell-unification). */
+  fill?: boolean;
 }
 
-const PlanetVisualizationUniversal: React.FC<PlanetVisualizationUniversalProps> = ({ planetUrl, planet, cosmicOriginTime, initialAngleRotation, onEffectsCreated, effects, onToggleEffect, onMoonSelected }) => {
+const PlanetVisualizationUniversal: React.FC<PlanetVisualizationUniversalProps> = ({ planetUrl, planet, cosmicOriginTime, initialAngleRotation, onEffectsCreated, effects, onToggleEffect, onMoonSelected, fill = false }) => {
   const decelerateRef = useRef(false);
   const planetRendererRef = useRef<{ captureScreenshot: () => void; isGeneratingImage: boolean; toggleEffect: (effectId: string, enabled: boolean) => void } | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -120,11 +122,17 @@ const PlanetVisualizationUniversal: React.FC<PlanetVisualizationUniversalProps> 
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
+      <div className={fill ? "hidden" : "flex items-center justify-between mb-3"}>
         <h3 className="text-lg sm:text-xl font-bold text-white">Planet Visualization</h3>
       </div>
 
-      <div className="relative w-full max-w-80 sm:max-w-96 aspect-square mx-auto bg-black flex justify-center items-center rounded-xl overflow-hidden border-2 border-blue-400/30 mb-4">
+      <div
+        className={
+          fill
+            ? "relative w-full flex-1 min-h-[280px] bg-black flex justify-center items-center rounded-none overflow-hidden border border-[rgba(46,230,255,.25)]"
+            : "relative w-full max-w-80 sm:max-w-96 aspect-square mx-auto bg-black flex justify-center items-center rounded-none overflow-hidden border-2 border-blue-400/30 mb-4"
+        }
+      >
         <AdaptivePreloadCanvas hidden={canvasHidden} decelerateRef={decelerateRef} />
 
         {imageLoaded && planet && (

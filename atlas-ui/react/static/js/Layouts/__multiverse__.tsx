@@ -230,14 +230,13 @@ const MultiverseLayout: React.FC = () => {
       }
     };
 
+    // Same static config element as __main__: one read is enough.
     checkUniverseConfig();
-    const interval = setInterval(checkUniverseConfig, 1000);
-    return () => clearInterval(interval);
   }, []);
 
   if (loading && !data) {
     return (
-      <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col">
+      <div className="w-full min-h-screen atlas-page text-white flex flex-col">
         <div className="relative z-10 pt-1 flex-1 flex flex-col">
           <Header />
           <div className="flex items-center justify-center h-[60vh] flex-1">
@@ -252,7 +251,7 @@ const MultiverseLayout: React.FC = () => {
   }
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col">
+    <div className="w-full min-h-screen atlas-page text-white flex flex-col">
       <div
         className="absolute inset-0 opacity-20"
         style={{
@@ -268,7 +267,7 @@ const MultiverseLayout: React.FC = () => {
 
         <div className="w-full px-2 sm:px-4 lg:px-6 py-4 sm:py-8 flex-1">
           <div className="text-center mb-6">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">多元宇宙网络</h1>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-[0.04em] mb-4">多元宇宙网络</h1>
             <p className="text-sm text-gray-300 mb-4">已连接的P2P宇宙实例</p>
 
             <div className="flex items-center justify-center gap-2 text-xs flex-wrap mb-4">
@@ -327,7 +326,7 @@ const MultiverseLayout: React.FC = () => {
 
             {showPortMessage && (
               <div className="mt-4 max-w-4xl mx-auto">
-                <div className="bg-gradient-to-r from-blue-900/40 via-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-xl border border-blue-500/40 p-4 shadow-xl relative">
+                <div className="bg-blue-900/40 hover:bg-purple-900/40 rounded-none border border-blue-500/40 p-4 shadow-xl relative">
                   <button onClick={dismissPortMessage} className="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors p-1" aria-label="Dismiss message">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -351,7 +350,7 @@ const MultiverseLayout: React.FC = () => {
 
           {universeConfig?.remote && (
             <div className="mb-8">
-              <div className="bg-gradient-to-r from-amber-900/30 via-orange-900/30 to-amber-900/30 backdrop-blur-lg rounded-2xl border border-amber-500/40 p-4 sm:p-6 shadow-2xl">
+              <div className="bg-amber-900/30 rounded-none border border-amber-500/40 p-4 sm:p-6 shadow-2xl">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="text-center sm:text-left">
@@ -376,7 +375,7 @@ const MultiverseLayout: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <button onClick={handleReturnToOriginalUniverse} className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-amber-500/25 flex items-center gap-2 w-full text-center sm:w-auto justify-center">
+                  <button onClick={handleReturnToOriginalUniverse} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-6 rounded-none transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-amber-500/25 flex items-center gap-2 w-full text-center sm:w-auto justify-center">
                     <UniverseIcon size={18} color="white" />
                     <span>返回你的宇宙</span>
                   </button>
@@ -386,7 +385,7 @@ const MultiverseLayout: React.FC = () => {
           )}
 
           {error && (
-            <div className="bg-red-500/20 backdrop-blur-lg rounded-2xl border border-red-500/50 p-6 mb-8">
+            <div className="bg-red-500/20 rounded-none border border-red-500/50 p-6 mb-8">
               <p className="text-red-300 text-center">{error}</p>
             </div>
           )}
@@ -413,10 +412,10 @@ const MultiverseLayout: React.FC = () => {
                         : group.cosmic_origin_time;
 
                     return (
-                      <div key={`${group.seed}-${index}`} className={`bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-6 shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 hover:scale-[1.02] ${statusStyle.opacity} relative group ${isCurrentlyExploring(group.seed) ? "border-amber-500/50 ring-2 ring-amber-400/20" : ""}`}>
+                      <div key={`${group.seed}-${index}`} className={`atlas-hud p-6 shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 hover:scale-[1.02] ${statusStyle.opacity} relative group ${isCurrentlyExploring(group.seed) ? "border-amber-500/50 ring-2 ring-amber-400/20" : ""}`}>
                         {isCurrentlyExploring(group.seed) && (
                           <div className="absolute -top-2 -left-2 z-10">
-                            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold py-1 px-2 rounded-full shadow-lg flex items-center gap-1 animate-pulse">
+                            <div className="bg-amber-500 hover:bg-orange-500 text-white text-xs font-bold py-1 px-2 rounded-full shadow-lg flex items-center gap-1 animate-pulse">
                               <UniverseIcon size={12} color="white" />
                               <span>正在探索</span>
                             </div>
@@ -432,7 +431,7 @@ const MultiverseLayout: React.FC = () => {
 
                         <div className="flex items-start justify-between mb-4 pr-20">
                           <div className="flex-1">
-                            <h3 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{contentFilter.getDisplayText(group.seed_name)}</h3>
+                            <h3 className="text-xl font-bold text-amber-400">{contentFilter.getDisplayText(group.seed_name)}</h3>
                           </div>
                         </div>
 
@@ -498,11 +497,11 @@ const MultiverseLayout: React.FC = () => {
 
                         <div className="mt-4 pt-4 border-t border-white/10">
                           {isCurrentlyExploring(group.seed) ? (
-                            <div className="w-full bg-gradient-to-r from-amber-600/50 to-orange-600/50 text-amber-200 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-amber-500/30">
+                            <div className="w-full bg-amber-600/50 hover:bg-orange-600/50 text-amber-200 font-semibold py-3 px-4 rounded-none flex items-center justify-center gap-2 border border-amber-500/30">
                               <span>你在这里</span>
                             </div>
                           ) : (
-                            <button onClick={() => handleUniverseExploration(group)} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-purple-500/25">
+                            <button onClick={() => handleUniverseExploration(group)} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-none transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-purple-500/25">
                               探索这个宇宙
                             </button>
                           )}
@@ -545,7 +544,7 @@ const MultiverseLayout: React.FC = () => {
                             : group.cosmic_origin_time;
 
                         return (
-                          <div key={`filtered-${group.seed}-${index}`} className="bg-red-900/20 backdrop-blur-lg rounded-lg border border-red-500/30 p-3 shadow-lg opacity-60 relative">
+                          <div key={`filtered-${group.seed}-${index}`} className="bg-red-900/20 rounded-lg border border-red-500/30 p-3 shadow-lg opacity-60 relative">
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1 min-w-0">
                                 <h3 className="text-sm font-bold text-red-400 truncate">{nameFiltered.isBlocked ? "Forbidden" : group.seed_name}</h3>
@@ -587,14 +586,14 @@ const MultiverseLayout: React.FC = () => {
           )}
 
           {data && data.groups && data.groups.length === 0 && (
-            <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-12 text-center">
+            <div className="atlas-hud p-12 text-center">
               <p className="text-xl text-gray-400 mb-2">No Multiverse Connections Found</p>
               <p className="text-sm text-gray-500 mb-4">Waiting for P2P peers to connect...</p>
             </div>
           )}
 
           {!data && !loading && (
-            <div className="bg-red-500/20 backdrop-blur-lg rounded-2xl border border-red-500/50 p-12 text-center">
+            <div className="bg-red-500/20 rounded-none border border-red-500/50 p-12 text-center">
               <p className="text-xl text-red-400 mb-2">No Data Received</p>
               <p className="text-sm text-red-300">Check browser console for details</p>
             </div>

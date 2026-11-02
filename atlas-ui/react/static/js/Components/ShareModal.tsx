@@ -73,7 +73,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, url, title = "
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
       style={{
         opacity: isVisible ? 1 : 0,
         transition: "opacity 300ms ease-in-out",
@@ -81,7 +81,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, url, title = "
       onClick={handleClose}
     >
       <div
-        className="bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative"
+        className="bg-slate-800 rounded-none shadow-2xl w-full max-w-md p-6 relative"
         style={{
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "scale(1)" : "scale(0.95)",

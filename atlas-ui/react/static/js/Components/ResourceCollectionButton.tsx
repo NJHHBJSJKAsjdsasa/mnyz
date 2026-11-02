@@ -8,6 +8,8 @@ import { UnifiedSpaceshipStorage } from "../Utils/UnifiedSpaceshipStorage.tsx";
 import AntimatterIcon from "../Icons/AntimatterIcon.tsx";
 import DeuteriumIcon from "../Icons/DeuteriumIcon.tsx";
 import Element115Icon from "../Icons/Element115Icon.tsx";
+import { subscribeClock } from "../Utils/clock.tsx";
+import { RESOURCE_COLOR } from "../Icons/palette.ts";
 
 interface ResourceCollectionButtonProps {
   locationType: "galaxy" | "system" | "planet";
@@ -49,8 +51,7 @@ const ResourceCollectionButton: React.FC<ResourceCollectionButtonProps> = ({ loc
 
     updateState();
 
-    const interval = setInterval(updateState, 1000);
-    return () => clearInterval(interval);
+    return subscribeClock(updateState);
   }, [locationType, coordinates, systemIndex, planetName]);
 
   const handleCollect = async () => {
@@ -163,11 +164,11 @@ const ResourceCollectionButton: React.FC<ResourceCollectionButtonProps> = ({ loc
     const reward = SpaceshipResourceCollectionManager.calculateReward(locationType, coordinates, collectionCount, planetData, true);
     return (
       <span className="inline-flex items-center gap-1">
-        <AntimatterIcon size={8} color="#c084fc" />
+        <AntimatterIcon size={8} color={RESOURCE_COLOR.antimatter} />
         {reward.antimatter}AM |
-        <Element115Icon size={8} color="#67e8f9" />
+        <Element115Icon size={8} color={RESOURCE_COLOR.element115} />
         {reward.element115}E115 |
-        <DeuteriumIcon size={8} color="#fb923c" />
+        <DeuteriumIcon size={8} color={RESOURCE_COLOR.deuterium} />
         {reward.deuterium}D
       </span>
     );
@@ -202,7 +203,7 @@ const ResourceCollectionButton: React.FC<ResourceCollectionButtonProps> = ({ loc
   };
 
   return (
-    <button onClick={handleCollect} disabled={!canCollect || isCollecting} className={`relative inline-flex items-center space-x-1 px-1.5 py-0.5 rounded transition-all duration-200 text-[10px] font-medium h-[21px] box-border ${isCollecting ? "bg-blue-500/20 border border-blue-500/50 text-blue-400" : canCollect ? "bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 text-white hover:text-blue-300" : isDailyLimitReached() ? "bg-red-500/20 border border-red-500/50 text-red-400" : "bg-gray-500/20 border border-gray-500/50 text-gray-400"} ${className}`} title={getTooltipText()}>
+    <button onClick={handleCollect} disabled={!canCollect || isCollecting} className={`relative inline-flex items-center space-x-1 px-1.5 py-0.5 rounded transition-all duration-200 text-[10px] font-medium h-[21px] box-border ${isCollecting ? "bg-blue-500/20 border border-blue-500/50 text-blue-400" : canCollect ? "bg-plate-2 hover:bg-[var(--atlas-line-strong)] border border-white/20 hover:border-white/40 text-white hover:text-blue-300" : isDailyLimitReached() ? "bg-red-500/20 border border-red-500/50 text-red-400" : "bg-gray-500/20 border border-gray-500/50 text-gray-400"} ${className}`} title={getTooltipText()}>
       {getButtonIcon()}
       <span className="text-[10px] uppercase">{getButtonText()}</span>
 

@@ -275,7 +275,7 @@ const StockMarketPanel: React.FC = () => {
             className={`rounded px-2 py-1 text-[11px] ${
               span === interval
                 ? "bg-indigo-500/30 text-indigo-100"
-                : "bg-white/5 text-gray-400 hover:bg-white/10"
+                : "bg-white/[0.04] text-gray-400 hover:bg-plate-2"
             }`}
           >
             {span}
@@ -374,7 +374,7 @@ const StockMarketPanel: React.FC = () => {
             key={id}
             onClick={() => setTab(id)}
             className={`rounded px-3 py-1 text-xs ${
-              tab === id ? "bg-indigo-500/30 text-indigo-100" : "bg-white/5 text-gray-400 hover:bg-white/10"
+              tab === id ? "bg-indigo-500/30 text-indigo-100" : "bg-white/[0.04] text-gray-400 hover:bg-plate-2"
             }`}
           >
             {label}

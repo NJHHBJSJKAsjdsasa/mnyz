@@ -36,7 +36,7 @@ const BranchCard: React.FC<{ branch: (typeof TECH_BRANCHES)[number]; onUnlocked:
   };
 
   return (
-    <div className="rounded-lg border border-indigo-500/20 bg-white/5 p-2">
+    <div className="rounded-lg border border-indigo-500/20 bg-white/[0.04] p-2">
       <div className="flex items-center justify-between text-xs">
         <span className="text-gray-200">
           {branch.icon} {branch.name}
@@ -51,7 +51,7 @@ const BranchCard: React.FC<{ branch: (typeof TECH_BRANCHES)[number]; onUnlocked:
           const check = TechSystem.canUnlock(node.id);
 
           return (
-            <div key={node.id} className={`rounded px-2 py-1 border ${unlocked ? "bg-indigo-500/15 border-indigo-500/40" : "bg-white/5 border-dashed border-white/10"}`}>
+            <div key={node.id} className={`rounded px-2 py-1 border ${unlocked ? "bg-indigo-500/15 border-indigo-500/40" : "bg-white/[0.04] border-dashed border-white/10"}`}>
               <div className="flex items-center justify-between gap-2 text-[11px]">
                 <span className={unlocked ? "text-indigo-200" : "text-gray-400"}>
                   T{node.tier} {node.name}

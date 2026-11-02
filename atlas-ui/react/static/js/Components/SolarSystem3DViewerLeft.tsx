@@ -289,6 +289,10 @@ const SolarSystem3DViewerLeft = forwardRef<{ captureScreenshot: () => void; isGe
         Nebulous: "#FFC0CB",
         Aquifer: "#00FFFF",
         Exotic: "#FF00FF",
+        "Super Puff": "#F7C6D9",
+        "Super Ringed": "#E3C99A",
+        "Mirror": "#D9DEE6",
+        "Ruby Cloud": "#9B111E",
       };
 
       const starColors: { [key: string]: string } = {
@@ -739,7 +743,7 @@ const SolarSystem3DViewerLeft = forwardRef<{ captureScreenshot: () => void; isGe
           )}
 
           <div className="absolute top-2 right-2 flex gap-2 z-10">
-            <button onClick={handleDownloadScreenshot} disabled={isGeneratingImage} className={`p-2 border border-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`} title={isGeneratingImage ? "Generating image..." : "Download 4K screenshot"}>
+            <button onClick={handleDownloadScreenshot} disabled={isGeneratingImage} className={`p-2 border border-white/30 rounded-lg transition-all duration-200  shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`} title={isGeneratingImage ? "Generating image..." : "Download 4K screenshot"}>
               {isGeneratingImage ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <DownloadIcon className="w-4 h-4 text-white" />}
             </button>
             <button
@@ -750,7 +754,7 @@ const SolarSystem3DViewerLeft = forwardRef<{ captureScreenshot: () => void; isGe
                 }
               }}
               disabled={isGeneratingImage}
-              className={`p-2 border border-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`}
+              className={`p-2 border border-white/30 rounded-lg transition-all duration-200  shadow-lg ${isGeneratingImage ? "bg-black/40 cursor-not-allowed opacity-50" : "bg-black/60 hover:bg-black/80"}`}
               title={isGeneratingImage ? "Please wait..." : "Expand to fullscreen"}
             >
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -763,7 +767,7 @@ const SolarSystem3DViewerLeft = forwardRef<{ captureScreenshot: () => void; isGe
 
       {isFullscreen &&
         createPortal(
-          <div className={`fixed inset-0 z-50 bg-black/95 backdrop-blur-xl transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : isEntering ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>
+          <div className={`fixed inset-0 z-50 bg-black/95  transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : isEntering ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>
             <div className={`w-full h-full flex flex-col p-1 sm:p-2 transition-all duration-300 delay-75 ${isClosing ? "opacity-0 translate-y-4" : isEntering ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"}`}>
               <div className="flex items-center justify-between mb-2 sm:mb-4">
                 <div className="block sm:hidden">

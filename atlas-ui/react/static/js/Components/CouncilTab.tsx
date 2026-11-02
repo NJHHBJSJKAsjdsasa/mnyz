@@ -145,7 +145,7 @@ const CouncilTab: React.FC = () => {
       <div className="space-y-2">
         {data.motions.length === 0 && <div className="text-[11px] text-gray-500">暂无动议。</div>}
         {data.motions.map((motion) => (
-          <div key={motion.id} className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div key={motion.id} className="rounded-lg border border-white/10 bg-white/[0.04] p-2">
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <span className="text-gray-200">
                 {motion.kind === "sector_license"

@@ -84,8 +84,8 @@ const SurfaceSurvey: React.FC<SurfaceSurveyProps> = ({ planetKey, planetName, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="w-full max-w-md rounded-xl border border-cyan-500/30 bg-slate-950/95 p-3">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3">
+      <div className="w-full max-w-md rounded-none border border-cyan-500/30 bg-slate-950/95 p-3">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-bold text-cyan-300">地表采样 · {planetName.replace(/_/g, " ")}</span>
           <span className="text-[11px] text-gray-400">

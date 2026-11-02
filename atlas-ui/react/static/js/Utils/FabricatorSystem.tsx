@@ -3,6 +3,7 @@
 // No new resource types — everything trades inside the existing twelve.
 
 import { getItem, setItem } from "./b64.tsx";
+import { ServerApi } from "./ServerApi.tsx";
 import { SpaceshipResourceManager } from "./SpaceshipResources.tsx";
 import { UnifiedSpaceshipStorage } from "./UnifiedSpaceshipStorage.tsx";
 import { ResourceEventManager } from "./ResourceEventManager.tsx";
@@ -57,14 +58,55 @@ interface CraftStore {
   last: Record<string, number>;
 }
 
+/** Cooldowns as reported by the server; the local map is only a render cache. */
+let serverCooldowns: Record<string, number> = {};
+
+const applyView = (view: any): void => {
+  const next: Record<string, number> = {};
+  (view?.recipes || []).forEach((item: any) => {
+    const remaining = Number(item.cooldown_remaining_ms || 0);
+    if (remaining > 0) next[item.code] = Date.now() + remaining;
+  });
+  serverCooldowns = next;
+};
+
+const hydrate = (balances: Record<string, string> | undefined): void => {
+  if (!balances) return;
+  const current = { ...SpaceshipResourceManager.getResources() } as unknown as Record<string, number>;
+  let touched = false;
+  Object.entries(balances).forEach(([code, value]) => {
+    if (code in current) {
+      current[code] = Math.max(0, Math.round(Number(value)));
+      touched = true;
+    }
+  });
+  if (touched) UnifiedSpaceshipStorage.setResources(current as Parameters<typeof UnifiedSpaceshipStorage.setResources>[0]);
+};
+
+const formatGain = (bag: Partial<SpaceshipResource>): string =>
+  Object.entries(bag)
+    .map(([key, amount]) => `${key} ${amount}`)
+    .join(" · ");
+
 export class FabricatorSystem {
   static recipes(): Recipe[] {
     return RECIPES;
   }
 
+  /** Pull the authoritative cooldown table (server owns the clock). */
+  static async sync(): Promise<void> {
+    try {
+      applyView(await ServerApi.request("/api/v1/craft"));
+    } catch (error) {
+      console.warn("[atlas] craft view failed", error);
+    }
+  }
+
   static remainingMs(recipeId: string): number {
     const recipe = RECIPES.find((item) => item.id === recipeId);
     if (!recipe) return 0;
+    const fromServer = serverCooldowns[recipeId];
+    if (fromServer !== undefined) return Math.max(0, fromServer - Date.now());
     const last = FabricatorSystem.load().last[recipeId] ?? 0;
     return Math.max(0, last + recipe.cooldownMs - Date.now());
   }
@@ -81,24 +123,30 @@ export class FabricatorSystem {
     return affordable ? { ok: true } : { ok: false, reason: "原料不足" };
   }
 
-  static craft(recipeId: string): boolean {
+  /**
+   * Run a recipe on the server. The local wallet is overwritten with the ledger's
+   * answer, and the cooldown comes from the response — never from `Date.now()`.
+   */
+  static async run(recipeId: string): Promise<{ ok: boolean; message: string }> {
     const recipe = RECIPES.find((item) => item.id === recipeId);
-    if (!recipe || !FabricatorSystem.canCraft(recipeId).ok) return false;
-
-    const resources = SpaceshipResourceManager.getResources();
-    const updated = { ...resources };
-    Object.entries(recipe.cost).forEach(([key, amount]) => {
-      updated[key as keyof SpaceshipResource] = (updated[key as keyof SpaceshipResource] ?? 0) - (amount ?? 0);
-    });
-    UnifiedSpaceshipStorage.setResources(updated);
-    SpaceshipResourceManager.addResources(recipe.output);
-
-    const store = FabricatorSystem.load();
-    store.last[recipeId] = Date.now();
-    FabricatorSystem.save(store);
-
-    ResourceEventManager.emit("resources_updated");
-    return true;
+    if (!recipe) return { ok: false, message: "配方不存在" };
+    try {
+      const result = await ServerApi.request(`/api/v1/craft/${encodeURIComponent(recipeId)}/run`, {
+        method: "POST",
+        headers: { "Idempotency-Key": globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
+        body: "{}",
+      });
+      hydrate(result?.balances);
+      const remaining = Number(result?.cooldown_remaining_ms || 0);
+      serverCooldowns[recipeId] = Date.now() + remaining;
+      const store = FabricatorSystem.load();
+      store.last[recipeId] = Date.now();
+      FabricatorSystem.save(store);
+      ResourceEventManager.emit("resources_updated");
+      return { ok: true, message: `${recipe.name} 完成：${formatGain(recipe.output)}` };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "生产失败" };
+    }
   }
 
   private static load(): CraftStore {

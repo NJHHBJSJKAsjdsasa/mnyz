@@ -3,6 +3,7 @@
 // (archive stats, refit levels, codex). Nothing new is written per action.
 
 import { getItem, setItem } from "./b64.tsx";
+import { ServerApi } from "./ServerApi.tsx";
 import { DailyChallengesManager } from "./DailyChallenges.tsx";
 import { CodexSystem } from "./CodexSystem.tsx";
 import { UnifiedSpaceshipStorage } from "./UnifiedSpaceshipStorage.tsx";
@@ -70,8 +71,56 @@ const progressOf = (metric: WeeklyMetric): number => {
   }
 };
 
+/** Last snapshot the server returned; the local computation is only a fallback. */
+let serverSnapshot: WeeklySnapshot | null = null;
+
+const fromServer = (data: any): WeeklySnapshot => ({
+  weekKey: String(data?.week_key || ""),
+  tasks: (data?.tasks || []).map((task: any) => ({
+    id: task.id as WeeklyMetric,
+    title: String(task.title || ""),
+    current: Number(task.current || 0),
+    target: Number(task.target || 0),
+    done: Boolean(task.done),
+  })),
+  allDone: Boolean(data?.all_done),
+  claimed: Boolean(data?.claimed),
+  daysLeft: Number(data?.days_left || 0),
+  reward: (data?.reward || {}) as Partial<SpaceshipResource>,
+});
+
 export class WeeklyChallenges {
+  /** Pull the authoritative snapshot (targets scale server-side with account age). */
+  static async sync(): Promise<WeeklySnapshot | null> {
+    try {
+      serverSnapshot = fromServer(await ServerApi.request("/api/v1/weekly"));
+      return serverSnapshot;
+    } catch (error) {
+      console.warn("[atlas] weekly view failed", error);
+      return null;
+    }
+  }
+
+  /** Claim on the server; the reward is credited to the ledger, not to localStorage. */
+  static async claimAsync(): Promise<{ ok: boolean; message: string }> {
+    try {
+      const result = await ServerApi.request("/api/v1/weekly/claim", {
+        method: "POST",
+        headers: { "Idempotency-Key": globalThis.crypto?.randomUUID?.() || `${Date.now()}` },
+        body: "{}",
+      });
+      await WeeklyChallenges.sync();
+      const gained = Object.entries(result?.gained || {})
+        .map(([code, amount]) => `${code} ${amount}`)
+        .join(" · ");
+      return { ok: true, message: `周目标奖励已发放：${gained}` };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "领取失败" };
+    }
+  }
+
   static snapshot(): WeeklySnapshot {
+    if (serverSnapshot) return serverSnapshot;
     const weekKey = weekKeyOf();
     const store = WeeklyChallenges.load(weekKey);
     const weeksPlayed = Math.max(1, Math.ceil(DailyChallengesManager.getDayInfo().dayNumber / 7));

@@ -81,14 +81,14 @@ const mapServerState = (data: any, max: ServerMax): CombatState => {
 const bar = (current: number, max: number, tone: string): string => (max <= 0 ? "0%" : `${Math.max(0, Math.min(100, Math.round((current / max) * 100)))}%`);
 
 const ShipBlock: React.FC<{ ship: CombatShip; tone: "player" | "enemy" }> = ({ ship, tone }) => (
-  <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+  <div className="rounded-lg border border-white/10 bg-white/[0.04] p-2">
     <div className="flex items-center justify-between text-[11px]">
       <span className={tone === "player" ? "text-emerald-300" : "text-red-300"}>{ship.name}</span>
       <span className="text-gray-400">
         装甲 {ship.hp}/{ship.hpMax} · 护盾 {ship.shield}/{ship.shieldMax}
       </span>
     </div>
-    <div className="mt-1 h-1.5 rounded bg-white/10 overflow-hidden">
+    <div className="mt-1 h-1.5 rounded bg-plate-2 overflow-hidden">
       <div className={`h-full ${tone === "player" ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: bar(ship.hp, ship.hpMax, tone) }} />
     </div>
   </div>
@@ -210,8 +210,8 @@ const CombatPanel: React.FC<CombatPanelProps> = ({ planetKey, coordinates, chall
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="w-full max-w-lg rounded-xl border border-red-500/30 bg-slate-950/95 p-3 shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3">
+      <div className="w-full max-w-lg rounded-none border border-red-500/30 bg-slate-950/95 p-3 shadow-2xl">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-bold text-red-300">{challenge ? "🎯 模拟对决" : "⚔ 遭遇战"}</span>
           <span className="text-[11px] text-gray-400">第 {state.turn} 回合</span>
@@ -247,7 +247,7 @@ const CombatPanel: React.FC<CombatPanelProps> = ({ planetKey, coordinates, chall
                 onClick={() => void act(action.id)}
                 disabled={loading}
                 title={action.hint}
-                className="px-2 py-1.5 rounded-md text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all disabled:opacity-40"
+                className="px-2 py-1.5 rounded-md text-xs font-semibold bg-plate-2 hover:bg-[var(--atlas-line-strong)] text-white border border-white/10 transition-all disabled:opacity-40"
               >
                 {action.label}
               </button>
@@ -262,7 +262,7 @@ const CombatPanel: React.FC<CombatPanelProps> = ({ planetKey, coordinates, chall
             ))}
             <button
               onClick={onClose}
-              className="w-full mt-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-white transition-all"
+              className="w-full mt-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all"
             >
               关闭
             </button>

@@ -115,7 +115,7 @@ const TradeTab: React.FC<TradeTabProps> = ({ planetKey, coordinates }) => {
       </div>
 
       {goods.map((good) => (
-        <div key={good.resource} className="rounded-lg border border-yellow-500/20 bg-white/5 p-3">
+        <div key={good.resource} className="rounded-lg border border-yellow-500/20 bg-white/[0.04] p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xl">{good.icon}</span>
@@ -136,7 +136,7 @@ const TradeTab: React.FC<TradeTabProps> = ({ planetKey, coordinates }) => {
             <button
               onClick={() => handleBuy(good)}
               disabled={good.stock <= 0}
-              className="py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="py-1.5 rounded-md text-xs font-semibold bg-yellow-600 hover:bg-yellow-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               买入 1
             </button>

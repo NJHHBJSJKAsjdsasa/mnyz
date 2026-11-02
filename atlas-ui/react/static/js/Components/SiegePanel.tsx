@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { SpaceshipResourceManager } from "../Utils/SpaceshipResources.tsx";
 import { ResourceEventManager } from "../Utils/ResourceEventManager.tsx";
 import { ServerApi } from "../Utils/ServerApi.tsx";
+import { subscribeClock } from "../Utils/clock.tsx";
 
 interface SiegePanelProps {
   planetKey: string;
@@ -67,8 +68,7 @@ const SiegePanel: React.FC<SiegePanelProps> = ({ planetKey }) => {
       return;
     }
     void loadDetail(siegeId);
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
+    return subscribeClock((value) => setNow(value));
   }, [world?.siege]);
 
   if (ServerApi.mode() !== "server") return null;
@@ -89,7 +89,7 @@ const SiegePanel: React.FC<SiegePanelProps> = ({ planetKey }) => {
   };
 
   return (
-    <div className="rounded-lg border border-purple-500/25 bg-white/5 p-3">
+    <div className="rounded-lg border border-purple-500/25 bg-white/[0.04] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <span className="text-purple-200 font-medium">共享行星 · 攻城</span>
         <span className="text-gray-400">

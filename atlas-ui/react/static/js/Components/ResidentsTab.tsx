@@ -60,7 +60,7 @@ const ChallengeSection: React.FC = () => {
   };
 
   return (
-    <div className="rounded-lg border border-purple-500/20 bg-white/5 p-2 space-y-1">
+    <div className="rounded-lg border border-purple-500/20 bg-white/[0.04] p-2 space-y-1">
       <div className="text-xs text-gray-200">异步对决 · 挑战码</div>
       <p className="text-[11px] text-gray-500">把你的改装编码成一段文本，对方输入后与这份快照对打（不联网、不同步）。</p>
 
@@ -76,7 +76,7 @@ const ChallengeSection: React.FC = () => {
           placeholder="粘贴别人的挑战码"
           className="flex-1 min-w-0 text-[11px] bg-black/40 rounded px-2 py-1 text-gray-200"
         />
-        <button onClick={() => void fight()} className="px-2 py-1 rounded text-[11px] bg-white/10 hover:bg-white/20 text-white shrink-0">
+        <button onClick={() => void fight()} className="px-2 py-1 rounded text-[11px] bg-plate-2 hover:bg-[var(--atlas-line-strong)] text-white shrink-0">
           挑战
         </button>
       </div>
@@ -97,7 +97,7 @@ const ChallengeSection: React.FC = () => {
 };
 
 const Leaderboard: React.FC<{ rows: LeaderRow[]; serverMode?: boolean }> = ({ rows, serverMode }) => (
-  <div className="rounded-lg border border-blue-500/20 bg-white/5 p-2">
+  <div className="rounded-lg border border-blue-500/20 bg-white/[0.04] p-2">
     <div className="text-xs text-gray-200 mb-1">{serverMode ? "舰船等级排行" : "探索量排行"}</div>
     <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
       {rows.map((row, index) => (
@@ -128,7 +128,7 @@ const Roster: React.FC<{ seed: string; met: string[]; favors: Record<string, num
         return (
           <div
             key={resident.id}
-            className={`rounded px-2 py-1 text-[11px] border ${known ? "bg-emerald-500/10 border-emerald-500/30" : "bg-white/5 border-dashed border-white/10"}`}
+            className={`rounded px-2 py-1 text-[11px] border ${known ? "bg-emerald-500/10 border-emerald-500/30" : "bg-white/[0.04] border-dashed border-white/10"}`}
           >
             <div className="flex items-center justify-between gap-2">
               <span className={known ? "text-emerald-200 font-medium truncate" : "text-gray-500 truncate"}>{resident.callsign}</span>
@@ -148,7 +148,7 @@ const ServerRoster: React.FC<{ residents: any[]; onMeet: (id: string) => void }>
       <div
         key={resident.id}
         className={`rounded px-2 py-1 text-[11px] border ${
-          resident.met ? "bg-emerald-500/10 border-emerald-500/30" : "bg-white/5 border-dashed border-white/10"
+          resident.met ? "bg-emerald-500/10 border-emerald-500/30" : "bg-white/[0.04] border-dashed border-white/10"
         }`}
       >
         <div className="flex items-center justify-between gap-2">

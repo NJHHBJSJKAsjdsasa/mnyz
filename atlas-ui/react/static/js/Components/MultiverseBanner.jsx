@@ -93,7 +93,7 @@ const MultiverseBanner = () => {
   return (
     <>
       <div className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-50">
-        <button onClick={handleToggle} className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-emerald-900 via-slate-900 to-black hover:from-emerald-800 hover:via-slate-800 hover:to-gray-900 text-white rounded-full shadow-2xl border-2 border-emerald-400/40 transition-all duration-300 transform hover:scale-105 backdrop-blur-sm" title="Remote Universe Info">
+        <button onClick={handleToggle} className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-emerald-900 via-slate-900 to-black hover:from-emerald-800 hover:via-slate-800 hover:to-gray-900 text-white rounded-full shadow-2xl border-2 border-emerald-400/40 transition-all duration-300 transform hover:scale-105" title="Remote Universe Info">
           <div className="flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" className="text-emerald-200">
               <rect width="24" height="24" fill="none" />
@@ -110,7 +110,7 @@ const MultiverseBanner = () => {
       {isExpanded && (
         <div
           ref={bannerRef}
-          className="fixed bottom-36 sm:bottom-40 right-2 sm:right-6 w-[calc(100vw-1rem)] sm:w-96 max-w-md max-h-[70vh] sm:max-h-96 bg-black/90 backdrop-blur-xl rounded-2xl border border-purple-400/30 shadow-2xl z-40 overflow-hidden transition-all duration-300 ease-out"
+          className="fixed bottom-36 sm:bottom-40 right-2 sm:right-6 w-[calc(100vw-1rem)] sm:w-96 max-w-md max-h-[70vh] sm:max-h-96 bg-black/90 rounded-2xl border border-purple-400/30 shadow-2xl z-40 overflow-hidden transition-all duration-300 ease-out"
           style={{
             animation: isClosing ? "slideDownFadeOut 0.3s ease-out forwards" : "slideUpFadeIn 0.3s ease-out forwards",
           }}

@@ -1,0 +1,959 @@
+/* Game HUD — design tokens (2026-10-30, replaces Amber Cockpit).
+ *
+ * Identity, one line: *deep-space cockpit glass* — near-black navy, electric
+ * cyan light, violet secondary, gold for currency. This is a game, so the rules
+ * flipped from the previous "instrument" pass:
+ *
+ *   - **Glow is the point.** Emphasis is a bloom (`--glow-*`), not a hairline.
+ *     Surfaces still sit flat so text stays readable; the light lives on edges,
+ *     corners and numbers.
+ *   - **Corners bracket, not round.** Every framed surface draws 4 L-shaped
+ *     corner ticks (`.hud-corners`) and one cut corner (chamfer). Radii ≤ 6px.
+ *   - **Numbers are mono and lit.** Countable values get `--atlas-mono` +
+ *     tabular figures + a colour from the semantic set.
+ *   - **Motion is ambient.** Scanline sweeps, boot-ins, pulsing status lamps and
+ *     a slow nebula drift. All of it respects `prefers-reduced-motion`.
+ *
+ * `backdrop-filter` is still budgeted by scripts/check_frontend_gates.py (≤12):
+ * games blur, but not on every panel.
+ */
+
+/* Display face — self-hosted, latin subset (see static/fonts/README.md).
+ * Weight 500 for labels, 600/700 for headings; CJK falls through to the system
+ * stack (no multi-megabyte CJK webfont). */
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/barlow-condensed-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/barlow-condensed-600.woff2") format("woff2");
+}
+
+:root {
+  /* surfaces — deep space navy */
+  --atlas-void: #04060f;
+  --atlas-deep: #070c18;
+  --atlas-plate: #0a1222;
+  --atlas-plate-2: #101a30;
+  --atlas-plate-3: #16233c;
+  --atlas-line: #1d2c4a;
+  --atlas-line-strong: #2f4468;
+
+  /* text */
+  --atlas-n-950: #f2f7ff;   /* headings — near-white, cool */
+  --atlas-n-900: #cfe0f5;   /* body */
+  --atlas-n-800: #a7bddb;
+  --atlas-n-700: #7f96b8;
+  --atlas-n-600: #5a6f8f;
+
+  /* primary light — electric cyan */
+  --atlas-signal: #2ee6ff;
+  --atlas-signal-dim: rgba(46, 230, 255, 0.14);
+  --atlas-signal-soft: rgba(46, 230, 255, 0.06);
+  /* secondary — plasma violet */
+  --atlas-signal-2: #a06bff;
+  --atlas-signal-2-dim: rgba(160, 107, 255, 0.16);
+  /* tertiary — credits / currency gold */
+  --atlas-info: #ffc53d;
+  --atlas-info-dim: rgba(255, 197, 61, 0.16);
+
+  /* semantics — 涨 = 红, 跌 = 绿 (China convention) */
+  --atlas-up: #ff4d6d;
+  --atlas-down: #37e59b;
+  --atlas-warn: #ffb020;
+  --atlas-danger: #ff4d6d;
+  --atlas-ok: #37e59b;
+
+  /* bloom */
+  --glow-signal: 0 0 0 1px rgba(46, 230, 255, 0.35), 0 0 18px -4px rgba(46, 230, 255, 0.45);
+  --glow-signal-strong: 0 0 0 1px rgba(46, 230, 255, 0.6), 0 0 26px -2px rgba(46, 230, 255, 0.55);
+  --glow-violet: 0 0 0 1px rgba(160, 107, 255, 0.4), 0 0 20px -6px rgba(160, 107, 255, 0.5);
+  --glow-gold: 0 0 0 1px rgba(255, 197, 61, 0.4), 0 0 20px -6px rgba(255, 197, 61, 0.5);
+  --glow-danger: 0 0 0 1px rgba(255, 77, 109, 0.45), 0 0 20px -6px rgba(255, 77, 109, 0.5);
+  --glow-text: 0 0 12px rgba(46, 230, 255, 0.55);
+  --shadow-drop: 0 18px 40px -24px rgba(0, 0, 0, 0.95);
+
+  /* spacing / shape */
+  --atlas-1: 4px;
+  --atlas-2: 8px;
+  --atlas-3: 12px;
+  --atlas-4: 16px;
+  --atlas-5: 24px;
+  --atlas-6: 32px;
+  --atlas-r-sm: 2px;
+  --atlas-r-md: 3px;
+  --atlas-r-lg: 6px;
+  --atlas-notch: 12px;
+  --atlas-chamfer: polygon(
+    0 0,
+    calc(100% - var(--atlas-notch)) 0,
+    100% var(--atlas-notch),
+    100% 100%,
+    var(--atlas-notch) 100%,
+    0 calc(100% - var(--atlas-notch))
+  );
+  /* One cut corner only — used on buttons so the notch points at the cursor. */
+  --atlas-cut: polygon(0 0, 100% 0, 100% calc(100% - var(--atlas-notch)), calc(100% - var(--atlas-notch)) 100%, 0 100%);
+
+  /* type */
+  --atlas-font: "Inter", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --atlas-display: "Barlow Condensed", "Bahnschrift", "Arial Narrow", "Noto Sans SC", system-ui, sans-serif;
+  --atlas-mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --atlas-t-micro: 10.5px;
+  --atlas-t-small: 12px;
+  --atlas-t-body: 13px;
+  --atlas-t-title: 15px;
+  --atlas-t-h1: 20px;
+  --atlas-t-hud: 22px;
+}
+
+/* ------------------------------------------------------------------ surfaces */
+
+/* The panel shape. Opaque gradient plate + 1px frame + inner top highlight +
+ * corner ticks. Deliberately NOT clipped: `box-shadow` would be cut off by a
+ * clip-path, and the bloom is what makes this read as a game. */
+.atlas-plate {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(46, 230, 255, 0.045), transparent 46%),
+    linear-gradient(180deg, var(--atlas-plate-2), var(--atlas-plate));
+  border: 1px solid var(--atlas-line);
+  border-top-color: rgba(46, 230, 255, 0.22);
+  border-radius: var(--atlas-r-sm);
+  box-shadow: 0 10px 26px -22px rgba(0, 0, 0, 0.9);
+}
+
+/* Game HUD frame for game pages (planet / system / galaxy) and hero cards. */
+.atlas-hud {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(46, 230, 255, 0.07), transparent 40%),
+    linear-gradient(160deg, var(--atlas-plate-2) 0%, var(--atlas-deep) 62%, var(--atlas-plate) 100%);
+  border: 1px solid var(--atlas-line-strong);
+  border-top-color: rgba(46, 230, 255, 0.42);
+  border-radius: var(--atlas-r-sm);
+  box-shadow:
+    inset 0 1px 0 0 rgba(46, 230, 255, 0.18),
+    0 0 24px -12px rgba(46, 230, 255, 0.4),
+    0 20px 44px -30px rgba(0, 0, 0, 0.95);
+}
+
+/* Four corner brackets, drawn with gradients so it costs one pseudo element.
+ * Override the tint per block with `--hud-accent`. Animates in with `.is-live`. */
+.hud-corners::before,
+.atlas-hud::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  --_c: var(--hud-accent, var(--atlas-signal));
+  background-image:
+    linear-gradient(var(--_c), var(--_c)), linear-gradient(var(--_c), var(--_c)),
+    linear-gradient(var(--_c), var(--_c)), linear-gradient(var(--_c), var(--_c)),
+    linear-gradient(var(--_c), var(--_c)), linear-gradient(var(--_c), var(--_c)),
+    linear-gradient(var(--_c), var(--_c)), linear-gradient(var(--_c), var(--_c));
+  background-repeat: no-repeat;
+  background-size:
+    16px 1.5px, 1.5px 16px,
+    16px 1.5px, 1.5px 16px,
+    16px 1.5px, 1.5px 16px,
+    16px 1.5px, 1.5px 16px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 6px rgba(46, 230, 255, 0.35));
+}
+
+/* Title bar used by HUD frames: gradient strip that fades out to the right. */
+.hud-titlebar {
+  background: linear-gradient(90deg, rgba(46, 230, 255, 0.18), rgba(46, 230, 255, 0.02) 62%, transparent);
+  border-bottom: 1px solid rgba(46, 230, 255, 0.22);
+}
+.hud-titlebar[data-tone="violet"] {
+  background: linear-gradient(90deg, rgba(160, 107, 255, 0.2), rgba(160, 107, 255, 0.02) 62%, transparent);
+  border-bottom-color: rgba(160, 107, 255, 0.24);
+}
+
+/* Page ground: nebula wash + navigation grid, no images. */
+.atlas-page {
+  position: relative;
+  background-color: var(--atlas-void);
+  background-image:
+    radial-gradient(1100px 560px at 18% -8%, rgba(46, 230, 255, 0.11), transparent 62%),
+    radial-gradient(880px 520px at 88% 6%, rgba(160, 107, 255, 0.12), transparent 60%),
+    radial-gradient(1200px 700px at 50% 118%, rgba(14, 60, 110, 0.4), transparent 68%),
+    repeating-linear-gradient(0deg, transparent 0 47px, rgba(46, 230, 255, 0.05) 47px 48px),
+    repeating-linear-gradient(90deg, transparent 0 47px, rgba(46, 230, 255, 0.05) 47px 48px);
+  background-attachment: fixed;
+  box-shadow:
+    inset 0 0 0 1px rgba(46, 230, 255, 0.1),
+    inset 0 2px 0 0 rgba(46, 230, 255, 0.22);
+}
+
+/* Vignette + scanlines for full-screen game surfaces. */
+.atlas-vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to bottom, rgba(4, 6, 15, 0.28) 0 1px, transparent 1px 3px),
+    radial-gradient(120% 90% at 50% 50%, transparent 52%, rgba(2, 4, 10, 0.82) 100%);
+  z-index: 0;
+}
+
+.atlas-chamfer {
+  clip-path: var(--atlas-chamfer);
+}
+
+/* Fine grid, used behind empty states and modal bodies. */
+.atlas-grid {
+  background-image:
+    linear-gradient(rgba(46, 230, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(46, 230, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+/* Diagonal hatching — "standby / unbuilt". */
+.atlas-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(46, 230, 255, 0.08) 0 1px,
+    transparent 1px 7px
+  );
+}
+
+/* Static scanlines for compact surfaces (no animation, no blur). */
+.atlas-scanlines {
+  position: relative;
+}
+.atlas-scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(2, 5, 12, 0.32) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* HUD label: small, uppercase, wide tracking, mono. */
+.atlas-label {
+  font-family: var(--atlas-mono);
+  font-size: var(--atlas-t-micro);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--atlas-n-600);
+}
+
+.atlas-display {
+  font-family: var(--atlas-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Lit value: mono, tabular, cyan bloom. The game's "this number matters" cue. */
+.atlas-lit {
+  color: var(--atlas-signal);
+  text-shadow: var(--glow-text);
+}
+
+/* Telemetry table (ui/Table). Zebra + hover, hairline rows, glowing header. */
+.atlas-table thead th {
+  background: linear-gradient(180deg, rgba(46, 230, 255, 0.08), transparent);
+  box-shadow: inset 0 -1px 0 0 rgba(46, 230, 255, 0.26);
+}
+.atlas-table tbody td {
+  border-bottom: 1px solid rgba(29, 44, 74, 0.7);
+}
+.atlas-table tbody tr:nth-child(even) td {
+  background: rgba(46, 230, 255, 0.022);
+}
+.atlas-table tbody tr:hover td {
+  background: rgba(46, 230, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(46, 230, 255, 0.16);
+}
+.atlas-table tbody tr.is-active td {
+  background: rgba(46, 230, 255, 0.1);
+}
+.atlas-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Key/value row — the rhythm every summary block in the panels uses. */
+.atlas-kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--atlas-2);
+  min-height: 22px;
+  padding: 2px 0;
+  font-size: var(--atlas-t-small);
+  border-bottom: 1px solid rgba(29, 44, 74, 0.6);
+}
+.atlas-kv:last-of-type {
+  border-bottom: none;
+}
+.atlas-kv-label {
+  color: var(--atlas-n-700);
+  font-family: var(--atlas-mono);
+  font-size: var(--atlas-t-micro);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.atlas-tabular {
+  font-family: var(--atlas-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ segments */
+
+/* Segmented energy bar (fuel, hull, capacity). Flat track, lit fill, sheen. */
+.hud-bar {
+  position: relative;
+  height: 6px;
+  background: rgba(4, 6, 15, 0.85);
+  border: 1px solid rgba(29, 44, 74, 0.9);
+  overflow: hidden;
+}
+.hud-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(46, 230, 255, 0.55), var(--atlas-signal));
+  box-shadow: 0 0 10px rgba(46, 230, 255, 0.6);
+  transition: width 240ms ease;
+}
+.hud-bar[data-tone="gold"] > span {
+  background: linear-gradient(90deg, rgba(255, 197, 61, 0.5), var(--atlas-info));
+  box-shadow: 0 0 10px rgba(255, 197, 61, 0.55);
+}
+.hud-bar[data-tone="danger"] > span {
+  background: linear-gradient(90deg, rgba(255, 77, 109, 0.5), var(--atlas-danger));
+  box-shadow: 0 0 10px rgba(255, 77, 109, 0.55);
+}
+
+/* Slanted segment chip — the game's "tag" shape. */
+.hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  padding: 0 9px;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  background: var(--atlas-signal-dim);
+  color: var(--atlas-signal);
+  font-family: var(--atlas-mono);
+  font-size: var(--atlas-t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ motion */
+
+@keyframes atlas-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes atlas-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+/* Panel / card entrance: 12px lift + fade. Deliberately short (200ms) so a
+   dense dashboard does not feel like it is loading one card at a time. */
+@keyframes hud-boot {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+/* Ambient scanline that travels down a surface every 6s. */
+@keyframes hud-scan {
+  0% { transform: translateY(-110%); opacity: 0; }
+  12% { opacity: 0.9; }
+  55% { opacity: 0.55; }
+  100% { transform: translateY(420%); opacity: 0; }
+}
+@keyframes hud-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes hud-flicker {
+  0%, 92%, 100% { opacity: 1; }
+  93% { opacity: 0.55; }
+  95% { opacity: 1; }
+  96% { opacity: 0.7; }
+}
+@keyframes hud-drift {
+  from { background-position: 0 0, 0 0, 0 0; }
+  to { background-position: 0 -48px, -48px 0, 0 0; }
+}
+@keyframes hud-ping {
+  0% { box-shadow: 0 0 0 0 rgba(46, 230, 255, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(46, 230, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 230, 255, 0); }
+}
+
+.hud-boot-in {
+  animation: hud-boot 200ms ease-out both;
+}
+
+/* A thin light bar that sweeps across the top edge of a live surface. */
+.hud-scanbeam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--atlas-signal), transparent);
+  animation: hud-scan 6s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+/* Live indicator lamp: pulsing ring. */
+.hud-lamp {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--atlas-signal);
+  animation: hud-ping 2.4s ease-out infinite;
+}
+
+.atlas-loading-bar {
+  position: relative;
+  overflow: hidden;
+}
+.atlas-loading-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--atlas-signal), transparent);
+  animation: atlas-sweep 1.2s ease-in-out infinite;
+}
+
+/* Deep field behind the home star stage.
+ *
+ * Three dot layers at different tile sizes drift at different apparent speeds,
+ * which is enough parallax to read as "space" instead of "a dark panel". Kept as
+ * a plain repeating gradient: no canvas, no texture, nothing to load. */
+.atlas-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.85;
+  background-image:
+    radial-gradient(1.1px 1.1px at 18% 26%, rgba(255, 255, 255, 0.85), transparent 100%),
+    radial-gradient(1.1px 1.1px at 72% 63%, rgba(190, 226, 255, 0.72), transparent 100%),
+    radial-gradient(1.6px 1.6px at 41% 81%, rgba(255, 255, 255, 0.9), transparent 100%),
+    radial-gradient(1px 1px at 88% 14%, rgba(255, 236, 200, 0.7), transparent 100%),
+    radial-gradient(1.3px 1.3px at 6% 68%, rgba(210, 240, 255, 0.75), transparent 100%),
+    radial-gradient(1px 1px at 57% 8%, rgba(255, 255, 255, 0.65), transparent 100%);
+  background-size:
+    220px 220px, 220px 220px, 220px 220px,
+    340px 340px, 340px 340px, 340px 340px;
+  animation: hud-drift 120s linear infinite;
+}
+/* The dots should not fight the star: fade them out where the disc sits. */
+.atlas-stars::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(4, 8, 16, 0.55), transparent 55%);
+}
+
+/* The star stage's canvas is effectively opaque black outside the disc: the
+ * additively-blended corona quad writes alpha=1 across the whole render target,
+ * so masking the edges only ever trades a visible square for a visible ring.
+ * `screen` is the honest fix — black contributes nothing, so the canvas rect
+ * disappears into the deep field and the discs composite the way additive light
+ * actually would. Planets are given emissive so they survive it. */
+.atlas-star-blend {
+  mix-blend-mode: screen;
+}
+
+/* ------------------------------------------------------------------ jump */
+/* Drive charge: the tunnel (`WarpTunnelFX`) is z40/pointer-events:none by design,
+ * which puts it under the dock and leaves the page reading through it. For the
+ * one moment that should be a cut, the stack is: black veil (88) → tunnel (90). */
+.atlas-jump-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 88;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(6, 14, 28, 0.9), #010206 78%);
+  animation: atlas-jump-fade 950ms ease-in forwards;
+}
+@keyframes atlas-jump-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.atlas-jump-warp {
+  z-index: 90 !important;
+}
+
+/* ------------------------------------------------------------------ scroll */
+.atlas-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--atlas-line-strong) transparent;
+}
+.atlas-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.atlas-scroll::-webkit-scrollbar-track {
+  background: rgba(4, 6, 15, 0.6);
+}
+.atlas-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--atlas-line-strong), var(--atlas-line));
+  border-radius: 0;
+}
+.atlas-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--atlas-signal);
+  box-shadow: inset 0 0 6px rgba(46, 230, 255, 0.8);
+}
+
+/* ------------------------------------------------------------------ layouts */
+
+/* ------------------------------------------------------------------ buttons */
+
+/* ui/Button. Visuals live here (not inline) so :hover / :active can win —
+ * inline styles beat the cascade, which is why the old buttons could not light
+ * up on hover without a JS listener per button. */
+.hud-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--atlas-2);
+  font-family: var(--atlas-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: 2px;
+  /* one cut corner, bottom-right: the game's "chip" silhouette */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  cursor: pointer;
+  transition: background 130ms ease, color 130ms ease, border-color 130ms ease,
+    box-shadow 130ms ease, transform 90ms ease;
+  white-space: nowrap;
+}
+.hud-btn[data-size="sm"] { height: 26px; padding: 0 11px; font-size: 11px; letter-spacing: 0.12em; }
+.hud-btn[data-size="md"] { height: 32px; padding: 0 15px; font-size: 12.5px; letter-spacing: 0.12em; }
+.hud-btn[data-size="lg"] { height: 40px; padding: 0 20px; font-size: 14px; letter-spacing: 0.14em; }
+
+.hud-btn[data-variant="primary"] {
+  background: linear-gradient(180deg, #7df3ff, #17bcdd);
+  border: 1px solid #9ff8ff;
+  color: #041019;
+  box-shadow: 0 0 20px -6px rgba(46, 230, 255, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.hud-btn[data-variant="primary"]:hover {
+  background: linear-gradient(180deg, #a6f8ff, #2fd6f2);
+  box-shadow: 0 0 26px -4px rgba(46, 230, 255, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.hud-btn[data-variant="secondary"] {
+  background: linear-gradient(180deg, rgba(46, 230, 255, 0.12), rgba(10, 18, 34, 0.9));
+  border: 1px solid var(--atlas-line-strong);
+  color: var(--atlas-n-900);
+}
+.hud-btn[data-variant="secondary"]:hover {
+  border-color: rgba(46, 230, 255, 0.55);
+  color: var(--atlas-n-950);
+  box-shadow: 0 0 16px -6px rgba(46, 230, 255, 0.6);
+}
+.hud-btn[data-variant="ghost"] {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--atlas-n-800);
+}
+.hud-btn[data-variant="ghost"]:hover {
+  color: var(--atlas-signal);
+  border-color: rgba(46, 230, 255, 0.3);
+  background: rgba(46, 230, 255, 0.06);
+}
+.hud-btn[data-variant="danger"] {
+  background: linear-gradient(180deg, #ff7088, #d81f45);
+  border: 1px solid #ff9aab;
+  color: #1a0207;
+  box-shadow: 0 0 20px -8px rgba(255, 77, 109, 0.85);
+}
+.hud-btn[data-variant="danger"]:hover {
+  background: linear-gradient(180deg, #ff8fa1, #ef3057);
+  box-shadow: 0 0 26px -6px rgba(255, 77, 109, 0.95);
+}
+.hud-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.hud-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Tabs are chips on a rail, not underlines. */
+.hud-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  background: rgba(10, 18, 34, 0.55);
+  color: var(--atlas-n-700);
+  font-family: var(--atlas-display);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.hud-tab:hover:not(:disabled) {
+  color: var(--atlas-n-950);
+  background: rgba(46, 230, 255, 0.1);
+  border-color: rgba(46, 230, 255, 0.32);
+}
+.hud-tab[data-selected] {
+  background: linear-gradient(180deg, rgba(46, 230, 255, 0.3), rgba(46, 230, 255, 0.08));
+  border-color: rgba(46, 230, 255, 0.6);
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(46, 230, 255, 0.7);
+  box-shadow: 0 0 18px -8px rgba(46, 230, 255, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.hud-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ dock */
+
+/* The economy console lives on the page, permanently. It is a rail, not a dialog:
+ * no backdrop, no launcher button, nothing to dismiss. Collapse it to a spine, or
+ * expand it over the whole screen — but it is always mounted. */
+.hud-dock {
+  position: fixed;
+  right: 14px;
+  top: 96px;
+  /* Bottom flap stays free: the spaceship launcher, treasure chest and task chip
+   * all live in the last 100px of the bottom-right corner. */
+  bottom: 112px;
+  width: 404px;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background:
+    linear-gradient(180deg, rgba(46, 230, 255, 0.09), transparent 22%),
+    rgba(5, 9, 18, 0.96);
+  border: 1px solid rgba(46, 230, 255, 0.3);
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(46, 230, 255, 0.1),
+    0 0 44px -18px rgba(46, 230, 255, 0.55),
+    0 30px 60px -30px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+  animation: hud-boot 240ms ease-out both;
+}
+.hud-dock[data-expanded="true"] {
+  inset: 8px;
+  width: auto;
+  z-index: 60;
+}
+.hud-dock[data-collapsed="true"] {
+  width: 44px;
+  padding: 0;
+}
+
+/* 2026-10-30: a "station pinned to the centre / to the home stage" variant lived
+ * here for one afternoon. Removed on the player's call — the panel is already on
+ * screen when you pick a chip, so a second, larger copy of it reads as a
+ * duplicate. One surface, switched in place; no `data-focus`, no veil. */
+@media (max-width: 1180px) {
+  .hud-dock {
+    width: 356px;
+  }
+}
+@media (max-width: 860px) {
+  .hud-dock {
+    left: 8px;
+    width: auto;
+    top: auto;
+    height: 52vh;
+  }
+}
+
+/* The dock is fixed, so the page must reserve its width — otherwise the chapter
+ * title and the Z axis disappear under it. `:has` keeps this in CSS instead of
+ * threading a "dock is open" prop through eight layouts. */
+@media (min-width: 861px) {
+  body:has(.hud-dock) .atlas-page {
+    padding-right: 424px;
+  }
+  body:has(.hud-dock[data-expanded]) .atlas-page {
+    padding-right: 0;
+  }
+  body:has(.hud-dock[data-collapsed]) .atlas-page {
+    padding-right: 64px;
+  }
+}
+
+/* Small square window controls in the dock head. */
+.hud-dockbtn {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(46, 230, 255, 0.07);
+  border: 1px solid var(--atlas-line-strong);
+  border-radius: 2px;
+  color: var(--atlas-n-700);
+  font-family: var(--atlas-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.hud-dockbtn:hover {
+  color: var(--atlas-signal);
+  border-color: rgba(46, 230, 255, 0.55);
+  box-shadow: 0 0 12px -4px rgba(46, 230, 255, 0.7);
+}
+
+/* ------------------------------------------------------------------ deck */
+
+/* The shell body is ONE board, not a stack of cards. Panels tile edge-to-edge
+ * inside it: no side borders, no radius, no drop shadow, and vertically adjacent
+ * plates overlap by 1px so their borders collapse into a single seam. */
+/* The deck is a screen, not a page: a lit ground with a faint navigation grid so
+ * short views still read as a powered display instead of empty darkness. */
+.hud-deck {
+  background-color: var(--atlas-deep);
+  background-image:
+    radial-gradient(900px 420px at 82% -12%, rgba(160, 107, 255, 0.1), transparent 62%),
+    radial-gradient(700px 380px at 8% 108%, rgba(46, 230, 255, 0.08), transparent 62%),
+    repeating-linear-gradient(0deg, transparent 0 47px, rgba(46, 230, 255, 0.045) 47px 48px),
+    repeating-linear-gradient(90deg, transparent 0 47px, rgba(46, 230, 255, 0.045) 47px 48px);
+}
+.hud-deck section[data-panel] {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* Every economy panel wraps its tiles in `<div style="display:grid;gap:12px">`.
+ * `!important` is the only way to beat that inline gap — the point is that the
+ * 12px of air between cards becomes a 1px lit seam, so the view reads as one
+ * console instead of a dashboard of floating boxes. */
+.hud-deck section[data-panel] > div {
+  gap: 1px !important;
+  background: var(--atlas-line);
+}
+.hud-deck section[data-panel] > section.atlas-plate {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  box-shadow: none;
+}
+.hud-deck section[data-panel] > section.atlas-plate + section.atlas-plate {
+  margin-top: -1px;
+}
+/* First tile of a view carries the cyan rule that says "this is the live deck". */
+.hud-deck section[data-panel] > section.atlas-plate:first-child {
+  border-top: 1px solid rgba(46, 230, 255, 0.32);
+  box-shadow: inset 0 1px 0 rgba(46, 230, 255, 0.14);
+}
+/* Tiles carry no glow of their own: the light belongs to the frame and the
+ * title bars, otherwise forty panels compete for the same halo. */
+.hud-deck section[data-panel] .atlas-plate {
+  border-radius: 0;
+}
+/* Every tile boots in (200ms) — a dashboard that appears all at once reads as a
+ * page; a screen whose modules light up reads as hardware coming online. */
+.hud-deck section[data-panel] > div > section {
+  animation: hud-boot 220ms ease-out both;
+}
+.hud-deck section[data-panel] > div > section:nth-child(2) { animation-delay: 40ms; }
+.hud-deck section[data-panel] > div > section:nth-child(3) { animation-delay: 80ms; }
+.hud-deck section[data-panel] > div > section:nth-child(4) { animation-delay: 120ms; }
+.hud-deck section[data-panel] > div > section:nth-child(n + 5) { animation-delay: 160ms; }
+/* Hover: the tile lifts its seam to cyan. No transform — the deck must not move. */
+.hud-deck section[data-panel] > div > section:hover {
+  box-shadow: inset 0 0 0 1px rgba(46, 230, 255, 0.22), inset 0 1px 0 rgba(46, 230, 255, 0.12);
+}
+
+/* Fixed frame furniture for the shell: corner brackets + a travelling scanline.
+ * Both are pointer-transparent overlays so they never eat a click. */
+.hud-frame-corners {
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  z-index: 60;
+  background-image:
+    linear-gradient(var(--atlas-signal), var(--atlas-signal)), linear-gradient(var(--atlas-signal), var(--atlas-signal)),
+    linear-gradient(var(--atlas-signal), var(--atlas-signal)), linear-gradient(var(--atlas-signal), var(--atlas-signal)),
+    linear-gradient(var(--atlas-signal), var(--atlas-signal)), linear-gradient(var(--atlas-signal), var(--atlas-signal)),
+    linear-gradient(var(--atlas-signal), var(--atlas-signal)), linear-gradient(var(--atlas-signal), var(--atlas-signal));
+  background-repeat: no-repeat;
+  background-size:
+    22px 2px, 2px 22px,
+    22px 2px, 2px 22px,
+    22px 2px, 2px 22px,
+    22px 2px, 2px 22px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  opacity: 0.8;
+  filter: drop-shadow(0 0 8px rgba(46, 230, 255, 0.55));
+}
+.hud-shell-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 59;
+  overflow: hidden;
+}
+.hud-shell-scan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: linear-gradient(180deg, transparent, rgba(46, 230, 255, 0.055), transparent);
+  animation: hud-scan 9s linear infinite;
+}
+
+/* Market quotes: three panes on desktop, ticket under the book on tablets, one
+ * column on phones (06 §2). Layout only. */
+.market-quotes {
+  display: grid;
+  gap: var(--atlas-3);
+  grid-template-columns: 280px minmax(0, 1fr) 340px;
+  align-items: start;
+}
+@media (max-width: 1279px) {
+  .market-quotes {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .market-quotes .market-ticket {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 767px) {
+  .market-quotes {
+    grid-template-columns: 1fr;
+  }
+  .market-quotes .market-ticket {
+    grid-column: auto;
+  }
+}
+
+/* L2 · floating layer. Opaque plate inside a lit frame: the game's dialog. */
+.surface-overlay {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(46, 230, 255, 0.06), transparent 34%),
+    linear-gradient(180deg, var(--atlas-plate-2), var(--atlas-deep));
+  border: 1px solid var(--atlas-line-strong);
+  border-top-color: var(--atlas-signal);
+  border-radius: var(--atlas-r-sm);
+  box-shadow:
+    0 0 0 1px rgba(46, 230, 255, 0.18),
+    0 0 40px -10px rgba(46, 230, 255, 0.35),
+    0 40px 80px -40px rgba(0, 0, 0, 0.98);
+}
+
+/* ------------------------------------------------------------------ rail */
+
+/* The rail lists the children of whatever you are looking at (16 §2.1):
+ * systems inside a galaxy, planets inside a system. Rows are separated by the
+ * 1px deck seam rather than individual borders, so a 74-page system list reads
+ * as one column of the frame instead of a stack of cards. */
+.rail-list {
+  display: grid;
+  gap: 1px;
+  background: var(--atlas-line);
+}
+.rail-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: rgba(6, 12, 24, 0.62);
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  color: var(--atlas-n-800);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.rail-row:hover {
+  background: rgba(46, 230, 255, 0.11);
+  color: var(--atlas-n-950);
+}
+.rail-row[data-active="true"] {
+  background: rgba(46, 230, 255, 0.14);
+  color: #fff;
+  box-shadow: inset 2px 0 0 var(--atlas-signal);
+}
+.rail-row__idx {
+  font-family: var(--atlas-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--atlas-n-600);
+  font-variant-numeric: tabular-nums;
+}
+.rail-row__name {
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ view fade */
+
+/* Client-side view change (16 §3.2). Distinct from `.atlas-jump-veil`: that one
+ * is 950ms to full black and belongs to a coordinate jump, which really is a
+ * journey. This is 160ms each way and exists only to hide the frame where one
+ * 3D scene is disposed and the next is built. Short enough that the sense of
+ * continuity survives — the point of P2 is that moving inside a world is not a
+ * page load. */
+.atlas-view-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 87;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, rgba(8, 18, 34, 0.86), #010206 72%);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.atlas-view-fade[data-active="true"] {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ reduced */
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-loading-bar::after,
+  .hud-scanbeam,
+  .hud-lamp,
+  .hud-boot-in,
+  .atlas-stars,
+  .hud-shell-scan::before,
+  .atlas-jump-veil,
+  .atlas-view-fade {
+    animation: none !important;
+  }
+  .hud-scanbeam { opacity: 0; }
+}

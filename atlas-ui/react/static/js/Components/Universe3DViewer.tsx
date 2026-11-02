@@ -364,7 +364,7 @@ const Universe3DViewer: React.FC<Universe3DViewerProps> = ({ coordinates, galaxy
               setIsFullscreen(true);
               setIsEntering(true);
             }}
-            className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black/80 border border-white/30 rounded-lg transition-all duration-200 backdrop-blur-sm shadow-lg z-10"
+            className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black/80 border border-white/30 rounded-lg transition-all duration-200  shadow-lg z-10"
             title="Expand to fullscreen"
           >
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,7 +395,7 @@ const Universe3DViewer: React.FC<Universe3DViewerProps> = ({ coordinates, galaxy
 
       {isFullscreen &&
         createPortal(
-          <div className={`fixed inset-0 z-50 bg-black/95 backdrop-blur-xl transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : isEntering ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>
+          <div className={`fixed inset-0 z-50 bg-black/95  transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : isEntering ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>
             <div className={`w-full h-full flex flex-col p-1 sm:p-2 transition-all duration-300 delay-75 ${isClosing ? "opacity-0 translate-y-4" : isEntering ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"}`}>
               <div className="flex items-center justify-between mb-2 sm:mb-4">
                 <div className="block sm:hidden">

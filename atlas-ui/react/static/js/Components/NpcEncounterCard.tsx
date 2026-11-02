@@ -114,11 +114,11 @@ const NpcEncounterCard: React.FC<NpcEncounterCardProps> = ({ planetKey, resident
           <div className="mt-2 flex gap-2">
             <button
               onClick={() => void accept()}
-              className="px-3 py-1 rounded-md text-xs font-semibold bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transition-all"
+              className="px-3 py-1 rounded-md text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-all"
             >
               成交
             </button>
-            <button onClick={decline} className="px-3 py-1 rounded-md text-xs bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all">
+            <button onClick={decline} className="px-3 py-1 rounded-md text-xs bg-white/[0.04] border border-white/10 text-gray-300 hover:bg-plate-2 transition-all">
               谢绝
             </button>
           </div>

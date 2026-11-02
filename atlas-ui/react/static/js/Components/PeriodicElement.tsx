@@ -28,7 +28,7 @@ const PeriodicElement: React.FC<PeriodicElementProps> = ({ elementName, expanded
   if (expanded) {
     return (
       <div className={`flex flex-col p-2 rounded-lg border ${rarityColorClass} ${isException ? "relative overflow-hidden" : ""} shadow-lg transition-all duration-200 hover:scale-105 ${className}`}>
-        {isException && <div className="absolute inset-0 bg-gradient-to-r from-cyan-400/10 via-purple-500/10 to-cyan-400/10 animate-pulse pointer-events-none rounded-lg"></div>}
+        {isException && <div className="absolute inset-0 bg-cyan-400/10 animate-pulse pointer-events-none rounded-lg"></div>}
 
         <div className={`flex flex-col items-center justify-center h-12 w-12 mx-auto mb-2 ${isException ? "bg-black/30 border-cyan-400/30" : "bg-black/20"} rounded border border-white/10 relative z-10`}>
           <div className={`text-xs font-bold leading-none ${isException ? "text-cyan-100" : ""}`}>{elementInfo.symbol}</div>
@@ -76,7 +76,7 @@ const PeriodicElement: React.FC<PeriodicElementProps> = ({ elementName, expanded
 
   return (
     <div className={`inline-flex flex-col items-center justify-center h-10 w-10 rounded border ${rarityColorClass} ${isException ? "relative overflow-hidden" : ""} transition-all duration-200 hover:scale-110 cursor-pointer ${className}`}>
-      {isException && <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 to-purple-500/20 animate-pulse pointer-events-none rounded"></div>}
+      {isException && <div className="absolute inset-0 bg-cyan-400/20 hover:bg-purple-500/20 animate-pulse pointer-events-none rounded"></div>}
       <div className={`text-xs font-bold leading-none relative z-10 ${isException ? "text-cyan-100" : ""}`}>{elementInfo.symbol}</div>
       <div className={`text-[8px] opacity-70 leading-none mt-0.5 relative z-10 ${isException ? "text-cyan-200" : ""}`}>{elementInfo.atomicNumber}</div>
     </div>

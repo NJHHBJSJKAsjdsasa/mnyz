@@ -210,7 +210,7 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
       questions: [
         {
           question: "阿特拉斯中的行星有多独特？",
-          answer: "潜在的3×10³²个行星中的每一个都具有完全独特的特征，跨越27种不同的行星类型（从岩石到奇特），并且在不久的将来可能会增加。每个行星都有特定的化学成分，最多包含119种元素（包括虚构的Z-Divinium），根据轨道位置计算的温度，基于真实质量的重力，以及从细菌到非物理意识实体的生命可能性。",
+          answer: "潜在的3×10³²个行星中的每一个都具有完全独特的特征，跨越31种不同的行星类型（从岩石到奇特）。其中4种属于「边陲世界」——只有拥有11颗行星的星系才会抽到，概率约为每7.5万个星系一颗。每个行星都有特定的化学成分，最多包含119种元素（包括虚构的Z-Divinium），根据轨道位置计算的温度，基于真实质量的重力，以及从细菌到非物理意识实体的生命可能性。",
         },
         {
           question: "行星可以包含哪些元素？",
@@ -425,7 +425,7 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
   ];
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col">
+    <div className="w-full min-h-screen atlas-page text-white flex flex-col">
       <div
         className="absolute inset-0 opacity-20"
         style={{
@@ -441,12 +441,12 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
           <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-6">阿特拉斯常见问题</h1>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white tracking-[0.04em] mb-6">阿特拉斯常见问题</h1>
             <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed mb-6">探索这个由程序生成的最大宇宙的令人难以置信的规模和无限可能性。准备面对一个可计算的无穷大。</p>
 
             {areFactsDisabled && (
               <div className={`w-full mx-auto transition-opacity duration-200 ${isCollapsing ? "opacity-0" : "opacity-100"}`}>
-                <div className="bg-yellow-900/10 backdrop-blur-sm rounded-lg border border-yellow-400/10 p-4 mb-6">
+                <div className="bg-yellow-900/10 rounded-lg border border-yellow-400/10 p-4 mb-6">
                   <div className="flex flex-col sm:flex-row items-center gap-3">
                     <div className="flex-1 text-center sm:text-left">
                       <h3 className="text-sm font-medium text-yellow-200/80 mb-1">宇宙 facts 已禁用</h3>
@@ -465,8 +465,8 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
 
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4 mb-12">
             {quickStats.map((stat) => (
-              <div key={stat.label} className="bg-white/5 backdrop-blur-lg rounded-xl border border-white/10 p-4 text-center">
-                <div className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-1">{stat.value}</div>
+              <div key={stat.label} className="atlas-hud p-4 text-center">
+                <div className="text-2xl sm:text-3xl font-bold text-amber-400 font-mono mb-1">{stat.value}</div>
                 <div className="text-sm font-semibold text-gray-300 mb-1">{stat.label}</div>
                 <div className="text-xs text-gray-400">{stat.description}</div>
               </div>
@@ -475,7 +475,7 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
 
           <div className="flex flex-col lg:flex-row gap-8">
             <div className="lg:w-80">
-              <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-6 sticky top-8">
+              <div className="atlas-hud p-6 sticky top-8">
                 <h3 className="text-lg font-bold text-white mb-4">导航</h3>
                 <nav className="space-y-2">
                   {faqSections.map((section) => (
@@ -490,7 +490,7 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
             <div className="flex-1">
               {faqSections.map((section) => (
                 <div key={section.id} id={section.id} className="mb-12">
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-6">{section.title}</h2>
+                  <h2 className="text-3xl font-bold text-white tracking-[0.04em] mb-6">{section.title}</h2>
 
                   <div className="space-y-4">
                     {section.questions.map((faq, index) => {
@@ -498,8 +498,8 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
                       const isExpanded = expandedQuestion === questionId;
 
                       return (
-                        <div key={index} className={`bg-white/5 backdrop-blur-lg rounded-xl border transition-all duration-200 ${faq.highlight ? "border-cyan-500/30 shadow-cyan-500/10 shadow-lg" : "border-white/10 hover:border-white/20"}`}>
-                          <button onClick={() => toggleQuestion(questionId)} className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-white/5 transition-colors">
+                        <div key={index} className={`atlas-hud border transition-all duration-200 ${faq.highlight ? "border-cyan-500/30 shadow-cyan-500/10 shadow-lg" : "border-white/10 hover:border-white/20"}`}>
+                          <button onClick={() => toggleQuestion(questionId)} className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-white/[0.04] transition-colors">
                             <h3 className={`text-lg font-semibold ${faq.highlight ? "text-cyan-300" : "text-white"}`}>{faq.question}</h3>
                             <div className={`text-2xl transition-transform duration-[250ms] ease-in-out ${isExpanded ? "rotate-45" : ""}`}>+</div>
                           </button>
@@ -518,17 +518,17 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
                 </div>
               ))}
 
-              <div className="bg-gradient-to-r from-cyan-900/30 to-purple-900/30 backdrop-blur-lg rounded-2xl border border-cyan-400/20 p-8 text-center mt-12">
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-4">查看我们的最新发现</h3>
+              <div className="bg-cyan-900/30 hover:bg-purple-900/30 rounded-none border border-cyan-400/20 p-8 text-center mt-12">
+                <h3 className="text-2xl font-bold text-amber-400 font-mono mb-4">查看我们的最新发现</h3>
                 <p className="text-gray-300 mb-6">探索我们发表的关于程序宇宙理论和宇宙学的研究论文。</p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <a href="/papers/01.pdf" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-cyan-300 font-medium rounded-xl transition-all duration-300 border border-cyan-400/30 hover:border-cyan-400/50">
+                  <a href="/papers/01.pdf" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-plate-2 hover:bg-[var(--atlas-line-strong)] text-cyan-300 font-medium rounded-none transition-all duration-300 border border-cyan-400/30 hover:border-cyan-400/50">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     程序宇宙
                   </a>
-                  <a href="/papers/02.pdf" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-cyan-300 font-medium rounded-xl transition-all duration-300 border border-cyan-400/30 hover:border-cyan-400/50">
+                  <a href="/papers/02.pdf" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-plate-2 hover:bg-[var(--atlas-line-strong)] text-cyan-300 font-medium rounded-none transition-all duration-300 border border-cyan-400/30 hover:border-cyan-400/50">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -537,10 +537,10 @@ const FaqLayout: React.FC<FaqLayoutProps> = ({ version }) => {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 backdrop-blur-lg rounded-2xl border border-white/10 p-8 text-center mt-8">
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-4">准备好探索无限了吗？</h3>
+              <div className="bg-purple-900/50 hover:bg-blue-900/50 rounded-none border border-white/10 p-8 text-center mt-8">
+                <h3 className="text-2xl font-bold text-amber-400 font-mono mb-4">准备好探索无限了吗？</h3>
                 <p className="text-gray-300 mb-6 text-lg">开始您穿越有史以来最广阔的程序宇宙的旅程。</p>
-                <a href="/" className="inline-block px-8 py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg">
+                <a href="/" className="inline-block px-8 py-4 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-none transition-all duration-300 transform hover:scale-105 shadow-lg">
                   开始导航 →
                 </a>
               </div>

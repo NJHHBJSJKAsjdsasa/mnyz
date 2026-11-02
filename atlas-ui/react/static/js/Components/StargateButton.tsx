@@ -79,15 +79,16 @@ const StargateButton: React.FC<StargateButtonProps> = ({ href, className = "", s
     };
 
     checkUniverseType();
-    const interval = setInterval(checkUniverseType, 1000);
-
-    return () => clearInterval(interval);
+    // One-shot on purpose (2026-10-29): `#data-universe-config` is a static
+    // server-rendered element, so this value cannot change without a full page
+    // load — and that remounts the component anyway. The old 1 s timer re-parsed
+    // the same JSON 86,400 times a day for a value that never moved.
   }, []);
 
   return (
     <>
       <div
-        className={`stargate ${className} relative inline-flex items-center group inline-block ${isRemoteUniverse ? "bg-gradient-to-r from-red-900 via-red-800 to-red-900 text-red-300 border border-red-600 cursor-not-allowed opacity-60" : "bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 text-gray-200 border border-slate-600 hover:border-slate-500 shadow-md hover:shadow-lg"} font-medium text-sm rounded-full transition-all duration-300 overflow-hidden ${isScaled ? "scale-110" : ""}`}
+        className={`stargate ${className} relative inline-flex items-center group inline-block ${isRemoteUniverse ? "bg-red-900 text-red-300 border border-red-600 cursor-not-allowed opacity-60" : "bg-slate-800 text-gray-200 border border-slate-600 hover:border-slate-500 shadow-md hover:shadow-lg"} font-medium text-sm rounded-full transition-all duration-300 overflow-hidden ${isScaled ? "scale-110" : ""}`}
         style={{
           transition: "transform 0.3s ease",
           transform: isScaled ? "scale(1.1)" : "scale(1)",

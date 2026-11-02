@@ -1,0 +1,1216 @@
+/* Animations — split out of global.css (2026-10-28).
+ *
+ * Every @keyframes here is still referenced: either by a class in this file, by a
+ * component that applies `animate-*`, or by an inline `animation:` string in the
+ * 3D renderers. Blocks with no reference at all were deleted (see
+ * docs/frontend-redesign/13-css-cleanup.md for the list).
+ */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes planetRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+@keyframes cloudRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+@keyframes atmospherePulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 15px rgba(34, 197, 94, 0.8),
+      0 0 25px rgba(34, 197, 94, 0.4);
+  }
+}
+@keyframes bounce-subtle {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(-1px);
+  }
+}
+@keyframes slideDownFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+@keyframes scan-horizontal-reverse {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+@keyframes scan-vertical {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+@keyframes scan-vertical-reverse {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+/* Animation classes for border scanning */
+.animate-scan-horizontal {
+  animation: scan-horizontal 3s ease-in-out infinite;
+}
+@keyframes scanlines {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(10px);
+  }
+}
+.delay-75 {
+  animation-delay: 75ms;
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+.animate-bounce-subtle {
+  animation: bounce-subtle 2s ease-in-out infinite;
+}
+@keyframes slideUpFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes slideDownFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-shimmer {
+  animation: shimmer 3s infinite;
+}
+.animate-spin-slow {
+  animation: spin-slow 2s linear infinite;
+}
+.animate-slideUpFadeIn {
+  animation: slideUpFadeIn 0.3s ease-out forwards;
+}
+.animate-slideDownFadeOut {
+  animation: slideDownFadeOut 0.3s ease-out forwards;
+}
+@keyframes drill-hammer {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(-5deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(5deg);
+  }
+  50% {
+    transform: translateY(-1px) rotate(-3deg);
+  }
+  75% {
+    transform: translateY(-2px) rotate(3deg);
+  }
+}
+@keyframes auto-mining {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+@keyframes processing-dots {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes slideDown {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+.animate-fadeOut {
+  animation: fadeOut 0.3s ease-in forwards;
+}
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out forwards;
+}
+.animate-slideDown {
+  animation: slideDown 0.3s ease-in forwards;
+}
+@keyframes slideInDown {
+  from {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0%);
+    opacity: 1;
+  }
+}
+@keyframes slideOutUp {
+  from {
+    transform: translate(-50%, 0%);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+}
+@keyframes popAndFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.2) rotate(10deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.1) rotate(-5deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.05) rotate(2deg);
+  }
+  80% {
+    opacity: 0.7;
+    transform: scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+.animate-popAndFadeOut {
+  animation: popAndFadeOut 0.8s ease-out forwards;
+}
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+.animate-slideOutRight {
+  animation: slideOutRight 0.3s ease-in forwards;
+}
+.animate-slideInLeft {
+  animation: slideInLeft 0.3s ease-out;
+}
+.animate-slideOutLeft {
+  animation: slideOutLeft 0.3s ease-in forwards;
+}
+@keyframes extractionCore {
+  0% {
+    width: 8px;
+    height: 8px;
+    opacity: 0;
+  }
+  20% {
+    width: 20px;
+    height: 20px;
+    opacity: 1;
+  }
+  80% {
+    width: 20px;
+    height: 20px;
+    opacity: 1;
+  }
+  100% {
+    width: 8px;
+    height: 8px;
+    opacity: 0;
+  }
+}
+@keyframes extractionRing {
+  0% {
+    width: 20px;
+    height: 20px;
+    opacity: 0;
+    border-width: 8px;
+  }
+  50% {
+    width: 150px;
+    height: 150px;
+    opacity: 0.8;
+    border-width: 2px;
+  }
+  100% {
+    width: 250px;
+    height: 250px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+@keyframes scanGrid {
+  0% {
+    background-position: 0 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.3;
+  }
+  90% {
+    opacity: 0.3;
+  }
+  100% {
+    background-position: 40px 40px;
+    opacity: 0;
+  }
+}
+@keyframes extractionBeam {
+  0% {
+    opacity: 0;
+    transform: scaleX(0) scaleY(1);
+  }
+  20% {
+    opacity: 0.4;
+    transform: scaleX(1) scaleY(1);
+  }
+  80% {
+    opacity: 0.4;
+    transform: scaleX(1) scaleY(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(0) scaleY(1);
+  }
+}
+@keyframes resourceParticle {
+  0% {
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(360deg) translateX(0);
+  }
+}
+@keyframes particleTrail {
+  0% {
+    transform: translateX(100px) scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(50px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) scale(0);
+    opacity: 0;
+  }
+}
+@keyframes hexagonPulse {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.1) rotate(30deg);
+    opacity: 0.6;
+  }
+}
+@keyframes hexagonDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes float-0 {
+  0%,
+  100% {
+    transform: translateY(0px) rotateX(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotateX(2deg);
+  }
+}
+@keyframes float-1 {
+  0%,
+  100% {
+    transform: translateY(0px) rotateX(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotateX(-2deg);
+  }
+}
+@keyframes holographic-shimmer {
+  0% {
+    background-position: -100% 0;
+  }
+  100% {
+    background-position: 100% 0;
+  }
+}
+@keyframes digital-rain {
+  0% {
+    transform: translateY(-100vh);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+@keyframes quantum-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgba(6, 182, 212, 0.4),
+      inset 0 0 20px rgba(6, 182, 212, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(6, 182, 212, 0.8),
+      inset 0 0 40px rgba(6, 182, 212, 0.2);
+  }
+}
+@keyframes energy-wave {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+@keyframes cyberpunk-glitch {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px);
+  }
+  40% {
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(-1px);
+  }
+  80% {
+    transform: translateX(1px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes neural-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+@keyframes button-energy-surge {
+  0% {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(6, 182, 212, 0.6),
+      0 0 80px rgba(147, 51, 234, 0.3);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+    transform: scale(1);
+  }
+}
+@keyframes particle-drift {
+  0% {
+    transform: translate(0, 0) scale(0);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(10px, -10px) scale(1);
+    opacity: 1;
+  }
+  80% {
+    transform: translate(30px, -30px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(50px, -50px) scale(0);
+    opacity: 0;
+  }
+}
+@keyframes phaseSlideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes phaseSlideDownFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+}
+.animate-phaseSlideUpFadeIn {
+  animation: phaseSlideUpFadeIn 0.4s ease-out forwards;
+}
+.animate-phaseSlideDownFadeOut {
+  animation: phaseSlideDownFadeOut 0.4s ease-in forwards;
+}
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes factsFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+@keyframes factsButtonPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+@keyframes didYouKnowCircleFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8) translateY(-5px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6) translateY(-10px);
+  }
+}
+.animate-didYouKnowCircleFadeOut {
+  animation: didYouKnowCircleFadeOut 0.5s ease-out forwards;
+}
+@keyframes didYouKnowCircleFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(20px);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-didYouKnowCircleFadeIn {
+  animation: didYouKnowCircleFadeIn 0.6s ease-out forwards;
+}
+@keyframes glitchFlicker {
+  0%,
+  100% {
+    opacity: 0.8;
+    filter: hue-rotate(0deg);
+  }
+  25% {
+    opacity: 0.2;
+    filter: hue-rotate(90deg);
+  }
+  50% {
+    opacity: 0.9;
+    filter: hue-rotate(180deg);
+  }
+  75% {
+    opacity: 0.1;
+    filter: hue-rotate(270deg);
+  }
+}
+@keyframes scanLine {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 100%));
+    opacity: 0;
+  }
+}
+@keyframes materializeHologram {
+  0% {
+    transform: scale(0.8) rotateY(45deg) translateY(20px);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  50% {
+    transform: scale(0.95) rotateY(15deg) translateY(10px);
+    opacity: 0.7;
+    filter: blur(5px);
+  }
+  100% {
+    transform: scale(1) rotateY(0deg) translateY(0px);
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) rotateZ(0deg);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-8px) rotateZ(180deg);
+    opacity: 1;
+  }
+}
+@keyframes warpCharge {
+  0% {
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 25px rgba(251, 191, 36, 0.7),
+      0 0 50px rgba(251, 191, 36, 0.4);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+    transform: scale(1);
+  }
+}
+@keyframes warpReady {
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(34, 211, 238, 0.8),
+      0 0 60px rgba(34, 211, 238, 0.3);
+    transform: scale(1.01);
+  }
+}
+@keyframes coordinateGlitchShake {
+  0%,
+  100% {
+    transform: translateX(0px);
+  }
+  10% {
+    transform: translateX(-2px);
+  }
+  20% {
+    transform: translateX(2px);
+  }
+  30% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  50% {
+    transform: translateX(-1px);
+  }
+  60% {
+    transform: translateX(1px);
+  }
+  70% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+  90% {
+    transform: translateX(-1px);
+  }
+}
+@keyframes holographicScanline {
+  0% {
+    height: 0;
+    top: 50%;
+    opacity: 0;
+  }
+  10% {
+    height: 2px;
+    opacity: 1;
+  }
+  90% {
+    height: 2px;
+    opacity: 1;
+  }
+  100% {
+    height: 0;
+    top: 50%;
+    opacity: 0;
+  }
+}
+@keyframes particleFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(0.8);
+    opacity: 0.4;
+  }
+  33% {
+    transform: translate(10px, -10px) scale(1);
+    opacity: 0.8;
+  }
+  66% {
+    transform: translate(-5px, -20px) scale(0.9);
+    opacity: 0.6;
+  }
+}
+@keyframes energySurge {
+  0% {
+    width: 0%;
+    opacity: 0.8;
+  }
+  50% {
+    width: 100%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0;
+  }
+}
+@keyframes destinationRevealPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+    border-color: rgba(34, 211, 238, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(34, 211, 238, 0.5),
+      0 0 80px rgba(147, 51, 234, 0.2);
+    border-color: rgba(34, 211, 238, 0.6);
+  }
+}
+@keyframes flashOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateX(0) rotateY(0deg);
+    filter: blur(0px) brightness(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.95) translateX(10px) rotateY(-5deg);
+    filter: blur(2px) brightness(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) translateX(40px) rotateY(-15deg);
+    filter: blur(4px) brightness(0.2);
+  }
+}
+@keyframes dataTransfer {
+  0% {
+    opacity: 0;
+    transform: translateX(-30px) scale(0.9);
+    filter: blur(2px);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateX(5px) scale(1.02);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0px);
+  }
+}
+@keyframes greenOverlay {
+  0% {
+    background: rgba(34, 197, 94, 0);
+  }
+  100% {
+    background: rgba(34, 197, 94, 0.25);
+  }
+}
+@keyframes matrixReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes coordinateTransition {
+  from {
+    color: rgba(96, 165, 250, 0.5);
+    transform: scale(0.95);
+  }
+  to {
+    color: rgba(96, 165, 250, 1);
+    transform: scale(1);
+  }
+}
+@keyframes buttonParticleFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(0.8);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(10px, -15px) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes energyWave {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+@keyframes slideOutLeft {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    max-width: 100%;
+  }
+  100% {
+    transform: translateX(-20px) scale(0.95);
+    opacity: 0;
+    max-width: 0;
+  }
+}
+@keyframes slideInRight {
+  0% {
+    transform: translateX(-20px) scale(0.95);
+    opacity: 0;
+    max-width: 0;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    max-width: 100%;
+  }
+}
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+@keyframes iconTransition {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-slideOutLeft {
+  animation: slideOutLeft 0.5s ease-in-out forwards;
+}
+.animate-slideInRight {
+  animation: slideInRight 0.5s ease-in-out forwards;
+}
+@keyframes accordionCollapse {
+  0% {
+    max-height: 80px;
+    opacity: 1;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  99% {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  100% {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    display: none;
+    visibility: hidden;
+  }
+}
+@keyframes buttonAccordionCollapse {
+  0% {
+    opacity: 1;
+    transform: scaleY(1);
+    max-height: 80px;
+    min-height: auto;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  25% {
+    opacity: 0.8;
+    transform: scaleY(0.8);
+    max-height: 64px;
+    min-height: auto;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  50% {
+    opacity: 0.5;
+    transform: scaleY(0.5);
+    max-height: 40px;
+    min-height: auto;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  75% {
+    opacity: 0.2;
+    transform: scaleY(0.2);
+    max-height: 16px;
+    min-height: auto;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(0);
+    max-height: 0;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    visibility: hidden;
+    display: none;
+  }
+}
+.animate-accordionCollapse {
+  animation: accordionCollapse 0.6s ease-in-out forwards;
+  overflow: hidden;
+}
+.animate-matrix-fade-in {
+  animation: matrix-fade-in 0.8s ease-out;
+}
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(6, 182, 212, 0.6),
+      0 0 60px rgba(147, 51, 234, 0.3);
+  }
+}
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-data-stream {
+  animation: data-stream 3s ease-in-out infinite;
+}
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+/* Motion budget (04 §3 / P4, 2026-10-29).
+ *
+ * `components.css` already neutralises its own decorative loops; this file had
+ * none, so 27 `animate-*` classes (and Tailwind's `animate-pulse|ping|bounce`)
+ * kept running at full speed for users who asked the OS for less motion.
+ *
+ * Rule: infinite loops stop, spinners keep turning (a frozen spinner reads as a
+ * hung page) but at a calmer cadence, and scrolling stays instant. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce,
+  .animate-pulse-slow,
+  .animate-pulse-glow,
+  .animate-glow-pulse,
+  .animate-shimmer,
+  .animate-scan-horizontal,
+  .animate-spin-slow,
+  .animate-data-stream,
+  .animate-glow {
+    animation: none !important;
+  }
+
+  .animate-spin {
+    animation-duration: 2.4s !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Moved out of global.css (2026-10-30). Only `flashIn` was still referenced —
+ * `typewriter`, `data-stream`, `slideRight`, `matrix-fade-in` had no callers
+ * left and were deleted with the old reveal components.
+ * ------------------------------------------------------------------------- */
+@keyframes flashIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateX(-30px) rotateY(15deg);
+    filter: brightness(0.3);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05) translateX(5px) rotateY(-2deg);
+    filter: brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(0) rotateY(0deg);
+    filter: brightness(1);
+  }
+}

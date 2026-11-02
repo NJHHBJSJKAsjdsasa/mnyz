@@ -1,13 +1,69 @@
 // atlas-ui/react/static/js/Components/ServerAuthPanel.tsx
-// Small server-mode account panel: login/register/logout, no separate page.
+// Server-mode account panel: login / register / logout, no separate page.
+//
+// 2026-10-29 (B 组换壳, 05 §3):
+//   * the dialog is now `ui/Modal` — same overlay token as every other dialog,
+//     Esc closes it, focus is trapped, and it no longer re-implements a backdrop;
+//   * it starts **closed**. It used to start open for every guest, so the very
+//     first thing a new player saw on the home page was a login box covering the
+//     coordinate selector — the page could not be used until it was dismissed.
+//     Guests still get it forced open the moment an action needs auth, via the
+//     existing `atlas:login-required` event;
+//   * inputs and the submit button come from `ui/`, so the form matches the panels.
 
 import React, { useEffect, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { ServerApi } from "../Utils/ServerApi.tsx";
+import { Button } from "../ui/Button.tsx";
+import { Input } from "../ui/Input.tsx";
+import { Modal } from "../ui/Modal.tsx";
+
+let mountedRoot: Root | null = null;
+
+/**
+ * Mount the account dialog on a page that does not render it declaratively.
+ *
+ * Only `__main__` used to include `<ServerAuthPanel/>`, so on `/galaxy`,
+ * `/system/<n>` and `/planet/<name>` the `atlas:login-required` event had **no
+ * listener at all** — a guest clicking "next galaxy" got nothing: no request, no
+ * dialog, no toast. Game pages now call this next to `ensureEconomyShell()`.
+ */
+export function ensureAuthPanel(): void {
+  if (mountedRoot || typeof document === "undefined") return;
+  if (document.getElementById("atlas-auth-panel")) return;
+  const host = document.createElement("div");
+  host.id = "atlas-auth-panel";
+  document.body.appendChild(host);
+  mountedRoot = createRoot(host);
+  mountedRoot.render(<ServerAuthPanel />);
+}
+
+/** Open the account dialog from anywhere (header trigger, 401 handler, …). */
+export const openAuthDialog = (): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("atlas:login-required"));
+};
+
+/** The header's account entry. Lives next to the dialog so both read one status. */
+export const AuthButton: React.FC = () => {
+  const status = ServerApi.accountStatus();
+  const loggedIn = status !== "guest";
+  return (
+    <Button
+      size="sm"
+      variant={loggedIn ? "secondary" : "primary"}
+      onClick={openAuthDialog}
+      title={loggedIn ? `已登录：${status}` : "登录或注册服务端账号"}
+    >
+      {loggedIn ? `账号 · ${status}` : "登录 / 注册"}
+    </Button>
+  );
+};
 
 const ServerAuthPanel: React.FC = () => {
   const status = ServerApi.accountStatus();
   const loggedIn = status !== "guest";
-  const [open, setOpen] = useState(!loggedIn);
+  const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,91 +104,103 @@ const ServerAuthPanel: React.FC = () => {
     }
   };
 
+  const canSubmit = Boolean(email.trim() && password && (tab === "login" || displayName.trim()));
+
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed top-3 right-3 z-[70] px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 border border-cyan-500/40 text-cyan-200 hover:bg-slate-800 shadow-lg"
+      <Modal
+        open={open}
+        title="服务端账号"
+        onClose={() => setOpen(false)}
+        width={360}
+        dismissible={!busy}
+        footer={
+          loggedIn ? null : (
+            <span style={{ color: "var(--atlas-n-600)", fontSize: "var(--atlas-t-micro)" }}>
+              可以先关闭窗口浏览；采集、扫描、交易、战斗等操作会要求登录。
+            </span>
+          )
+        }
       >
-        {loggedIn ? `账号 · ${status}` : "登录 / 注册"}
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="w-full max-w-sm rounded-xl border border-cyan-500/30 bg-slate-950/95 p-4 shadow-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-bold text-cyan-200">服务端账号</span>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-white">✕</button>
+        {loggedIn ? (
+          <div style={{ display: "grid", gap: "var(--atlas-3)" }}>
+            <p style={{ fontSize: "var(--atlas-t-small)", color: "var(--atlas-n-800)" }}>
+              当前已登录（{status}）。
+            </p>
+            <Button variant="danger" block loading={busy} onClick={() => void logout()}>
+              退出登录
+            </Button>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "var(--atlas-2)" }}>
+            <div
+              role="tablist"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 2,
+                padding: 2,
+                background: "var(--atlas-plate-2)",
+                borderRadius: "var(--atlas-r-md)",
+              }}
+            >
+              {(["login", "register"] as const).map((id) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                  style={{
+                    height: 26,
+                    border: "none",
+                    borderRadius: "var(--atlas-r-sm)",
+                    background: tab === id ? "var(--atlas-signal)" : "transparent",
+                    color: tab === id ? "var(--atlas-void)" : "var(--atlas-n-700)",
+                    fontFamily: "var(--atlas-font)",
+                    fontSize: "var(--atlas-t-small)",
+                    fontWeight: tab === id ? 600 : 400,
+                    cursor: "pointer",
+                  }}
+                >
+                  {id === "login" ? "登录" : "注册"}
+                </button>
+              ))}
             </div>
 
-            {loggedIn ? (
-              <div className="space-y-3">
-                <p className="text-xs text-gray-300">当前已登录（{status}）。</p>
-                <button
-                  onClick={() => void logout()}
-                  disabled={busy}
-                  className="w-full py-2 rounded bg-red-600/80 hover:bg-red-500 text-white text-xs font-semibold disabled:opacity-40"
-                >
-                  退出登录
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-1 rounded bg-white/5 p-1">
-                  <button
-                    onClick={() => setTab("login")}
-                    className={`py-1 rounded text-xs ${tab === "login" ? "bg-cyan-600 text-white" : "text-gray-400"}`}
-                  >
-                    登录
-                  </button>
-                  <button
-                    onClick={() => setTab("register")}
-                    className={`py-1 rounded text-xs ${tab === "register" ? "bg-cyan-600 text-white" : "text-gray-400"}`}
-                  >
-                    注册
-                  </button>
-                </div>
-
-                {tab === "register" && (
-                  <input
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="舰长名（必填）"
-                    maxLength={24}
-                    className="w-full text-xs bg-black/40 border border-white/10 rounded px-2 py-1.5 text-gray-100"
-                  />
-                )}
-                <input
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="邮箱"
-                  type="email"
-                  className="w-full text-xs bg-black/40 border border-white/10 rounded px-2 py-1.5 text-gray-100"
-                />
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder={tab === "register" ? "密码（至少 10 位）" : "密码"}
-                  type="password"
-                  className="w-full text-xs bg-black/40 border border-white/10 rounded px-2 py-1.5 text-gray-100"
-                />
-                <button
-                  onClick={() => void submit()}
-                  disabled={busy || !email.trim() || !password || (tab === "register" && !displayName.trim())}
-                  className="w-full py-2 rounded bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold disabled:opacity-40"
-                >
-                  {busy ? "处理中…" : tab === "login" ? "登录" : "注册并登录"}
-                </button>
-                <p className="text-[10px] text-gray-500">
-                  可以先关闭窗口浏览；采集、扫描、交易、战斗等操作会要求登录。
-                </p>
-              </div>
-            )}
-
-            {message && <p className="mt-2 text-[11px] text-red-300">{message}</p>}
+            {tab === "register" ? (
+              <Input
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="舰长名（必填）"
+                maxLength={24}
+                aria-label="舰长名"
+              />
+            ) : null}
+            <Input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="邮箱"
+              type="email"
+              aria-label="邮箱"
+            />
+            <Input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={tab === "register" ? "密码（至少 10 位）" : "密码"}
+              type="password"
+              aria-label="密码"
+            />
+            <Button block loading={busy} disabled={!canSubmit} onClick={() => void submit()}>
+              {tab === "login" ? "登录" : "注册并登录"}
+            </Button>
+            {message ? (
+              <span role="alert" style={{ color: "var(--atlas-danger)", fontSize: "var(--atlas-t-small)" }}>
+                {message}
+              </span>
+            ) : null}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </>
   );
 };

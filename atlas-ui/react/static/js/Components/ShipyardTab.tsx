@@ -111,7 +111,7 @@ const ShipyardTab: React.FC = () => {
         <span className="text-cyan-300 font-semibold shrink-0">🎫 改装券 ×{vouchers}</span>
       </div>
 
-      <div className="rounded-lg border border-red-500/20 bg-white/5 p-3">
+      <div className="rounded-lg border border-red-500/20 bg-white/[0.04] p-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
           <span className="text-gray-300">
             船体 {hull}/{MAX_HULL} · 采集 ×{HullSystem.factor().toFixed(2)} · 航行成本 ×{HullSystem.travelFactor().toFixed(2)}
@@ -125,8 +125,8 @@ const ShipyardTab: React.FC = () => {
             维修 · {formatCost(HullSystem.repairCost())}
           </button>
         </div>
-        <div className="mt-2 h-1.5 rounded bg-white/10 overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-red-500 to-amber-500 transition-all" style={{ width: `${hull}%` }} />
+        <div className="mt-2 h-1.5 rounded bg-plate-2 overflow-hidden">
+          <div className="h-full bg-red-500 hover:bg-amber-500 transition-all" style={{ width: `${hull}%` }} />
         </div>
       </div>
 
@@ -141,7 +141,7 @@ const ShipyardTab: React.FC = () => {
         const overclockCost = ShipModuleSystem.overclockCost(module.id);
 
         return (
-          <div key={module.id} className="rounded-lg border border-green-500/20 bg-white/5 p-3">
+          <div key={module.id} className="rounded-lg border border-green-500/20 bg-white/[0.04] p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{module.icon}</span>
@@ -163,7 +163,7 @@ const ShipyardTab: React.FC = () => {
                   onClick={() => install(module.id, false)}
                   disabled={!normal.ok}
                   title={normal.reason ?? ""}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-green-600 hover:bg-green-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   改装
                 </button>
@@ -171,7 +171,7 @@ const ShipyardTab: React.FC = () => {
                   onClick={() => install(module.id, true)}
                   disabled={!withVoucher.ok}
                   title={withVoucher.reason ?? formatCost(voucherCost)}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   用券 -50%
                 </button>
@@ -194,7 +194,7 @@ const ShipyardTab: React.FC = () => {
                 onClick={() => overclockModule(module.id)}
                 disabled={!overclockCheck.ok}
                 title={overclockCheck.reason ?? ""}
-                className="px-3 py-1 rounded-md text-xs font-semibold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1 rounded-md text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 超频
               </button>
@@ -209,7 +209,7 @@ const ShipyardTab: React.FC = () => {
           { label: "等离子电池", value: resources.plasmaCell },
           { label: "神经回路", value: resources.neuralCircuit },
         ].map((item) => (
-          <div key={item.label} className="bg-white/5 rounded p-2 border border-green-500/20">
+          <div key={item.label} className="bg-white/[0.04] rounded p-2 border border-green-500/20">
             <div className="text-gray-400">{item.label}</div>
             <div className="text-white font-semibold">{Math.round(item.value)}</div>
           </div>

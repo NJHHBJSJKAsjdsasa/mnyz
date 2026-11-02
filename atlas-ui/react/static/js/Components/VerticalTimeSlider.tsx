@@ -216,12 +216,12 @@ export const VerticalTimeSlider: React.FC<VerticalTimeSliderProps> = ({ sliderPo
         </div>
 
         <div className="relative h-full flex items-center">
-          <div ref={trackRef} className="relative w-3 h-full bg-black/60 backdrop-blur-md rounded-full cursor-pointer border border-white/20 touch-none" onMouseDown={onMouseDown} onTouchStart={onTouchStart}>
+          <div ref={trackRef} className="relative w-3 h-full bg-black/60 rounded-full cursor-pointer border border-white/20 touch-none" onMouseDown={onMouseDown} onTouchStart={onTouchStart}>
             <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
-              <div className="absolute inset-x-0 h-1/4 bg-gradient-to-b from-green-500/30 to-green-500/10" style={{ top: "0%" }} />
-              <div className="absolute inset-x-0 h-1/4 bg-gradient-to-b from-green-500/10 to-transparent" style={{ top: "25%" }} />
+              <div className="absolute inset-x-0 h-1/4 bg-green-500/30 hover:bg-green-500/10" style={{ top: "0%" }} />
+              <div className="absolute inset-x-0 h-1/4 bg-green-500/10 to-transparent" style={{ top: "25%" }} />
               <div className="absolute inset-x-0 h-1/4 bg-gradient-to-b from-transparent to-orange-500/10" style={{ top: "50%" }} />
-              <div className="absolute inset-x-0 h-1/4 bg-gradient-to-b from-orange-500/10 to-orange-500/30" style={{ top: "75%" }} />
+              <div className="absolute inset-x-0 h-1/4 bg-orange-500/10 hover:bg-orange-500/30" style={{ top: "75%" }} />
             </div>
 
             <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-cyan-400/60 pointer-events-none" />
@@ -234,7 +234,7 @@ export const VerticalTimeSlider: React.FC<VerticalTimeSliderProps> = ({ sliderPo
 
             <div className={`absolute left-1/2 -translate-x-1/2 w-6 h-6 rounded-full transition-transform ${isDragging ? "scale-125" : "scale-100"}`} style={{ top: `calc(${thumbPosition}% - 12px)` }}>
               <div className="absolute inset-0 rounded-full bg-cyan-400/40 blur-sm" />
-              <div className="absolute inset-1 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-600 border-2 border-white/50 shadow-lg" />
+              <div className="absolute inset-1 rounded-full bg-cyan-400 hover:bg-cyan-600 border-2 border-white/50 shadow-lg" />
               <div className="absolute inset-2 rounded-full bg-gradient-to-br from-white/40 to-transparent" />
             </div>
           </div>

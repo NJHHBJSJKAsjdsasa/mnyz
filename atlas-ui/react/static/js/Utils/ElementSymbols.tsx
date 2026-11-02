@@ -160,7 +160,7 @@ export const ELEMENT_CATEGORY_COLORS = {
 export const getRarityColor = (rarityTier: string): string => {
   switch (rarityTier) {
     case "Exception":
-      return "bg-gradient-to-br from-cyan-500/40 to-purple-600/40 border-2 border-cyan-400/90 text-cyan-100 shadow-lg shadow-cyan-400/30 animate-pulse";
+      return "bg-cyan-500/40 hover:bg-purple-600/40 border-2 border-cyan-400/90 text-cyan-100 shadow-lg shadow-cyan-400/30 animate-pulse";
     case "Ultra Rare":
       return "bg-violet-600/30 border-violet-400/80 text-violet-200 shadow-violet-400/20";
     case "Extremely Rare":

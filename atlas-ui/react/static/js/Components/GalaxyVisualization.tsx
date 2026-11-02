@@ -16,9 +16,15 @@ interface GalaxyVisualizationProps {
   quasars?: number;
   galaxyName?: string;
   seed?: number;
+  /**
+   * Fill the parent instead of sitting in a 384px square. Set by the shell's
+   * stage (P1b); the square is right for a column layout, wrong when the 3D view
+   * is supposed to be the screen.
+   */
+  fill?: boolean;
 }
 
-const GalaxyVisualization: React.FC<GalaxyVisualizationProps> = ({ galaxyUrl, galaxyType = "Spiral", numSystems = 10000, blackHoles = 5, pulsars = 10, quasars = 3, galaxyName, seed }) => {
+const GalaxyVisualization: React.FC<GalaxyVisualizationProps> = ({ galaxyUrl, galaxyType = "Spiral", numSystems = 10000, blackHoles = 5, pulsars = 10, quasars = 3, galaxyName, seed, fill = false }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isEntering, setIsEntering] = useState(false);
@@ -103,11 +109,17 @@ const GalaxyVisualization: React.FC<GalaxyVisualizationProps> = ({ galaxyUrl, ga
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
+      <div className={fill ? "hidden" : "flex items-center justify-between mb-3"}>
         <h3 className="text-lg sm:text-xl font-bold text-white">Galaxy Visualization</h3>
       </div>
 
-      <div className="relative w-full max-w-80 sm:max-w-96 aspect-square mx-auto bg-black/50 flex justify-center items-center rounded-xl overflow-hidden border-2 border-blue-400/30 mb-4">
+      <div
+        className={
+          fill
+            ? "relative w-full flex-1 min-h-[280px] bg-black/50 flex justify-center items-center rounded-none overflow-hidden border border-[rgba(46,230,255,.25)]"
+            : "relative w-full max-w-80 sm:max-w-96 aspect-square mx-auto bg-black/50 flex justify-center items-center rounded-none overflow-hidden border-2 border-blue-400/30 mb-4"
+        }
+      >
         <Galaxy3DViewer
           ref={galaxyRendererRef}
           galaxyType={galaxyType}
@@ -149,7 +161,7 @@ const GalaxyVisualization: React.FC<GalaxyVisualizationProps> = ({ galaxyUrl, ga
 
       {isFullscreen &&
         createPortal(
-          <div className={`fixed inset-0 z-50 bg-black/95 backdrop-blur-xl transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : isEntering ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>
+          <div className={`fixed inset-0 z-50 bg-black/95 transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : isEntering ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>
             <div className={`w-full h-full flex flex-col p-1 sm:p-2 transition-all duration-300 delay-75 ${isClosing ? "opacity-0 translate-y-4" : isEntering ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"}`}>
               <div className="flex items-center justify-between mb-2 sm:mb-4">
                 <div className="block sm:hidden">

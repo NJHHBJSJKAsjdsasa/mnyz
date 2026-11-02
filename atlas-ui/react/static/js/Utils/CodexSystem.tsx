@@ -13,6 +13,10 @@ export const CODEX_STORAGE_KEY = "_atlasCodex";
 export const CODEX_PLANET_TYPES = [
   "Gas Giant",
   "Frozen Gas Giant",
+  "Super Puff",
+  "Super Ringed",
+  "Mirror",
+  "Ruby Cloud",
   "Rocky",
   "Icy",
   "Anomaly",

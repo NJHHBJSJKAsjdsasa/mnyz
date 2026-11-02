@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from "react";
 import { markSystemAsVisited } from "../Utils/VisitHistory.tsx";
 import { SpaceshipTravelManager } from "../Utils/SpaceshipTravelCosts.tsx";
+import { go } from "../Utils/PageNavigation.ts";
+import LevelStepper from "../Shell/LevelStepper.tsx";
 
 interface System {
   name: string;
@@ -43,7 +45,7 @@ const SystemNavigation: React.FC<SystemNavigationProps> = ({ currentSystem, gala
 
       const coordinates = galaxy.coordinates.join(",");
       markSystemAsVisited(coordinates, currentSystem.index - 1);
-      window.location.href = `/system/${currentSystem.index - 1}`;
+      void go(`/system/${currentSystem.index - 1}`);
     }
   };
 
@@ -60,7 +62,7 @@ const SystemNavigation: React.FC<SystemNavigationProps> = ({ currentSystem, gala
 
     const coordinates = galaxy.coordinates.join(",");
     markSystemAsVisited(coordinates, currentSystem.index + 1);
-    window.location.href = `/system/${currentSystem.index + 1}`;
+    void go(`/system/${currentSystem.index + 1}`);
   };
 
   if (loading) {
@@ -68,21 +70,15 @@ const SystemNavigation: React.FC<SystemNavigationProps> = ({ currentSystem, gala
   }
 
   return (
-    <div className="relative">
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={handlePrevious} disabled={!hasPrev} className={`flex items-center justify-center px-3 py-1.5 rounded-lg transition-all duration-200 ${hasPrev ? "bg-white/10 hover:bg-white/20 border border-white/20 text-white hover:text-blue-300" : "bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed"}`}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <button onClick={handleNext} disabled={!hasNext} className={`flex items-center justify-center px-3 py-1.5 rounded-lg transition-all duration-200 ${hasNext ? "bg-white/10 hover:bg-white/20 border border-white/20 text-white hover:text-blue-300" : "bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed"}`}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-    </div>
+    <LevelStepper
+      prevLabel={hasPrev ? `#${currentSystem.index - 1}` : null}
+      nextLabel={hasNext ? `#${currentSystem.index + 1}` : null}
+      prevTitle="上一个恒星系（消耗燃料）"
+      nextTitle="下一个恒星系（消耗燃料）"
+      onPrev={() => void handlePrevious()}
+      onNext={() => void handleNext()}
+      hint="恒星系"
+    />
   );
 };
 

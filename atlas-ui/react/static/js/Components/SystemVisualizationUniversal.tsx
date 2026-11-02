@@ -5,6 +5,8 @@ import StargateButton from "./StargateButton";
 import MiningAnimationOverlay from "./MiningAnimationOverlay.tsx";
 import { ResourceEventManager } from "../Utils/ResourceEventManager.tsx";
 import AdaptivePreloadCanvas from "./AdaptivePreloadCanvas.tsx";
+import RealisticSystemStage from "./RealisticSystemStage.tsx";
+import { readRenderer, writeRenderer } from "../Utils/RendererFlag.tsx";
 
 interface System {
   name: string;
@@ -35,15 +37,25 @@ interface SystemVisualizationUniversalProps {
   systemUrl: string;
   system?: System;
   cosmicOriginTime?: number;
+  /**
+   * Fill the parent instead of sitting in a 384px square. Set by the shell's
+   * stage (P1b); the square is right for a column layout, wrong when the 3D view
+   * is supposed to be the screen.
+   */
+  fill?: boolean;
 }
 
-const SystemVisualizationUniversal: React.FC<SystemVisualizationUniversalProps> = ({ systemUrl, system, cosmicOriginTime }) => {
+const SystemVisualizationUniversal: React.FC<SystemVisualizationUniversalProps> = ({ systemUrl, system, cosmicOriginTime, fill = false }) => {
   const decelerateRef = useRef(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [canvasHidden, setCanvasHidden] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [showMiningAnimation, setShowMiningAnimation] = useState(false);
   const solarSystemRendererRef = useRef<{ captureScreenshot: () => void; isGeneratingImage: boolean } | null>(null);
+  // 3.0 star system is opt-in, same flag as the planet page (docs/render-transplant §10.2)
+  const [renderer] = useState(() => readRenderer());
+  const [realisticFailed, setRealisticFailed] = useState(false);
+  const useRealistic = renderer === "realistic" && !realisticFailed;
 
   useEffect(() => {
     setImageLoaded(true);
@@ -80,16 +92,31 @@ const SystemVisualizationUniversal: React.FC<SystemVisualizationUniversalProps> 
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
+      <div className={fill ? "hidden" : "flex items-center justify-between mb-3"}>
         <h3 className="text-lg sm:text-xl font-bold text-white">System Visualization</h3>
       </div>
 
-      <div className="relative w-full max-w-80 sm:max-w-96 aspect-square mx-auto bg-black flex justify-center items-center rounded-xl overflow-hidden border-2 border-blue-400/30 mb-4">
+      <div
+        className={
+          fill
+            ? "relative w-full flex-1 min-h-[280px] bg-black flex justify-center items-center rounded-none overflow-hidden border border-[rgba(46,230,255,.25)]"
+            : "relative w-full max-w-80 sm:max-w-96 aspect-square mx-auto bg-black flex justify-center items-center rounded-none overflow-hidden border-2 border-blue-400/30 mb-4"
+        }
+      >
         <AdaptivePreloadCanvas hidden={canvasHidden} decelerateRef={decelerateRef} />
 
         {imageLoaded && system && (
           <div className={`absolute inset-0 w-full h-full transition-all duration-500 ${imageLoaded && canvasHidden ? "opacity-100 blur-0" : "opacity-0 blur-[25px]"}`}>
-            <SolarSystem3DViewerLeft ref={solarSystemRendererRef} planets={system.planets} stars={system.stars} systemName={system.name} cosmicOriginTime={cosmicOriginTime || 0} systemUrl={systemUrl} />
+            {useRealistic ? (
+              <RealisticSystemStage
+                systemIndex={system.index ?? 0}
+                cosmicOriginTime={cosmicOriginTime || 0}
+                height="100%"
+                onFallback={() => setRealisticFailed(true)}
+              />
+            ) : (
+              <SolarSystem3DViewerLeft ref={solarSystemRendererRef} planets={system.planets} stars={system.stars} systemName={system.name} cosmicOriginTime={cosmicOriginTime || 0} systemUrl={systemUrl} />
+            )}
           </div>
         )}
 
@@ -112,6 +139,17 @@ const SystemVisualizationUniversal: React.FC<SystemVisualizationUniversalProps> 
           }}
           isGeneratingImage={isGeneratingImage}
         />
+
+        {useRealistic ? null : (
+          <button
+            type="button"
+            onClick={() => writeRenderer("realistic")}
+            className="mt-2 text-xs text-cyan-300/70 hover:text-cyan-200 transition-colors"
+            title="试用 3.0 恒星系渲染（可随时切回）"
+          >
+            试用真实渲染 →
+          </button>
+        )}
 
         <div className="mt-2 text-xs text-gray-500 text-center">Gateway to the stars</div>
       </div>

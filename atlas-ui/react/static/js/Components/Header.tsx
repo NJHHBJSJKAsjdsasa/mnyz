@@ -1,53 +1,148 @@
-// atlas-ui/react/static/js/Components/Header.tsx
+// atlas-ui/react/static/js/Components/Header.tsx — the page header strip.
+//
+// 2026-10-30 (Amber Cockpit): the strip is now a *nameplate* — a squared mark,
+// a letterspaced wordmark, one hairline seam, then instrument readouts. The
+// amber bar on the left edge is the only "logo"; it ties the header to the
+// shell's top rail without repeating the shape.
+//
+// Content is unchanged (logo, 阿特拉斯 / 宇宙导航系统, multiverse status, ready
+// hint). Two decorative loops were already gone; the glowing status dot went
+// too — a 6px amber square says the same thing without light.
+
 import React, { useState, useEffect } from "react";
+// The header is the one component every layout renders, so it is also the
+// natural place to pull the design tokens in: without this import the
+// token-based styles below resolve to nothing on every page that does not
+// mount the economy shell (faq / multiverse / onboarding / error).
+import "../../css/tokens.css";
 import { UniverseDetection } from "../Utils/UniverseDetection.tsx";
 import { useMultiverseGlitch } from "../Utils/useMultiverseGlitch.tsx";
 import MultiverseHeaderConnectedIcon from "../Icons/MultiverseHeaderConnectedIcon.jsx";
 
-const Header: React.FC = () => {
+export interface HeaderProps {
+  /** Rendered at the right end, after the status chips (e.g. the account button). */
+  trailing?: React.ReactNode;
+}
+
+const MONO: React.CSSProperties = {
+  fontFamily: "var(--atlas-mono)",
+  fontSize: "var(--atlas-t-micro)",
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+};
+
+const Header: React.FC<HeaderProps> = ({ trailing }) => {
   const [isRemoteUniverse, setIsRemoteUniverse] = useState(false);
   const glitchText = useMultiverseGlitch(isRemoteUniverse);
 
   useEffect(() => {
-    const checkUniverseType = () => {
-      setIsRemoteUniverse(UniverseDetection.isRemoteUniverse());
-    };
-
-    checkUniverseType();
-    const interval = setInterval(checkUniverseType, 1000);
-
-    return () => clearInterval(interval);
+    // One-shot on purpose (2026-10-29): `#data-universe-config` is a static
+    // server-rendered element, so this value cannot change without a full page
+    // load — and that remounts the component anyway.
+    setIsRemoteUniverse(UniverseDetection.isRemoteUniverse());
   }, []);
 
   return (
-    <header className="bg-black/20 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-4">
-      <div className="w-full flex items-center justify-between">
-        <a href="/" className="flex items-center space-x-3 sm:space-x-4">
-          <img src="/static/atlas-logo.jpg" alt="Atlas Logo" className="h-10 w-10 sm:h-12 sm:w-12 rounded-full border-2 border-blue-400 shadow-lg" />
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white">阿特拉斯</h1>
-            <p className="text-xs sm:text-sm text-gray-400 hidden sm:block">宇宙导航系统</p>
-          </div>
+    <header
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "var(--atlas-4)",
+        // Matched to `Shell/GameTopBar` on 2026-11-01: same 54px height, same
+        // padding, same lit lower edge. They were 52 vs 54 with two different
+        // gradient stacks, which read as "the site and the game are two different
+        // products" every time you crossed between them. Content still differs on
+        // purpose — the game bar shows where you are, this one shows which page.
+        height: 54,
+        padding: "0 16px",
+        background: "linear-gradient(180deg, rgba(46,230,255,.1), rgba(6,10,20,.92))",
+        borderBottom: "1px solid rgba(46,230,255,.28)",
+        boxShadow: "inset 0 2px 0 var(--atlas-signal)",
+        fontFamily: "var(--atlas-font)",
+      }}
+    >
+      <a
+        href="/"
+        style={{ display: "flex", alignItems: "center", gap: "var(--atlas-3)", textDecoration: "none" }}
+      >
+        {/* amber edge: the header's whole identity, costs one element */}
+        <span
+          aria-hidden
+          style={{
+            width: 3,
+            height: 28,
+            background: "linear-gradient(180deg, var(--atlas-signal), rgba(46,230,255,.2))",
+            boxShadow: "0 0 14px rgba(46,230,255,.7)",
+          }}
+        />
+        <img
+          src="/static/atlas-logo.jpg"
+          alt="Atlas Logo"
+          style={{
+            height: 28,
+            width: 28,
+            borderRadius: 2,
+            border: "1px solid rgba(46,230,255,.45)",
+            objectFit: "cover",
+            boxShadow: "0 0 16px -4px rgba(46,230,255,.75)",
+          }}
+        />
+        <span style={{ display: "grid", gap: 2 }}>
+          <span
+            className="atlas-display"
+            style={{
+              color: "var(--atlas-n-950)",
+              fontSize: 16,
+              letterSpacing: "0.32em",
+              lineHeight: 1,
+              textShadow: "0 0 14px rgba(46,230,255,.55)",
+            }}
+          >
+            ATLAS
+          </span>
+          <span style={{ ...MONO, color: "var(--atlas-n-600)", fontSize: 10 }}>
+            阿特拉斯 · 宇宙导航系统
+          </span>
+        </span>
+      </a>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--atlas-4)" }}>
+        <a
+          href="/multiverse"
+          title="多元宇宙"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 8px",
+            borderRadius: 2,
+            border: `1px solid ${isRemoteUniverse ? "rgba(255,176,32,.55)" : "rgba(46,230,255,.45)"}`,
+            background: isRemoteUniverse
+              ? "linear-gradient(180deg, rgba(255,176,32,.18), rgba(10,18,34,.9))"
+              : "linear-gradient(180deg, rgba(46,230,255,.16), rgba(10,18,34,.9))",
+            boxShadow: isRemoteUniverse
+              ? "0 0 16px -6px rgba(255,176,32,.8)"
+              : "0 0 16px -6px rgba(46,230,255,.8)",
+            color: isRemoteUniverse ? "var(--atlas-warn)" : "var(--atlas-signal)",
+            ...MONO,
+            textDecoration: "none",
+          }}
+        >
+          {isRemoteUniverse ? (
+            <MultiverseHeaderConnectedIcon className="w-3.5 h-3.5" />
+          ) : (
+            <span className="hud-lamp" aria-hidden />
+          )}
+          {isRemoteUniverse ? glitchText : "多元宇宙在线"}
         </a>
 
-        <div className="flex items-center space-x-3 sm:space-x-6">
-          <a href="/multiverse" className="hover:scale-105 transition-transform">
-            <div className="flex items-center space-x-2 text-green-400 relative">
-              {isRemoteUniverse ? <MultiverseHeaderConnectedIcon className="w-4 h-4" /> : <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>}
-              <div className="relative">
-                <span className="text-xs sm:text-sm font-medium font-mono">{isRemoteUniverse ? glitchText : "多元宇宙在线"}</span>
-                {isRemoteUniverse && (
-                  <div className="absolute top-full left-0 w-full h-0.5 bg-green-900 overflow-hidden -mt-0.5 rounded-3xl">
-                    <div className="w-full h-full bg-gradient-to-r from-transparent via-green-400 to-transparent animate-pulse-slow relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-300 to-transparent animate-data-stream"></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </a>
-          <div className="text-xs sm:text-sm hidden lg:block text-gray-400">量子导航就绪</div>
-        </div>
+        <span style={{ ...MONO, color: "var(--atlas-n-600)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span className="hud-lamp" aria-hidden />
+          量子导航就绪
+        </span>
+        {trailing}
       </div>
     </header>
   );

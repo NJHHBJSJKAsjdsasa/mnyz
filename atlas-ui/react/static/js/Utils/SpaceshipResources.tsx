@@ -311,7 +311,7 @@ export class SpaceshipResourceManager {
     if (generation.antimatter + generation.element115 + generation.deuterium === 0) return;
 
     const toast = document.createElement("div");
-    toast.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-purple-900/90 to-blue-900/90 text-white px-4 py-3 rounded-lg shadow-lg border border-purple-500/50 w-[90vw] max-w-lg";
+    toast.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-purple-900/90 hover:bg-blue-900/90 text-white px-4 py-3 rounded-lg shadow-lg border border-purple-500/50 w-[90vw] max-w-lg";
     toast.className += " animate-slideInDown";
 
     const container = document.createElement("div");
@@ -509,7 +509,7 @@ export class SpaceshipResourceManager {
 
   private static showExchangeNotification(fromResource: string, toResource: string, sentAmount: number, receivedAmount: number): void {
     const toast = document.createElement("div");
-    toast.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-amber-900/90 to-orange-900/90 text-white px-4 py-3 rounded-lg shadow-lg border border-amber-500/50";
+    toast.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-amber-900/90 hover:bg-orange-900/90 text-white px-4 py-3 rounded-lg shadow-lg border border-amber-500/50";
     toast.className += " animate-slideInDown";
 
     const resourceLabels: { [key: string]: { name: string; color: string } } = {

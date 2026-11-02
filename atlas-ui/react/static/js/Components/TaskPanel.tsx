@@ -107,11 +107,16 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ className = "" }) => {
   };
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 ${className}`}>
+    // Bottom-right stack (2026-10-29). Three widgets live in this corner and used
+    // to sit on top of each other at the same offsets — TaskPanel and
+    // SpaceshipPanel were both at `bottom-4 right-4`, so one hid the other.
+    // Agreed order, bottom → top: SpaceshipPanel (bottom-6) · TreasureChest
+    // (bottom-24) · TaskPanel (bottom-44). Add new widgets above, never on top.
+    <div className={`fixed bottom-44 right-4 sm:right-6 z-50 ${className}`}>
       {/* 任务按钮 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-gray-800/80 backdrop-blur-lg border border-white/10 rounded-full px-4 py-2 text-white hover:bg-gray-700/80 transition-all"
+        className="flex items-center gap-2 bg-gray-800/80 border border-white/10 rounded-full px-4 py-2 text-white hover:bg-gray-700/80 transition-all"
       >
         <span className="text-xl">📋</span>
         <span className="font-medium">任务</span>
@@ -122,7 +127,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ className = "" }) => {
 
       {/* 任务面板 */}
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-2 w-80 bg-gray-900/95 backdrop-blur-lg border border-white/10 rounded-lg shadow-xl p-4">
+        <div className="absolute bottom-full right-0 mb-2 w-80 bg-gray-900/95 border border-white/10 rounded-lg shadow-xl p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-white">任务中心</h3>
             <button

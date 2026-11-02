@@ -1,0 +1,391 @@
+/* Named component styles — split out of global.css (2026-10-28).
+ *
+ * These are bespoke classes (mining hexagons, glitch text, the nprogress skin,
+ * coordinate selector decorations). They are not Tailwind utilities, so they live
+ * together instead of in the entry file.
+ *
+ * NOTE: selectors that a third-party library applies at runtime (nprogress on
+ * <html>, element ids) are kept unconditionally — a grep for the class name in
+ * our own source would report a false negative for those.
+ */
+
+html.nprogress-busy,
+html.nprogress-busy * {
+  cursor: wait !important;
+}
+#nprogress .bar {
+  background: linear-gradient(90deg, #e5951c, #bf7414) !important;
+  position: fixed;
+  z-index: 1031;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px !important;
+}
+#nprogress .peg {
+  display: block;
+  position: absolute;
+  right: 0px;
+  width: 100px;
+  height: 100%;
+  box-shadow:
+    0 0 10px #e5951c,
+    0 0 5px #e5951c;
+  opacity: 1;
+  transform: rotate(3deg) translate(0px, -4px);
+}
+#nprogress .spinner {
+  display: none !important;
+}
+.mining-extraction-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 201, 109, 1) 0%, rgba(229, 149, 28, 0.85) 40%, transparent 70%);
+  animation: extractionCore 3s ease-in-out;
+  box-shadow: 0 0 30px rgba(229, 149, 28, 0.85);
+}
+.mining-extraction-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(229, 149, 28, 0.85);
+  border-radius: 50%;
+  animation: extractionRing 1.5s ease-out forwards;
+  box-shadow:
+    0 0 15px rgba(229, 149, 28, 0.6),
+    inset 0 0 15px rgba(229, 149, 28, 0.32);
+}
+.mining-ring-delay-1 {
+  animation-delay: 0.3s;
+  border-color: rgba(181, 106, 73, 0.85);
+}
+.mining-ring-delay-2 {
+  animation-delay: 0.6s;
+  border-color: rgba(229, 149, 28, 0.6);
+}
+.mining-scan-grid {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(229, 149, 28, 0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(229, 149, 28, 0.10) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: scanGrid 3s linear;
+  mask-image: radial-gradient(circle at center, black 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 70%);
+}
+.mining-extraction-beam {
+  position: absolute;
+  background: linear-gradient(90deg, transparent, rgba(229, 149, 28, 0.32), transparent);
+  animation: extractionBeam 3s ease-in-out;
+}
+.mining-beam-vertical {
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+.mining-beam-horizontal {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+  animation-delay: 0.1s;
+}
+.mining-beam-diagonal-1 {
+  top: 50%;
+  left: 50%;
+  width: 141%;
+  height: 2px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  animation-delay: 0.2s;
+}
+.mining-beam-diagonal-2 {
+  top: 50%;
+  left: 50%;
+  width: 141%;
+  height: 2px;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  animation-delay: 0.3s;
+}
+.mining-resource-particle {
+  animation: resourceParticle 2.5s ease-in-out forwards;
+}
+.mining-particle-trail {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 201, 109, 1) 0%, rgba(229, 149, 28, 0) 70%);
+  box-shadow: 0 0 10px rgba(229, 149, 28, 0.85);
+  animation: particleTrail 2.5s ease-in-out forwards;
+}
+.particle {
+  position: absolute;
+  background: var(--atlas-signal);
+  border-radius: 50%;
+  animation: particle-drift 4s linear infinite;
+}
+@media (max-width: 768px) {
+  .perspective-1000 {
+    perspective: 500px;
+  }
+
+  .matrix-char {
+    font-size: 10px;
+  }
+
+  .holographic-glow {
+    padding: 8px 12px;
+  }
+
+  .neural-node {
+    width: 2px;
+    height: 2px;
+  }
+
+  .quantum-field::before,
+  .quantum-field::after {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .float-0,
+  .float-1 {
+    animation: none;
+  }
+
+  .holographic-glow::after {
+    display: none;
+  }
+
+  .matrix-text-mobile {
+    padding: 2rem 1rem;
+    max-width: 90vw;
+  }
+
+  .matrix-text-mobile pre {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .matrix-text-mobile .text-3xl {
+    font-size: 1.5rem;
+  }
+
+  .matrix-text-mobile .text-lg {
+    font-size: 0.9rem;
+  }
+}
+@media (min-width: 768px) and (max-width: 1024px) {
+  .matrix-text-container {
+    padding: 3rem 2rem;
+    max-width: 85vw;
+  }
+
+  .matrix-text-container pre {
+    font-size: 0.9rem;
+  }
+
+  .matrix-text-container .text-3xl {
+    font-size: 2rem;
+  }
+}
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+  .matrix-char,
+  .neural-node,
+  .particle {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .glitch-text {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .float-0,
+  .float-1,
+  .holographic-shimmer,
+  .digital-rain,
+  .neural-pulse,
+  .button-energy-surge,
+  .particle-drift,
+  .cyberpunk-glitch {
+    animation: none !important;
+  }
+
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
+
+  .transform-gpu {
+    transform: none !important;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .matrix-char {
+    color: #4c9f7b;
+  }
+
+  .neural-node {
+    background: #c6ad70;
+    box-shadow: 0 0 8px #c6ad70;
+  }
+}
+@media (max-width: 768px) and (orientation: landscape) {
+  .matrix-text-container {
+    padding: 1rem;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .matrix-text-container pre {
+    font-size: 0.7rem;
+    line-height: 1.3;
+  }
+
+  .matrix-text-container .text-3xl {
+    font-size: 1.3rem;
+  }
+}
+@media (max-width: 640px) {
+  .terminal-mobile-text {
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+    word-break: break-all;
+  }
+
+  .terminal-mobile-container {
+    margin: 0 8px;
+    min-height: 150px !important;
+  }
+
+  .terminal-mobile-header {
+    padding: 8px 12px !important;
+    font-size: 9px !important;
+  }
+}
+.topbar-green-overlay.ready::before {
+  background: rgba(76, 159, 123, 0.22);
+}
+/* Utility classes for CoordinateSelector */
+.coordinate-selector-particle {
+  animation: buttonParticleFloat 2s ease-in-out infinite;
+}
+.coordinate-selector-energy-wave {
+  animation: energyWave 0.7s ease-in-out;
+}
+/* Axis-specific styles */
+.axis-x {
+  --gradient-colors: linear-gradient(to right, #f2b040, #c6ad70);
+  --border-color: rgb(229 149 28 / 0.4);
+  --text-color: rgb(249 201 109);
+  --accent-color: rgb(229 149 28);
+  --ring-color: rgb(229 149 28);
+}
+.axis-y {
+  --gradient-colors: linear-gradient(to right, #b56a49, #93533a);
+  --border-color: rgb(181 106 73 / 0.4);
+  --text-color: rgb(224 161 132);
+  --accent-color: rgb(181 106 73);
+  --ring-color: rgb(147 83 58);
+}
+.axis-z {
+  --gradient-colors: linear-gradient(to right, #c6ad70, #a48f5b);
+  --border-color: rgb(198 173 112 / 0.4);
+  --text-color: rgb(230 211 164);
+  --accent-color: rgb(198 173 112);
+  --ring-color: rgb(164 143 91);
+}
+/* Custom range slider styles for CoordinateSelector */
+.axis-x input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(to bottom right, #f2b040, #c6ad70);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: -6px;
+}
+.axis-x input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+  transform: scale(1.1);
+}
+.axis-y input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(to bottom right, #b56a49, #93533a);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: -6px;
+}
+.axis-y input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+  transform: scale(1.1);
+}
+.axis-z input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(to bottom right, #c6ad70, #a48f5b);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: -6px;
+}
+.axis-z input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+  transform: scale(1.1);
+}
+/* Firefox range slider styles */
+.axis-x input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(to bottom right, #f2b040, #c6ad70);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border: none;
+  transition: all 0.2s ease;
+}
+.axis-y input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(to bottom right, #b56a49, #93533a);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border: none;
+  transition: all 0.2s ease;
+}
+.axis-z input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(to bottom right, #c6ad70, #a48f5b);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border: none;
+  transition: all 0.2s ease;
+}

@@ -8,6 +8,7 @@ import { SpaceshipResourceCollectionManager } from "../Utils/SpaceshipResourceCo
 import { LocationBookmarks } from "../Utils/LocationBookmarks.tsx";
 import { StargateGenerator } from "../Utils/StargateGenerator.tsx";
 import { ResourceEventManager } from "../Utils/ResourceEventManager.tsx";
+import { subscribeClock } from "../Utils/clock.tsx";
 
 interface Star {
   Type: string;
@@ -93,12 +94,12 @@ const SystemInfo: React.FC<SystemInfoProps> = ({ system, galaxy, systemIndex, co
     };
 
     updateMiningState();
-    const interval = setInterval(updateMiningState, 1000);
+    const stopClock = subscribeClock(updateMiningState);
 
     const unsubscribe = ResourceEventManager.subscribe("mining_completed", handleMiningCompleted);
 
     return () => {
-      clearInterval(interval);
+      stopClock();
       if (collectingTimeout) clearTimeout(collectingTimeout);
       unsubscribe();
     };
@@ -122,29 +123,29 @@ const SystemInfo: React.FC<SystemInfoProps> = ({ system, galaxy, systemIndex, co
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="bg-white/10 rounded-lg p-2 border border-blue-500/30">
+        <div className="bg-plate-2 rounded-lg p-2 border border-blue-500/30">
           <div className="text-xs text-gray-200">系统类型</div>
           <div className="text-sm font-bold text-blue-300 capitalize">{system.star_system_type}</div>
         </div>
-        <div className="bg-white/10 rounded-lg p-2 border border-purple-500/30">
+        <div className="bg-plate-2 rounded-lg p-2 border border-purple-500/30">
           <div className="text-xs text-gray-200">行星</div>
           <div className="text-sm font-bold text-purple-300">{system.num_planets}</div>
         </div>
-        <div className="bg-white/10 rounded-lg p-2 border border-orange-500/30">
+        <div className="bg-plate-2 rounded-lg p-2 border border-orange-500/30">
           <div className="text-xs text-gray-200">恒星</div>
           <div className="text-sm font-bold text-orange-300">{system.stars.length}</div>
         </div>
       </div>
 
-      <div className="bg-white/10 rounded-lg p-3 border border-gray-500/30 mb-3 col-span-3">
+      <div className="bg-plate-2 rounded-lg p-3 border border-gray-500/30 mb-3 col-span-3">
         <SolarSystem3DViewer planets={system.planets} stars={system.stars} systemName={system.name} cosmicOriginTime={cosmicOriginTime} />
       </div>
 
-      <div className="bg-white/10 rounded-lg p-2 border border-yellow-500/30">
+      <div className="bg-plate-2 rounded-lg p-2 border border-yellow-500/30">
         <div className="text-xs text-gray-200 mb-2">恒星组成</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
           {system.stars.map((star, index) => (
-            <div key={index} className="bg-white/5 rounded p-1.5 border border-yellow-500/20">
+            <div key={index} className="bg-white/[0.04] rounded p-1.5 border border-yellow-500/20">
               <div className="text-xs text-gray-300 flex items-center gap-2">
                 <span>恒星 {index + 1}</span>
                 <span className="font-bold text-yellow-300">{star.Type}</span>
@@ -160,23 +161,23 @@ const SystemInfo: React.FC<SystemInfoProps> = ({ system, galaxy, systemIndex, co
       <div className="mt-4 pt-3 border-t border-white/10">
         <div className="text-xs text-gray-400 mb-2">技术数据</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
-          <div className="bg-white/5 rounded px-1.5 py-0.5">
+          <div className="bg-white/[0.04] rounded px-1.5 py-0.5">
             <span className="text-gray-400">状态:</span>
             <div className="text-green-400 font-medium">已访问</div>
           </div>
-          <div className="bg-white/5 rounded px-1.5 py-0.5">
+          <div className="bg-white/[0.04] rounded px-1.5 py-0.5">
             <span className="text-gray-400">系统:</span>
             <div className="text-white truncate font-medium">{formatName(system.name)}</div>
           </div>
-          <div className="bg-white/5 rounded px-1.5 py-0.5">
+          <div className="bg-white/[0.04] rounded px-1.5 py-0.5">
             <span className="text-gray-400">系统ID:</span>
             <div className="text-white font-medium">#{systemIndex + 1}</div>
           </div>
-          <div className="bg-white/5 rounded px-1.5 py-0.5">
+          <div className="bg-white/[0.04] rounded px-1.5 py-0.5">
             <span className="text-gray-400">星系:</span>
             <div className="text-white truncate font-medium">{formatName(galaxy.name)}</div>
           </div>
-          <div className="bg-white/5 rounded px-1.5 py-0.5">
+          <div className="bg-white/[0.04] rounded px-1.5 py-0.5">
             <span className="text-gray-400">坐标:</span>
             <div className="text-white font-medium">{galaxy.coordinates.join(", ")}</div>
           </div>

@@ -76,7 +76,7 @@ const StationCard: React.FC<StationCardProps> = ({ station, serverMode, onAction
   };
 
   return (
-    <div className="rounded-lg border border-orange-500/25 bg-white/5 p-3">
+    <div className="rounded-lg border border-orange-500/25 bg-white/[0.04] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm text-white font-medium truncate">{station.name.replace(/_/g, " ")}</span>
         <span className="text-[11px] text-gray-500">{station.coordinates}</span>
@@ -233,7 +233,7 @@ const StationTab: React.FC<StationTabProps> = ({ planetKey, planetName, systemIn
         </span>
       </div>
 
-      <div className="rounded-lg border border-cyan-500/20 bg-white/5 p-3">
+      <div className="rounded-lg border border-cyan-500/20 bg-white/[0.04] p-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
           <span className="text-gray-300">
             星区许可 · 当前位于 区 {sector.key}（已解锁 {SectorSystem.count()} 个）
@@ -253,21 +253,21 @@ const StationTab: React.FC<StationTabProps> = ({ planetKey, planetName, systemIn
         <button
           onClick={unlockSector}
           disabled={sector.unlocked}
-          className="mt-2 px-3 py-1 rounded-md text-[11px] font-semibold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+          className="mt-2 px-3 py-1 rounded-md text-[11px] font-semibold bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {sector.unlocked ? "已许可" : "解锁本星区"}
         </button>
       </div>
 
       {!built && (
-        <div className="rounded-lg border border-orange-500/20 bg-white/5 p-3">
+        <div className="rounded-lg border border-orange-500/20 bg-white/[0.04] p-3">
           <div className="text-xs text-gray-300">在本行星建造空间站</div>
           <div className="mt-1 text-[11px] text-gray-500">{formatCost(StationSystem.buildCost())}</div>
           <button
             onClick={() => void build()}
             disabled={!check.ok}
             title={check.reason ?? ""}
-            className="mt-2 px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-2 px-3 py-1.5 rounded-md text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
           >
             建造
           </button>

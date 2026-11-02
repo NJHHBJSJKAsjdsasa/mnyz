@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { FabricatorSystem, Recipe } from "../Utils/FabricatorSystem.tsx";
 import { SpaceshipResource } from "../Utils/SpaceshipResources.tsx";
 import { resourceLabel } from "../Utils/ResourceLabels.tsx";
+import { subscribeClock } from "../Utils/clock.tsx";
 
 const formatBag = (bag: Partial<SpaceshipResource>): string =>
   Object.entries(bag)
@@ -21,17 +22,28 @@ const RecipeCard: React.FC<{ recipe: Recipe; onCrafted: (text: string) => void }
   const check = FabricatorSystem.canCraft(recipe.id);
   const remaining = FabricatorSystem.remainingMs(recipe.id);
 
-  const craft = () => {
+  const [busy, setBusy] = useState(false);
+
+  // The server owns both the wallet and the cooldown; re-read on mount so a
+  // refresh cannot show a stale "可生产" button.
+  useEffect(() => {
+    void FabricatorSystem.sync();
+  }, []);
+
+  const craft = async () => {
+    if (busy) return;
     if (!check.ok) {
       onCrafted(check.reason ?? "无法生产");
       return;
     }
-    const ok = FabricatorSystem.craft(recipe.id);
-    onCrafted(ok ? `${recipe.name} 完成：${formatBag(recipe.output)}` : "生产失败");
+    setBusy(true);
+    const result = await FabricatorSystem.run(recipe.id);
+    setBusy(false);
+    onCrafted(result.message);
   };
 
   return (
-    <div className="rounded-lg border border-teal-500/20 bg-white/5 p-3">
+    <div className="rounded-lg border border-teal-500/20 bg-white/[0.04] p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-gray-200">
           <span className="mr-1">{recipe.icon}</span>
@@ -43,8 +55,8 @@ const RecipeCard: React.FC<{ recipe: Recipe; onCrafted: (text: string) => void }
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <span className="text-gray-400">原料 {formatBag(recipe.cost)}</span>
         <button
-          onClick={craft}
-          disabled={!check.ok}
+          onClick={() => void craft()}
+          disabled={!check.ok || busy}
           title={check.reason ?? ""}
           className="px-2 py-1 rounded text-[11px] bg-teal-600/80 hover:bg-teal-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -60,8 +72,7 @@ const FabricatorTab: React.FC = () => {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const timer = window.setInterval(() => setTick((value) => value + 1), 1000);
-    return () => window.clearInterval(timer);
+    return subscribeClock(() => setTick((value) => value + 1));
   }, []);
 
   const notify = (text: string) => {

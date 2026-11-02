@@ -23,7 +23,7 @@ const IntelPanel: React.FC<{ coordinates: string }> = ({ coordinates }) => {
   };
 
   return (
-    <div className="rounded-lg border border-teal-500/20 bg-white/5 p-3">
+    <div className="rounded-lg border border-teal-500/20 bg-white/[0.04] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <span className="text-gray-300">附近星系情报 · 真实行星构成（服务端查询）</span>
         <span className="text-gray-500">有效 {Math.round(INTEL_TTL_MS / 60000)} 分钟</span>
@@ -54,7 +54,7 @@ const IntelPanel: React.FC<{ coordinates: string }> = ({ coordinates }) => {
       <button
         onClick={buy}
         disabled={loading}
-        className="mt-2 px-3 py-1 rounded-md text-[11px] font-semibold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+        className="mt-2 px-3 py-1 rounded-md text-[11px] font-semibold bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {loading ? "查询中…" : `购买情报 · ${INTEL_COST} 反物质`}
       </button>
