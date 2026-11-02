@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ATLAS · 设计预览 v1.1</title>
+<style>
+  :root{
+    --n-000:#05070C; --n-050:#070A10; --n-100:#0B1018; --n-200:#0F1620;
+    --n-300:#141D28; --n-400:#1B2634; --n-500:#26333F; --n-600:#4E6175;
+    --n-700:#7E92A7; --n-800:#9AAEC2; --n-900:#C6D3E1; --n-950:#F2F7FB;
+    --signal:#3DDCFF; --signal-weak:rgba(61,220,255,.14); --signal-line:rgba(61,220,255,.38);
+    --up:#FF5C6C; --down:#3FD68C; --warn:#FFB020; --danger:#FF4D4F;
+    --info:#6FA8FF; --aurora:#8B7CFF; --relic:#E8A33D;
+    --r-instrument:2px; --r-panel:6px; --r-pill:999px;
+    --dur-instant:80ms; --dur-fast:160ms; --dur-base:240ms; --dur-slow:400ms;
+    --ease-out:cubic-bezier(.22,1,.36,1); --ease-in:cubic-bezier(.5,0,.75,0);
+    --ease-inout:cubic-bezier(.4,0,.2,1); --ease-spring:cubic-bezier(.34,1.4,.64,1);
+    --font-sans:"Inter","Segoe UI",ui-sans-serif,system-ui,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--n-000); color:var(--n-900);
+    font-family:var(--font-sans); font-size:14px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 50% -10%, rgba(61,220,255,.05), transparent 70%),
+      radial-gradient(800px 400px at 85% 110%, rgba(139,124,255,.04), transparent 70%);
+    background-repeat:no-repeat;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.02;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  .micro{font-size:11.5px;line-height:1.35;letter-spacing:.06em;text-transform:uppercase;font-family:var(--font-mono);color:var(--n-800);font-weight:600}
+  .small{font-size:12.5px;line-height:1.5}
+  .muted{color:var(--n-800)}
+  .dim{color:var(--n-800)}
+  .up{color:var(--up)} .down{color:var(--down)} .warn{color:var(--warn)}
+
+  /* ---------- material ---------- */
+  .plate{background:var(--n-100);border:1px solid rgba(255,255,255,.06);border-radius:var(--r-panel)}
+  .raised{background:var(--n-300);border:1px solid rgba(255,255,255,.08);border-radius:var(--r-panel)}
+  .overlay{background:rgba(15,22,32,.86);backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,.10);border-radius:var(--r-panel);box-shadow:0 24px 64px -24px rgba(0,0,0,.9)}
+  .ticks{position:relative}
+  .ticks::before,.ticks::after{content:"";position:absolute;width:8px;height:8px;border-color:var(--signal-line);border-style:solid;pointer-events:none}
+  .ticks::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+  .ticks::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+
+  /* ---------- top rail ---------- */
+  .toprail{
+    position:fixed;top:0;left:0;right:0;height:56px;z-index:20;
+    display:flex;align-items:center;gap:16px;padding:0 20px 0 16px;
+    background:rgba(7,10,16,.82);backdrop-filter:blur(16px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .brand{display:flex;align-items:center;gap:10px;width:232px;flex:0 0 232px}
+  .brand-mark{width:24px;height:24px;border-radius:50%;border:1px solid var(--signal-line);position:relative;flex:0 0 24px}
+  .brand-mark::after{content:"";position:absolute;inset:4px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--signal),#0a5566 70%,#062430);box-shadow:0 0 12px rgba(61,220,255,.45)}
+  .brand-name{font-size:12px;letter-spacing:.2em;font-family:var(--font-mono);color:var(--n-950)}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--n-800);min-width:0}
+  .crumb a{color:var(--n-800);text-decoration:none;transition:color var(--dur-fast) var(--ease-out)}
+  .crumb a:hover{color:var(--signal)}
+  .crumb .sep{color:var(--n-600)}
+  .crumb .cur{color:var(--n-950);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rail-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .kbd-hint{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:var(--r-instrument);background:var(--n-200);border:1px solid rgba(255,255,255,.06);color:var(--n-800);font-size:12.5px;cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out)}
+  .kbd-hint:hover{background:var(--n-400);border-color:rgba(255,255,255,.10);color:var(--n-900)}
+  .kbd{font-family:var(--font-mono);font-size:11px;padding:1px 5px;border-radius:2px;background:var(--n-400);border:1px solid rgba(255,255,255,.08);color:var(--n-800)}
+  .wallet{display:flex;align-items:baseline;gap:8px;height:30px;padding:0 12px;border-radius:var(--r-instrument);background:var(--n-200);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:background var(--dur-fast) var(--ease-out)}
+  .wallet:hover{background:var(--n-400)}
+  .wallet b{font-family:var(--font-mono);font-weight:600;font-size:13px;color:var(--n-950);font-variant-numeric:tabular-nums}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--down);box-shadow:0 0 8px rgba(63,214,140,.7);flex:0 0 6px}
+  .status{display:flex;align-items:center;gap:7px;font-size:12px;font-family:var(--font-mono);color:var(--n-900);padding-left:4px}
+  .badge-aurora{font-size:9px;letter-spacing:.1em;font-family:var(--font-mono);padding:2px 5px;border-radius:2px;color:var(--aurora);border:1px solid rgba(139,124,255,.35);background:rgba(139,124,255,.08)}
+
+  /* ---------- nav rail ---------- */
+  .navrail{
+    position:fixed;top:56px;left:0;bottom:32px;width:64px;z-index:20;
+    background:rgba(7,10,16,.7);border-right:1px solid rgba(255,255,255,.06);
+    padding:12px 8px;display:flex;flex-direction:column;gap:2px;
+    transition:width var(--dur-base) var(--ease-out);
+    overflow:hidden;
+  }
+  .navrail:hover,.navrail:focus-within{width:232px;background:rgba(9,13,20,.96);backdrop-filter:blur(16px)}
+  .navitem{
+    display:flex;align-items:center;gap:12px;height:40px;padding:0 10px;border-radius:var(--r-instrument);
+    color:var(--n-800);text-decoration:none;position:relative;white-space:nowrap;
+    transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);cursor:pointer;
+  }
+  .navitem svg{flex:0 0 20px}
+  .navitem span{font-size:13px;opacity:0;transition:opacity var(--dur-fast) var(--ease-out)}
+  .navrail:hover .navitem span,.navrail:focus-within .navitem span{opacity:1}
+  .navitem:hover{background:var(--n-400);color:var(--n-950)}
+  .navitem.on{background:var(--signal-weak);color:var(--n-950)}
+  .navitem.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:var(--signal);border-radius:2px}
+  .navitem .cnt{margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:1px 5px;border-radius:var(--r-pill);background:rgba(255,176,32,.14);color:var(--warn);border:1px solid rgba(255,176,32,.3);opacity:0;transition:opacity var(--dur-fast)}
+  .navrail:hover .navitem .cnt{opacity:1}
+  .nav-foot{margin-top:auto;padding:8px 10px;border-top:1px solid rgba(255,255,255,.06);font-family:var(--font-mono);font-size:10.5px;color:var(--n-700);letter-spacing:.05em;white-space:nowrap}
+
+  /* ---------- layout ---------- */
+  .content{position:relative;z-index:2;margin:56px 0 32px 64px;padding:24px 24px 40px;max-width:1600px}
+  .page-head{display:flex;align-items:flex-end;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+  h1{font-size:28px;line-height:1.15;letter-spacing:-.01em;font-weight:600;color:var(--n-950)}
+  .meta-line{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--n-800);font-family:var(--font-mono);padding-bottom:3px}
+  .meta-line i{font-style:normal;color:var(--n-600);margin-right:6px}
+  .head-actions{margin-left:auto;display:flex;gap:8px}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 14px;border-radius:var(--r-instrument);font-size:13px;font-family:var(--font-sans);border:1px solid rgba(255,255,255,.10);background:var(--n-300);color:var(--n-900);cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out)}
+  .btn:hover{background:var(--n-400);border-color:rgba(255,255,255,.16);color:var(--n-950)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--signal);border-color:transparent;color:#04222b;font-weight:600}
+  .btn.primary:hover{background:#5ce4ff}
+  .btn.danger{background:rgba(255,77,79,.12);border-color:rgba(255,77,79,.4);color:#ff8b8d}
+  .btn.ghost{background:transparent}
+  .btn.sm{height:26px;padding:0 10px;font-size:12px}
+  button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+  .grid-planet{display:grid;grid-template-columns:minmax(320px,5fr) minmax(0,7fr);gap:16px;align-items:start}
+  @media (max-width:1100px){.grid-planet{grid-template-columns:1fr}.content{margin-left:64px}}
+
+  /* ---------- planet ---------- */
+  .planet-pane{padding:16px}
+  .sphere-wrap{position:relative;width:100%;max-width:380px;aspect-ratio:1;margin:0 auto;border-radius:var(--r-panel);overflow:hidden;background:var(--n-200);border:1px solid rgba(255,255,255,.06)}
+  .sphere{position:absolute;inset:8%;border-radius:50%;background:radial-gradient(circle at 32% 27%,#2f7f8c 0%,#1d5b6b 20%,#123f4f 40%,#0a2836 62%,#05161f 100%);box-shadow:inset -18px -22px 60px rgba(0,0,0,.9),inset 14px 10px 46px rgba(61,220,255,.12),0 0 70px rgba(61,220,255,.06);overflow:hidden}
+  .sphere::before{content:"";position:absolute;inset:-25%;border-radius:50%;background:repeating-linear-gradient(0deg,rgba(255,255,255,.055) 0 9px,transparent 9px 27px),repeating-linear-gradient(72deg,rgba(61,220,255,.07) 0 7px,transparent 7px 32px);animation:spin 120s linear infinite}
+  .sphere::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 30% 26%,transparent 28%,rgba(0,0,0,.5) 70%,rgba(0,0,0,.88) 100%)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .sphere-tag{position:absolute;left:10px;bottom:9px;font-family:var(--font-mono);font-size:10px;letter-spacing:.05em;color:var(--n-700);background:rgba(5,7,12,.7);padding:2px 6px;border-radius:2px;border:1px solid rgba(255,255,255,.06)}
+  .sphere-tools{position:absolute;right:8px;top:8px;display:flex;gap:6px;opacity:0;transition:opacity var(--dur-fast) var(--ease-out)}
+  .sphere-wrap:hover .sphere-tools{opacity:1}
+  .icon-btn{width:26px;height:26px;display:grid;place-items:center;border-radius:var(--r-instrument);background:rgba(5,7,12,.7);border:1px solid rgba(255,255,255,.12);color:var(--n-800);cursor:pointer;transition:color var(--dur-fast),background var(--dur-fast)}
+  .icon-btn:hover{color:var(--n-950);background:rgba(5,7,12,.95)}
+  .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+  .quick button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:var(--r-instrument);background:var(--n-200);border:1px solid rgba(255,255,255,.06);color:var(--n-900);cursor:pointer;font-size:12px;transition:background var(--dur-fast),color var(--dur-fast),border-color var(--dur-fast)}
+  .quick button:hover{background:var(--n-400);color:var(--n-950);border-color:rgba(255,255,255,.12)}
+  .quick button.main{background:var(--signal-weak);border-color:var(--signal-line);color:var(--signal)}
+
+  /* ---------- metrics ---------- */
+  .metrics{display:grid;grid-template-columns:repeat(6,1fr);margin:0;border-top:1px solid rgba(255,255,255,.06)}
+  .metric{padding:14px 12px 14px 14px;border-right:1px solid rgba(255,255,255,.06)}
+  .metric:last-child{border-right:0}
+  .metric dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--font-mono);color:var(--n-800);margin-bottom:6px}
+  .metric dd{font-family:var(--font-mono);font-size:18px;line-height:1.1;color:var(--n-950);font-variant-numeric:tabular-nums}
+  .metric dd em{font-style:normal;font-size:11.5px;color:var(--n-800);margin-left:3px}
+
+  /* ---------- tabs ---------- */
+  .lab-head{display:flex;align-items:center;gap:16px;padding:14px 16px 0;flex-wrap:wrap}
+  .lab-title{font-size:16px;font-weight:600;color:var(--n-950)}
+  .groups{display:flex;gap:4px;margin-left:auto}
+  .group{position:relative;height:34px;padding:0 12px;background:none;border:0;color:var(--n-800);font-size:13px;cursor:pointer;font-family:var(--font-sans);transition:color var(--dur-fast) var(--ease-out)}
+  .group:hover{color:var(--n-950)}
+  .group.on{color:var(--n-950);font-weight:600}
+  .group.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--signal);border-radius:2px}
+  .subs{display:flex;gap:6px;padding:12px 16px 0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .subs::-webkit-scrollbar{display:none}
+  .sub{height:26px;padding:0 11px;border-radius:var(--r-pill);background:var(--n-200);border:1px solid rgba(255,255,255,.06);color:var(--n-800);font-size:12px;cursor:pointer;white-space:nowrap;transition:background var(--dur-fast),color var(--dur-fast),border-color var(--dur-fast)}
+  .sub:hover{background:var(--n-400);color:var(--n-950)}
+  .sub.on{background:var(--signal-weak);border-color:var(--signal-line);color:var(--signal)}
+  .lab-body{padding:16px;border-top:1px solid rgba(255,255,255,.06);margin-top:12px;min-height:260px}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--font-mono);color:var(--n-800);font-weight:600;padding:0 10px 9px;border-bottom:1px solid rgba(255,255,255,.06)}
+  td{padding:10px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--n-900);font-size:13px}
+  tbody tr:hover{background:rgba(255,255,255,.02)}
+  td.num,th.num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  .pill{display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 7px;border-radius:var(--r-pill);font-size:11px;font-family:var(--font-mono);letter-spacing:.02em;border:1px solid transparent}
+  .pill.ok{background:rgba(63,214,140,.1);color:var(--down);border-color:rgba(63,214,140,.28)}
+  .pill.hi{background:rgba(255,92,108,.1);color:var(--up);border-color:rgba(255,92,108,.28)}
+  .pill.mid{background:rgba(255,176,32,.1);color:var(--warn);border-color:rgba(255,176,32,.28)}
+  .pill.n{background:var(--n-300);color:var(--n-800);border-color:rgba(255,255,255,.08)}
+
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:36px 0;color:var(--n-800);font-size:12.5px}
+
+  /* ---------- status bar ---------- */
+  .statusbar{position:fixed;left:0;right:0;bottom:0;height:32px;z-index:20;display:flex;align-items:center;gap:14px;padding:0 14px;background:rgba(7,10,16,.92);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.06);font-family:var(--font-mono);font-size:12px;color:var(--n-900)}
+  .res{display:flex;align-items:center;gap:7px;position:relative;cursor:default}
+  .res svg{opacity:.9}
+  .res .bar{width:44px;height:2px;border-radius:1px;background:var(--n-500);overflow:hidden}
+  .res .bar i{display:block;height:100%;border-radius:1px}
+  .sb-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .sb-sep{width:1px;height:14px;background:rgba(255,255,255,.08)}
+  .res-fly{position:absolute;bottom:30px;left:-8px;display:none;padding:6px;gap:3px;grid-template-columns:repeat(12,22px)}
+  .res:hover .res-fly{display:grid}
+  .res-fly span{display:block;width:22px;background:var(--n-500);border-radius:1px;position:relative;height:34px}
+  .res-fly span i{position:absolute;left:0;right:0;bottom:0;border-radius:1px}
+
+  /* ---------- panel host ---------- */
+  .scrim{position:fixed;inset:0;z-index:39;background:rgba(3,5,9,.6);opacity:0;pointer-events:none;transition:opacity var(--dur-base) var(--ease-out)}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .panel{position:fixed;z-index:40;top:56px;left:64px;right:0;bottom:32px;display:flex;flex-direction:column;background:var(--n-050);border-left:1px solid rgba(255,255,255,.06);transform:translateY(8px);opacity:0;pointer-events:none;transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--ease-out)}
+  .panel.on{opacity:1;transform:none;pointer-events:auto}
+  .panel-head{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .panel-head h2{font-size:20px;font-weight:600;color:var(--n-950);letter-spacing:-.01em}
+  .panel-head .sub2{font-size:12.5px;color:var(--n-800)}
+  .panel-body{flex:1;overflow:auto;padding:16px 20px 32px}
+  .mtabs{display:flex;gap:2px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:16px;overflow-x:auto;scrollbar-width:none}
+  .mtabs::-webkit-scrollbar{display:none}
+  .mtab{height:36px;padding:0 12px;background:none;border:0;color:var(--n-800);font-size:13px;cursor:pointer;position:relative;white-space:nowrap;transition:color var(--dur-fast)}
+  .mtab:hover{color:var(--n-950)}
+  .mtab.on{color:var(--n-950)}
+  .mtab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--signal)}
+
+  .mk-grid{display:grid;grid-template-columns:240px minmax(0,1fr) 320px;gap:16px;align-items:start}
+  @media (max-width:1240px){.mk-grid{grid-template-columns:1fr}.mk-right{display:none}}
+  .idx{padding:10px 12px;border-radius:var(--r-instrument);background:var(--n-200);border:1px solid rgba(255,255,255,.06);margin-bottom:8px;cursor:pointer;transition:background var(--dur-fast),border-color var(--dur-fast)}
+  .idx:hover{background:var(--n-400);border-color:rgba(255,255,255,.12)}
+  .idx .row1{display:flex;justify-content:space-between;align-items:baseline}
+  .idx .code{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.04em;color:var(--n-800)}
+  .idx .val{font-family:var(--font-mono);font-size:16px;color:var(--n-950);font-variant-numeric:tabular-nums}
+  .idx .row2{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+  .idx .name{font-size:12px;color:var(--n-800)}
+  .idx .chg{font-family:var(--font-mono);font-size:12px;font-weight:600}
+
+  .chart-box{padding:12px 14px}
+  .bbook{display:grid;grid-template-rows:repeat(5,auto) 1px repeat(5,auto);font-family:var(--font-mono);font-size:12px}
+  .lvl{display:flex;justify-content:space-between;padding:3px 0}
+  .book-mid{height:1px;background:rgba(255,255,255,.08);margin:4px 0}
+
+  .field{margin-bottom:10px}
+  .field label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--font-mono);color:var(--n-800);margin-bottom:6px}
+  .input{display:flex;align-items:center;height:34px;border-radius:var(--r-instrument);background:var(--n-200);border:1px solid rgba(255,255,255,.08);padding:0 10px;transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
+  .input:focus-within{border-color:var(--signal-line);box-shadow:0 0 0 3px var(--signal-weak)}
+  .input input{flex:1;background:none;border:0;outline:0;color:var(--n-950);font-family:var(--font-mono);font-size:14px;font-variant-numeric:tabular-nums;min-width:0}
+  .input .unit{font-family:var(--font-mono);font-size:10px;color:var(--n-700);margin-left:6px}
+  .seg{display:flex;gap:2px;padding:2px;background:var(--n-200);border:1px solid rgba(255,255,255,.06);border-radius:var(--r-instrument);margin-bottom:12px}
+  .seg button{flex:1;height:28px;border:0;border-radius:2px;background:none;color:var(--n-800);font-size:12px;cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast)}
+  .seg button.on.buy{background:rgba(255,92,108,.14);color:var(--up)}
+  .seg button.on.sell{background:rgba(63,214,140,.14);color:var(--down)}
+  .note{font-size:12px;color:var(--n-800);line-height:1.6;margin-top:8px}
+  .sumrow{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--n-800)}
+  .sumrow b{font-family:var(--font-mono);color:var(--n-950);font-variant-numeric:tabular-nums;font-weight:500}
+
+  /* ---------- status badge（唯一渲染器） ---------- */
+  .st{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px;border-radius:var(--r-instrument);
+      font-size:11.5px;line-height:1;border:1px solid;white-space:nowrap;font-family:var(--font-sans)}
+  .st.xs{height:18px;font-size:11px;padding:0 6px;gap:5px}
+  .st svg{width:11px;height:11px;flex:0 0 11px}
+  .sts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .ctxseg{display:flex;gap:2px;padding:2px;background:var(--n-200);border:1px solid rgba(255,255,255,.06);border-radius:var(--r-instrument)}
+  .ctxseg button{height:24px;padding:0 9px;border:0;border-radius:2px;background:none;color:var(--n-800);font-size:12px;cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast)}
+  .ctxseg button:hover{color:var(--n-950)}
+  .ctxseg button.on{background:var(--signal-weak);color:var(--signal)}
+
+  /* 语境密度：只改密度变量，不换组件 */
+  body[data-context="combat"] td{padding:5px 8px;font-size:12px}
+  body[data-context="combat"] th{font-size:10.5px;padding-bottom:6px}
+  body[data-context="combat"] .metric{padding:9px 10px}
+  body[data-context="combat"] .metric dd{font-size:15px}
+  body[data-context="combat"] .lab-body{padding:12px}
+  body[data-context="operate"] td{padding:7px 8px;font-size:12.5px}
+  body[data-context="operate"] .lab-body{padding:12px}
+
+  /* ---------- palette ---------- */
+  .palette{position:fixed;z-index:50;top:14vh;left:50%;transform:translate(-50%,-6px) scale(.99);width:min(560px,92vw);opacity:0;pointer-events:none;transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+  .palette.on{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
+  .palette input{width:100%;height:44px;background:none;border:0;border-bottom:1px solid rgba(255,255,255,.08);outline:0;color:var(--n-950);font-size:15px;padding:0 16px;font-family:var(--font-sans)}
+  .pal-res{padding:6px}
+  .pal-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-instrument);font-size:13px;color:var(--n-900);cursor:pointer}
+  .pal-row:hover,.pal-row.sel{background:var(--n-400)}
+  .pal-row .k{font-family:var(--font-mono);font-size:10px;color:var(--n-700);margin-left:auto}
+
+  .preview-badge{position:fixed;right:14px;top:64px;z-index:30;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;color:var(--n-700);background:rgba(11,16,24,.9);border:1px solid rgba(255,255,255,.08);border-radius:var(--r-pill);padding:4px 10px}
+  .toast{position:fixed;left:50%;bottom:52px;transform:translateX(-50%) translateY(-8px);z-index:60;padding:9px 14px;border-radius:var(--r-panel);font-size:13px;background:rgba(15,22,32,.96);border:1px solid rgba(255,255,255,.1);color:var(--n-950);opacity:0;pointer-events:none;transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<header class="toprail">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div class="brand-name">ATLAS</div>
+  </div>
+  <nav class="crumb">
+    <a href="#">天鹅座臂</a><span class="sep">›</span>
+    <a href="#">Kepler-442</a><span class="sep">›</span>
+    <span class="cur">Kepler-442b</span>
+  </nav>
+  <div class="rail-right">
+    <div class="kbd-hint" id="palBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <span>搜索</span><span class="kbd">⌘K</span>
+    </div>
+    <div class="ctxseg" id="ctxSeg" title="语境密度：探索 / 战斗 / 经营">
+      <button data-c="explore" class="on">探索</button>
+      <button data-c="combat">战斗</button>
+      <button data-c="operate">经营</button>
+    </div>
+    <button class="kbd-hint" onclick="openPanel('notify')" title="通知中心" style="gap:7px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+      <span class="mono" style="color:var(--warn)">3</span>
+    </button>
+    <div class="wallet" title="打开资产">
+      <span class="micro" style="color:var(--n-800)">Q1</span>
+      <b>124,806.42</b>
+    </div>
+    <div class="status">
+      <span class="dot"></span><span>42ms</span>
+      <span class="badge-aurora">REMOTE</span>
+    </div>
+  </div>
+</header>
+
+<nav class="navrail">
+  <a class="navitem on" title="导航">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
+    <span>导航</span>
+  </a>
+  <a class="navitem" data-panel="assets" title="资产">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
+    <span>资产</span>
+  </a>
+  <a class="navitem" data-panel="market" title="市场">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 17l5-6 4 4 4-7 5 5"/><path d="M3 21h18"/></svg>
+    <span>市场</span>
+  </a>
+  <a class="navitem" data-panel="bank" title="银行">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="11" rx="1"/><path d="M3 9l9-5 9 5M7 20v-7M12 20v-7M17 20v-7"/></svg>
+    <span>银行</span><span class="cnt">3</span>
+  </a>
+  <a class="navitem" data-panel="company" title="公司">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V5a1 1 0 011-1h8a1 1 0 011 1v16"/><path d="M14 9h5a1 1 0 011 1v11M2 21h20"/><path d="M7 8h4M7 12h4M7 16h4"/></svg>
+    <span>公司</span>
+  </a>
+  <a class="navitem" data-panel="legal" title="法务">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M7 21h10"/><path d="M5 7h14M5 7l-3 6a3 3 0 006 0zM19 7l-3 6a3 3 0 006 0z"/></svg>
+    <span>法务</span><span class="cnt">1</span>
+  </a>
+  <div class="nav-foot">v1.1 · PREVIEW</div>
+</nav>
+
+<main class="content">
+  <div class="page-head">
+    <div>
+      <h1>Kepler-442b</h1>
+      <div class="meta-line">
+        <span><i>恒星系</i>Kepler-442</span>
+        <span><i>星系</i>天鹅座臂</span>
+        <span><i>坐标</i>1000182, 999741, 1000033</span>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button class="btn ghost" onclick="toast('已加入书签')">存为书签</button>
+      <button class="btn" onclick="openPanel('legal')">产权：未登记</button>
+    </div>
+  </div>
+
+  <div class="grid-planet">
+    <!-- left: planet -->
+    <section class="plate ticks planet-pane">
+      <div class="sphere-wrap">
+        <div class="sphere"></div>
+        <div class="sphere-tools">
+          <button class="icon-btn" title="下载 4K 截图"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v11m0 0l-4-4m4 4l4-4M4 19h16"/></svg></button>
+          <button class="icon-btn" title="全屏"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9V4h5M20 15v5h-5M4 15v5h5M20 9V4h-5"/></svg></button>
+        </div>
+        <div class="sphere-tag">3D 渲染区 · 冻结 · 此处为占位</div>
+      </div>
+
+      <div class="quick">
+        <button class="main" onclick="toast('采集 +128 铁 · +34 硅')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v10m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/></svg>
+          采集
+        </button>
+        <button onclick="toast('扫描完成：4 类矿脉')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          扫描
+        </button>
+        <button onclick="toast('已存为书签')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4h12v17l-6-4-6 4z"/></svg>
+          书签
+        </button>
+        <button onclick="toast('链接已复制')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+          分享
+        </button>
+      </div>
+    </section>
+
+    <!-- right: metrics + lab -->
+    <section class="plate">
+      <dl class="metrics">
+        <div class="metric"><dt>直径</dt><dd>12,742<em>km</em></dd></div>
+        <div class="metric"><dt>质量</dt><dd>5.97<em>×10²⁴</em></dd></div>
+        <div class="metric"><dt>重力</dt><dd>1.02<em>g</em></dd></div>
+        <div class="metric"><dt>表面温度</dt><dd>288<em>K</em></dd></div>
+        <div class="metric"><dt>大气</dt><dd style="font-size:14px">N₂ · O₂</dd></div>
+        <div class="metric"><dt>自转</dt><dd>23.9<em>h</em></dd></div>
+      </dl>
+
+      <div class="lab-head">
+        <div>
+          <div class="lab-title">星舰实验舱</div>
+          <div class="small dim" style="margin-top:2px">Kepler 442b · 类地行星 · 12 个模块重组为 4 组</div>
+        </div>
+        <div class="groups" id="groups"></div>
+      </div>
+      <div class="subs" id="subs"></div>
+      <div class="lab-body" id="labBody"></div>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="res">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/></svg>
+    <span style="color:var(--n-800)">反物质</span>
+    <span style="color:var(--n-950)">1,240</span>
+    <span class="bar"><i style="width:62%;background:#a855f7"></i></span>
+    <div class="res-fly">
+      <span><i style="height:62%;background:#a855f7"></i></span><span><i style="height:34%;background:#22d3ee"></i></span>
+      <span><i style="height:18%;background:#fb923c"></i></span><span><i style="height:6%;background:#4ade80"></i></span>
+      <span><i style="height:12%;background:#f87171"></i></span><span><i style="height:3%;background:#facc15"></i></span>
+      <span><i style="height:9%;background:#f472b6"></i></span><span><i style="height:2%;background:#8b5cf6"></i></span>
+      <span><i style="height:1%;background:#9ca3af"></i></span><span><i style="height:5%;background:#fbbf24"></i></span>
+      <span><i style="height:4%;background:#3b82f6"></i></span><span><i style="height:2%;background:#a78bfa"></i></span>
+    </div>
+  </div>
+  <div class="res">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.8"><path d="M12 3l8 5v8l-8 5-8-5V8z"/></svg>
+    <span style="color:var(--n-800)">115</span>
+    <span style="color:var(--n-950)">340</span>
+    <span class="bar"><i style="width:34%;background:#22d3ee"></i></span>
+  </div>
+  <div class="res">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><path d="M12 8v8"/></svg>
+    <span style="color:var(--n-800)">氘</span>
+    <span style="color:var(--n-950)">88</span>
+    <span class="bar"><i style="width:18%;background:#fb923c"></i></span>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sts" id="sbStatus"></div>
+  <div class="sb-right">
+    <span id="clock">--:--:--</span>
+    <span class="sb-sep"></span>
+    <span style="color:var(--n-800)">tick 4,182,904</span>
+    <span class="sb-sep"></span>
+    <span style="color:var(--down)">● 已连接</span>
+  </div>
+</footer>
+
+<div class="preview-badge">设计预览 v1.1 · 非真实数据</div>
+
+<!-- market panel -->
+<div class="scrim" id="scrim" onclick="closePanel()"></div>
+<section class="panel" id="panel">
+  <div class="panel-head">
+    <h2 id="panelTitle">市场</h2>
+    <div class="sub2" id="panelSub">26 个端点 · 9 个子分区</div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn sm ghost" onclick="toast('已刷新')">刷新</button>
+      <button class="btn sm ghost" onclick="closePanel()">关闭 ×</button>
+    </div>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+</section>
+
+<!-- command palette -->
+<div class="palette overlay" id="palette">
+  <input id="palInput" placeholder="搜索页面、面板、股票、行星、动作…" />
+  <div class="pal-res" id="palRes"></div>
+</div>
+
+<div class="toast" id="toastEl"></div>
+<input id="hiddenFocus" style="position:fixed;opacity:0;width:1px;height:1px" />
+
+<script>
+/* ---------------- status vocabulary（唯一真源） ---------------- */
+const SEV = {
+  nominal:  { c: "#3FD68C", shape: "circle"  },
+  caution:  { c: "#FFB020", shape: "tri"     },
+  degraded: { c: "#E8A33D", shape: "diamond" },
+  critical: { c: "#FF4D4F", shape: "hex"     },
+  offline:  { c: "#4E6175", shape: "slash"   },
+};
+const SHAPE = {
+  circle:  '<circle cx="6" cy="6" r="4.4" fill="currentColor"/>',
+  tri:     '<path d="M6 1.7L11 10.3H1z" fill="currentColor"/>',
+  diamond: '<path d="M6 1L11 6L6 11L1 6z" fill="currentColor"/>',
+  hex:     '<path d="M3.6 1.6h4.8L10.8 6l-2.4 4.4H3.6L1.2 6z" fill="currentColor"/>',
+  slash:   '<rect x="1.7" y="1.7" width="8.6" height="8.6" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
+           '<path d="M2.8 9.2L9.2 2.8" stroke="currentColor" stroke-width="1.3"/>',
+};
+const STATUS = {
+  "ship.shield.offline": { sev: "critical", label: "护盾离线" },
+  "ship.hull.damaged":   { sev: "degraded", label: "船体受损 62%" },
+  "ship.fuel.low":       { sev: "caution",  label: "燃料不足" },
+  "ship.cargo.full":     { sev: "caution",  label: "货舱已满" },
+  "ship.task.running":   { sev: "nominal",  label: "自动采集运行中" },
+  "market.mm_paused":    { sev: "degraded", label: "做市已暂停" },
+  "market.margin_call":  { sev: "critical", label: "追保通知" },
+};
+
+function st(id, size = "") {
+  const d = STATUS[id];
+  if (!d) return "";
+  const v = SEV[d.sev];
+  return '<span class="st ' + size + '" style="color:' + v.c + ';border-color:' + v.c +
+    '55;background:' + v.c + '14" title="' + id + ' · ' + d.sev + '">' +
+    '<svg viewBox="0 0 12 12" aria-hidden="true">' + SHAPE[v.shape] + '</svg>' +
+    '<span>' + d.label + '</span></span>';
+}
+
+function renderStatus() {
+  /* 同一份数据，三处引用：状态栏 / 飞船改装 / 通知中心 */
+  document.getElementById("sbStatus").innerHTML =
+    st("ship.shield.offline") + st("ship.fuel.low");
+}
+
+/* ---------------- data ---------------- */
+const LABS = {
+  observe: { label: "观测", subs: [
+    { id: "scan",   label: "地质扫描" },
+    { id: "codex",  label: "图鉴" },
+    { id: "weekly", label: "周目标" },
+  ]},
+  operate: { label: "经营", subs: [
+    { id: "trade",   label: "星际贸易" },
+    { id: "craft",   label: "生产线" },
+    { id: "station", label: "空间站" },
+    { id: "tech",    label: "科技树" },
+  ]},
+  organize: { label: "组织", subs: [
+    { id: "shipyard",  label: "飞船改装" },
+    { id: "contracts", label: "远征合同" },
+    { id: "crew",      label: "同行者" },
+  ]},
+  govern: { label: "治理", subs: [
+    { id: "council", label: "宇宙议会" },
+    { id: "market",  label: "星际股市" },
+  ]},
+};
+
+const MINERALS = [
+  { n: "铁 Fe",      g: "18.4%", v: 1240, s: "ok",  s2: "已探明" },
+  { n: "硅 Si",      g: "11.2%", v: 860,  s: "ok",  s2: "已探明" },
+  { n: "钛 Ti",      g: "4.7%",  v: 320,  s: "mid", s2: "深层" },
+  { n: "稀土 Re",    g: "0.8%",  v: 64,   s: "hi",  s2: "稀有" },
+  { n: "氦-3 He³",   g: "0.02%", v: 6,    s: "hi",  s2: "稀有" },
+];
+
+const BODY = {
+  scan: () => `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div><div style="font-size:14px;color:var(--n-950)">地质勘探结果</div>
+      <div class="small dim">扫描于 12:04:11 · 覆盖率 82%</div></div>
+      <button class="btn sm primary" onclick="toast('开始新扫描')">重新扫描</button>
+    </div>
+    <table><thead><tr><th>矿物</th><th class="num">品位</th><th class="num">可采储量</th><th>状态</th></tr></thead>
+    <tbody>${MINERALS.map(m=>`<tr><td>${m.n}</td><td class="num">${m.g}</td><td class="num">${m.v.toLocaleString()}</td>
+      <td><span class="pill ${m.s}">${m.s2}</span></td></tr>`).join("")}</tbody></table>`,
+  codex: () => `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+      ${["类地行星","海洋行星","沙漠行星","冰巨星","气态巨行星","火山行星"].map((x,i)=>`
+        <div class="raised" style="padding:12px;cursor:pointer" onclick="toast('打开图鉴：${x}')">
+          <div class="micro">${String(i+1).padStart(2,"0")}</div>
+          <div style="font-size:13px;color:var(--n-950);margin-top:6px">${x}</div>
+          <div class="small dim" style="margin-top:2px">已收录 ${(i*7+3)} 项</div>
+        </div>`).join("")}
+    </div>`,
+  weekly: () => `
+    <table><thead><tr><th>周目标</th><th class="num">进度</th><th>状态</th></tr></thead><tbody>
+      <tr><td>采集 5,000 单位矿物</td><td class="num">3,412 / 5,000</td><td><span class="pill mid">进行中</span></td></tr>
+      <tr><td>访问 3 颗新行星</td><td class="num">3 / 3</td><td><span class="pill ok">可领取</span></td></tr>
+      <tr><td>完成 1 笔远征合同</td><td class="num">0 / 1</td><td><span class="pill n">未开始</span></td></tr>
+    </tbody></table>`,
+  trade: () => `
+    <table><thead><tr><th>资源</th><th class="num">买价</th><th class="num">卖价</th><th class="num">库存</th><th></th></tr></thead><tbody>
+      ${[["铁 Fe",12.4,11.8,8420],["硅 Si",21.0,20.2,3140],["钛 Ti",148.6,142.0,610],["稀土 Re",2040,1960,42]].map(r=>`
+      <tr><td>${r[0]}</td><td class="num up">${r[1].toFixed(2)}</td><td class="num down">${r[2].toFixed(2)}</td>
+      <td class="num muted">${r[3].toLocaleString()}</td>
+      <td style="text-align:right"><button class="btn sm ghost" onclick="toast('下单：${r[0]}')">交易</button></td></tr>`).join("")}
+    </tbody></table>`,
+  craft: () => `
+    <div class="raised" style="padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between"><div style="color:var(--n-950)">合金板 ×120</div><span class="pill mid">排队 2 / 3</span></div>
+      <div class="small dim" style="margin-top:4px">铁 240 · 钛 60 · 耗时 4m12s</div>
+      <div style="height:2px;background:var(--n-500);margin-top:10px;border-radius:1px;overflow:hidden"><i style="display:block;height:100%;width:58%;background:var(--signal)"></i></div>
+    </div>
+    <div class="empty">队列中还有 1 个任务</div>`,
+  station: () => `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+      ${[["船坞","Lv.3",true],["精炼厂","Lv.2",true],["仓库","Lv.4",true],["研究所","未建造",false],["护盾阵列","未建造",false]].map(m=>`
+      <div class="raised" style="padding:12px;border-color:${m[2]?"rgba(255,255,255,.08)":"rgba(255,255,255,.04)"}">
+        <div style="font-size:13px;color:${m[2]?"var(--n-950)":"var(--n-700)"}">${m[0]}</div>
+        <div class="small ${m[2]?"":"dim"}" style="margin-top:3px">${m[1]}</div>
+      </div>`).join("")}
+    </div>`,
+  tech: () => `
+    <table><thead><tr><th>科技</th><th>层级</th><th class="num">成本</th><th>状态</th></tr></thead><tbody>
+      <tr><td>深空推进 II</td><td>3</td><td class="num">2,400 Q1</td><td><span class="pill ok">已解锁</span></td></tr>
+      <tr><td>低温休眠舱</td><td>4</td><td class="num">5,100 Q1</td><td><span class="pill mid">可研究</span></td></tr>
+      <tr><td>曲率折跃</td><td>7</td><td class="num">48,000 Q1</td><td><span class="pill n">锁定</span></td></tr>
+    </tbody></table>`,
+  shipyard: () => `
+    <table><thead><tr><th>模块</th><th class="num">等级</th><th class="num">增益</th><th>状态</th><th></th></tr></thead><tbody>
+      <tr><td>曲率引擎</td><td class="num">3</td><td class="num down">+18% 效率</td><td>${st("ship.task.running","xs")}</td><td style="text-align:right"><button class="btn sm ghost" onclick="toast('改装中…')">改装</button></td></tr>
+      <tr><td>护盾发生器</td><td class="num">1</td><td class="num">+120 HP</td><td>${st("ship.shield.offline","xs")}</td><td style="text-align:right"><button class="btn sm ghost" onclick="toast('需要 2,400 Q1 修复')">修复</button></td></tr>
+      <tr><td>船体</td><td class="num">—</td><td class="num down">62%</td><td>${st("ship.hull.damaged","xs")}</td><td style="text-align:right"><button class="btn sm ghost" onclick="toast('修复中…')">修复</button></td></tr>
+      <tr><td>货舱</td><td class="num">2</td><td class="num down">+500 容量</td><td>${st("ship.cargo.full","xs")}</td><td style="text-align:right"><button class="btn sm ghost" onclick="toast('改装中…')">改装</button></td></tr>
+    </tbody></table>
+    <div class="note">状态列全部由 <span class="mono">ui/Status</span> 渲染，与状态栏、通知中心引用同一个 <span class="mono">statusId</span>，色值与文案不可能不一致。</div>`,
+  contracts: () => `
+    <table><thead><tr><th>合同</th><th>委托方</th><th class="num">报酬</th><th class="num">剩余</th><th></th></tr></thead><tbody>
+      <tr><td>矿物押运 · 2,000 铁</td><td>CCMC</td><td class="num down">8,400 Q1</td><td class="num warn">2d 04h</td><td style="text-align:right"><button class="btn sm" onclick="toast('已接受')">接受</button></td></tr>
+      <tr><td>深空测绘</td><td>宇宙议会</td><td class="num down">12,000 Q1</td><td class="num">4d 11h</td><td style="text-align:right"><button class="btn sm" onclick="toast('已接受')">接受</button></td></tr>
+    </tbody></table>`,
+  crew: () => `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+      ${[["阿娅 · 领航员","导航 +12%"],["卡兰 · 工程师","修复 +20%"],["诺 · 地质学家","扫描 +15%"],["空位",""]].map(c=>`
+      <div class="raised" style="padding:12px">
+        <div style="font-size:13px;color:${c[1]?"var(--n-950)":"var(--n-700)"}">${c[0]}</div>
+        <div class="small dim" style="margin-top:3px">${c[1]||"招募中"}</div>
+      </div>`).join("")}
+    </div>`,
+  council: () => `
+    <table><thead><tr><th>动议</th><th>类型</th><th class="num">赞成</th><th class="num">通过线</th><th></th></tr></thead><tbody>
+      <tr><td>A-12 修改章程</td><td>特别决议</td><td class="num down">61.2%</td><td class="num">66.7%</td><td style="text-align:right"><button class="btn sm" onclick="toast('已投赞成')">投票</button></td></tr>
+      <tr><td>A-13 部门预算</td><td>普通决议</td><td class="num down">72.4%</td><td class="num">50.0%</td><td style="text-align:right"><button class="btn sm ghost" onclick="toast('已投反对')">投票</button></td></tr>
+    </tbody></table>`,
+  market: () => `
+    <div class="empty">
+      <div>股市行情已在「市场」面板中</div>
+      <button class="btn sm primary" onclick="openPanel('market')">打开市场面板</button>
+    </div>`,
+};
+
+/* ---------------- lab ---------------- */
+let g = "observe", s = "scan";
+
+function renderGroups() {
+  document.getElementById("groups").innerHTML = Object.entries(LABS).map(([k, v]) =>
+    `<button class="group ${k === g ? "on" : ""}" data-g="${k}">${v.label}</button>`).join("");
+  document.querySelectorAll(".group").forEach(b => b.onclick = () => {
+    g = b.dataset.g; s = LABS[g].subs[0].id; renderAll();
+  });
+}
+function renderSubs() {
+  document.getElementById("subs").innerHTML = LABS[g].subs.map(x =>
+    `<button class="sub ${x.id === s ? "on" : ""}" data-s="${x.id}">${x.label}</button>`).join("");
+  document.querySelectorAll(".sub").forEach(b => b.onclick = () => { s = b.dataset.s; renderAll(); });
+  document.getElementById("labBody").innerHTML = (BODY[s] || (() => `<div class="empty">该模块内容</div>`))();
+}
+function renderAll() { renderGroups(); renderSubs(); }
+
+/* ---------------- market panel ---------------- */
+const MTABS = ["行情", "我的委托", "持仓", "指数", "融资融券", "发行", "做市", "交易所", "公司行动"];
+let mtab = 0;
+
+function candles(n, start, vol) {
+  const out = []; let p = start;
+  for (let i = 0; i < n; i++) {
+    const o = p;
+    const drift = (Math.random() - 0.48) * vol;
+    const c = Math.max(10, o + drift);
+    const h = Math.max(o, c) + Math.random() * vol * 0.7;
+    const l = Math.min(o, c) - Math.random() * vol * 0.7;
+    out.push({ o, h, l, c, v: 0.3 + Math.random() * 0.7 });
+    p = c;
+  }
+  return out;
+}
+
+function chartSVG(data) {
+  const W = 640, H = 260, pad = 8;
+  const hi = Math.max(...data.map(d => d.h)), lo = Math.min(...data.map(d => d.l));
+  const span = hi - lo || 1;
+  const slot = W / data.length, bw = Math.max(1.6, slot * 0.58);
+  const y = v => H - pad - ((v - lo) / span) * (H - pad * 2);
+  let g = "";
+  data.forEach((d, i) => {
+    const x = i * slot + slot / 2;
+    const up = d.c >= d.o;
+    const col = up ? "var(--up)" : "var(--down)";
+    g += `<line x1="${x}" y1="${y(d.h)}" x2="${x}" y2="${y(d.l)}" stroke="${col}" stroke-width="1"/>`;
+    const top = y(Math.max(d.o, d.c)), bot = y(Math.min(d.o, d.c));
+    g += `<rect x="${x - bw / 2}" y="${top}" width="${bw}" height="${Math.max(1, bot - top)}" fill="${col}"/>`;
+  });
+  let vg = "";
+  data.forEach((d, i) => {
+    const x = i * slot + slot / 2;
+    const h = d.v * 46;
+    vg += `<rect x="${x - bw / 2}" y="${330 - h}" width="${bw}" height="${h}" fill="rgba(61,220,255,.18)"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} 340" style="width:100%;height:auto;display:block">
+    <line x1="0" y1="${y(hi)}" x2="${W}" y2="${y(hi)}" stroke="rgba(255,255,255,.05)"/>
+    <line x1="0" y1="${y((hi+lo)/2)}" x2="${W}" y2="${y((hi+lo)/2)}" stroke="rgba(255,255,255,.05)"/>
+    <line x1="0" y1="${y(lo)}" x2="${W}" y2="${y(lo)}" stroke="rgba(255,255,255,.05)"/>
+    ${g}${vg}
+  </svg>`;
+}
+
+function marketBody() {
+  const t = MTABS[mtab];
+  if (mtab === 0) {
+    const data = candles(64, 760, 9);
+    const last = data[data.length - 1].c;
+    const chg = (last - 812.40) / 812.40 * 100;
+    const prev = 812.40;
+    const lv = [];
+    for (let i = 0; i < 5; i++) {
+      const a = prev + (i + 1) * 1.4, b = prev - (i + 1) * 1.4;
+      lv.push({ a, b, qa: 100 + i * 60, qb: 140 + i * 50 });
+    }
+    const pc = v => (v >= prev ? "up" : "down");
+    return `
+    <div class="mk-grid">
+      <div>
+        <div class="micro" style="margin-bottom:8px">指数</div>
+        ${[["CSX","宇宙综合指数","4,182.62","+0.84"],["ATL50","蓝筹 50","1,240.08","-0.31"],["NOVA","新星板","906.44","+2.10"]].map(x=>`
+          <div class="idx">
+            <div class="row1"><span class="code">${x[0]}</span><span class="val">${x[2]}</span></div>
+            <div class="row2"><span class="name">${x[1]}</span>
+            <span class="chg ${x[3].startsWith("+")?"up":"down"}">${x[3]}%</span></div>
+          </div>`).join("")}
+        <div class="micro" style="margin:14px 0 8px">股票</div>
+        ${[["ATL","阿特拉斯工业",last,+chg],["VEGA","织女星能源",342.10,-1.42],["NX-1","新星一号",88.40,+3.20]].map(x=>`
+          <div class="idx">
+            <div class="row1"><span class="code">${x[0]}</span>
+              <span class="val" style="font-size:14px">${x[2].toFixed(2)}</span></div>
+            <div class="row2"><span class="name">${x[1]}</span>
+              <span class="chg ${x[3]>=0?"up":"down"}">${x[3]>=0?"+":""}${x[3].toFixed(2)}%</span></div>
+          </div>`).join("")}
+      </div>
+
+      <div>
+        <div class="plate chart-box">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <div>
+              <div class="micro">ATL · 阿特拉斯工业</div>
+              <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px">
+                <span class="mono" style="font-size:26px;color:${chg>=0?"var(--up)":"var(--down)"}">${last.toFixed(2)}</span>
+                <span class="mono ${chg>=0?"up":"down"}" style="font-size:13px">${chg>=0?"+":""}${chg.toFixed(2)}%</span>
+                <span class="mono small dim">成交 1.24M Q4</span>
+              </div>
+            </div>
+            <div class="seg" style="margin:0 0 0 auto;width:230px">
+              ${["1m","5m","15m","1h","1d"].map((x,i)=>`<button class="${i===1?"on":""}">${x}</button>`).join("")}
+            </div>
+          </div>
+          <div style="margin-top:10px">${chartSVG(data)}</div>
+        </div>
+        <div class="plate" style="margin-top:12px;padding:12px 14px">
+          <div class="micro" style="margin-bottom:8px">五档盘口</div>
+          <div class="bbook">
+            ${lv.slice().reverse().map((x,i)=>`<div class="lvl"><span class="dim">卖 ${5-i}</span>
+              <span class="${pc(x.a)}">${x.a.toFixed(2)}</span><span class="muted">${x.qa}</span></div>`).join("")}
+            <div class="book-mid"></div>
+            ${lv.map((x,i)=>`<div class="lvl"><span class="dim">买 ${i+1}</span>
+              <span class="${pc(x.b)}">${x.b.toFixed(2)}</span><span class="muted">${x.qb}</span></div>`).join("")}
+          </div>
+        </div>
+      </div>
+
+      <div class="plate mk-right" style="padding:14px">
+        <div class="micro" style="margin-bottom:10px">下单</div>
+        <div class="seg">
+          <button class="on buy">买入</button><button class="sell">卖出</button>
+        </div>
+        <div class="field"><label>价格</label>
+          <div class="input"><input value="${last.toFixed(2)}" /><span class="unit">Q4</span></div></div>
+        <div class="field"><label>数量</label>
+          <div class="input"><input value="100" /><span class="unit">股</span></div></div>
+        <div class="sumrow"><span>≈ 金额</span><b>${(last*100).toFixed(2)} Q4</b></div>
+        <div class="sumrow"><span>可用</span><b>12,480.00 Q4</b></div>
+        <div style="height:1px;background:rgba(255,255,255,.06);margin:8px 0"></div>
+        <button class="btn primary" style="width:100%;justify-content:center;height:36px" onclick="toast('委托已提交')">确认买入</button>
+        <div class="note">手续费按挂牌交易所费率计收，以成交结果为准。<br>（契约缺口：<span class="mono">/stocks</span> 未返回 fee_bps）</div>
+      </div>
+    </div>`;
+  }
+  if (mtab === 6) {
+    return `
+    <table><thead><tr><th>标的</th><th class="num">数量</th><th>状态</th><th>上次运行</th><th>健康度</th><th></th></tr></thead><tbody>
+      <tr><td class="mono">ATL</td><td class="num">200</td><td><span class="pill ok">active</span></td>
+        <td class="mono small">12:03:40 <span class="dim">(12s 前)</span></td>
+        <td><span class="dot" style="display:inline-block;vertical-align:middle"></span> 正常</td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="toast('已暂停该做市程序')">暂停</button></td></tr>
+      <tr><td class="mono">VEGA</td><td class="num">500</td><td><span class="pill ok">active</span></td>
+        <td class="mono small">11:58:10</td>
+        <td><span class="pill mid">资金不足</span></td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="toast('跳转充值')">补足</button>
+          <button class="btn sm ghost" onclick="toast('已暂停')">暂停</button></td></tr>
+      <tr><td class="mono">NX-1</td><td class="num">100</td><td><span class="pill n">paused</span></td>
+        <td class="mono small dim">—</td><td><span class="dim">已暂停</span></td>
+        <td style="text-align:right"><button class="btn sm ghost" onclick="toast('已恢复')">恢复</button></td></tr>
+    </tbody></table>
+    <div class="note">自动重挂间隔 <span class="mono">60s</span>（<span class="mono">mm_refresh_tick</span>）· 上次全量刷新 12:03:40<br>
+    原始错误码 <span class="mono">insufficient_funds</span> 仅放 title，不显示在正文。</div>`;
+  }
+  if (mtab === 7) {
+    return `
+    <table><thead><tr><th>代码</th><th>名称</th><th>类型</th><th>币种</th><th>状态</th>
+      <th class="num">费率</th><th class="num">上市费</th><th>运营方</th></tr></thead><tbody>
+      <tr><td class="mono">CSX</td><td>宇宙联合交易所</td><td><span class="pill n">official</span></td>
+        <td class="mono">cc4</td><td><span class="pill ok">active</span></td>
+        <td class="num">10 bp</td><td class="num">0</td><td class="dim">系统</td></tr>
+      <tr><td class="mono">ALPHA</td><td>Alpha 板</td><td><span class="pill n">sub</span></td>
+        <td class="mono">cc4</td><td><span class="pill ok">active</span></td>
+        <td class="num">25 bp</td><td class="num">1,200</td><td>你</td></tr>
+    </tbody></table>
+    <div class="raised" style="margin-top:14px;padding:14px">
+      <div class="micro" style="margin-bottom:10px">申请子交易所</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+        <div class="field" style="margin:0"><label>代码</label><div class="input"><input value="ALPHA" /></div></div>
+        <div class="field" style="margin:0"><label>名称</label><div class="input"><input value="Alpha 板" /></div></div>
+        <div class="field" style="margin:0"><label>费率</label><div class="input"><input value="25" /><span class="unit">bp</span></div></div>
+        <div class="field" style="margin:0"><label>上市费</label><div class="input"><input value="1200" /><span class="unit">Q4</span></div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+        <div class="small warn">牌照费 5,000 cc4（一次性，付给 treasury）</div>
+        <button class="btn primary sm" style="margin-left:auto" onclick="toast('将扣除 5,000 cc4')">确认开设</button>
+      </div>
+    </div>
+    <div class="note">按 03 分册规划还需议会动议与央行审查；当前实现为缴费即开。<br>
+    <span class="mono">GET /exchanges</span> 不返回 max_listings / 挂牌数，故不显示容量。</div>`;
+  }
+  if (mtab === 8) {
+    return `
+    <div class="raised" style="padding:14px;border-color:rgba(255,77,79,.28)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:14px;color:var(--n-950)">拆股 / 合股 · ATL</div>
+        <span class="pill mid">仅控股方</span>
+      </div>
+      <div class="field" style="margin-top:12px;max-width:260px"><label>比例（0.01 – 100，且 ≠ 1）</label>
+        <div class="input"><input value="2" /><span class="unit">: 1</span></div></div>
+      <table style="margin-top:6px"><thead><tr><th>影响</th><th class="num">当前</th><th class="num">拆股后</th></tr></thead><tbody>
+        <tr><td>股价</td><td class="num">812.40</td><td class="num">406.20</td></tr>
+        <tr><td>总股本</td><td class="num">1,000,000</td><td class="num">2,000,000</td></tr>
+        <tr><td>我的持股</td><td class="num">620,000</td><td class="num">1,240,000</td></tr>
+        <tr><td>我的成本</td><td class="num">810.00</td><td class="num">405.00</td></tr>
+        <tr><td>我的未成交挂单</td><td class="num">3 笔</td><td class="num up">全部撤销</td></tr>
+      </tbody></table>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn sm ghost" onclick="toast('已取消')">取消</button>
+        <button class="btn danger sm" onclick="toast('拆股已执行 · 撤销 3 笔挂单')">确认拆股（不可撤销）</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="empty"><div>${t} · 内容区</div><div class="small dim">本预览仅实现「行情 / 做市 / 交易所 / 公司行动」四个分区</div></div>`;
+}
+
+function renderPanel() {
+  if (document.getElementById("panel").dataset.kind !== "market") return;
+  document.getElementById("panelBody").innerHTML = `
+    <div class="mtabs">${MTABS.map((x, i) => `<button class="mtab ${i === mtab ? "on" : ""}" data-i="${i}">${x}</button>`).join("")}</div>
+    ${marketBody()}`;
+  document.querySelectorAll(".mtab").forEach(b => b.onclick = () => { mtab = +b.dataset.i; renderPanel(); });
+}
+
+function notifyBody() {
+  const rows = [
+    ["ship.shield.offline", "刚刚",      "护盾发生器能量耗尽，进入战斗将无减伤", "去修复"],
+    ["market.margin_call",  "12 分钟前", "维持担保比例 118%（阈值 130%）",        "去补保证金"],
+    ["market.mm_paused",    "1 小时前",  "ATL 做市程序已暂停：资金不足",           "恢复"],
+    ["ship.fuel.low",       "2 小时前",  "反物质 62，单程最长 180",                "去补给"],
+  ];
+  return '<table><thead><tr><th>状态</th><th>时间</th><th>说明</th><th></th></tr></thead><tbody>' +
+    rows.map(r => '<tr><td>' + st(r[0], "xs") + '</td><td class="mono small">' + r[1] +
+      '</td><td class="muted">' + r[2] + '</td>' +
+      '<td style="text-align:right"><button class="btn sm ghost" onclick="toast(\'' + r[3] + '\')">' + r[3] + '</button></td></tr>').join("") +
+    '</tbody></table>' +
+    '<div class="note">本页不自己判断状态，全部读 <span class="mono">statusBus</span>；<br>' +
+    '徽章计数 = 未确认条数，与 NavRail / 铃铛上的数字同源。</div>';
+}
+
+const PANEL_META = {
+  market:  ["市场", "26 个端点 · 9 个子分区"],
+  assets:  ["资产", "7 个端点 · 6 个子分区"],
+  bank:    ["银行", "28 个端点 · 7 个子分区"],
+  company: ["公司", "14 个端点 · 6 个子分区"],
+  legal:   ["法务", "产权 / 诉讼 / 破产"],
+  notify:  ["通知", "状态聚合视图 · 与 StatusBar 同源"],
+};
+
+function openPanel(kind) {
+  const p = document.getElementById("panel");
+  const meta = PANEL_META[kind] || ["面板", ""];
+  p.dataset.kind = kind;
+  document.getElementById("panelTitle").textContent = meta[0];
+  document.getElementById("panelSub").textContent = meta[1];
+  document.getElementById("scrim").classList.add("on");
+  p.classList.add("on");
+  if (kind === "notify") { document.getElementById("panelBody").innerHTML = notifyBody(); return; }
+  if (kind === "market") renderPanel();
+  else document.getElementById("panelBody").innerHTML =
+    `<div class="empty"><div>${meta[0]}面板</div><div class="small dim">结构同「市场」：分区 Tabs + 列表 + Drawer</div>
+     <button class="btn sm primary" onclick="openPanel('market')">看「市场」完整示例</button></div>`;
+  document.querySelectorAll(".navitem").forEach(n => n.classList.toggle("on", n.dataset.panel === kind));
+}
+function closePanel() {
+  document.getElementById("scrim").classList.remove("on");
+  document.getElementById("panel").classList.remove("on");
+  document.querySelectorAll(".navitem").forEach(n => n.classList.toggle("on", !n.dataset.panel));
+}
+
+document.querySelectorAll(".navitem[data-panel]").forEach(n => n.onclick = () => openPanel(n.dataset.panel));
+
+/* ---------------- palette ---------------- */
+const PAL = [
+  { t: "打开 市场面板", k: "面板", run: () => openPanel("market") },
+  { t: "打开 银行面板", k: "面板", run: () => openPanel("bank") },
+  { t: "打开 法务面板", k: "面板", run: () => openPanel("legal") },
+  { t: "ATL · 阿特拉斯工业", k: "股票", run: () => { openPanel("market"); mtab = 0; renderPanel(); } },
+  { t: "Kepler-442b", k: "行星", run: () => toast("已在当前行星") },
+  { t: "采集当前行星", k: "动作", run: () => toast("采集 +128 铁") },
+];
+const palEl = document.getElementById("palette");
+let palSel = 0;
+
+function renderPal(q = "") {
+  const rows = PAL.filter(r => r.t.toLowerCase().includes(q.toLowerCase()));
+  palSel = 0;
+  document.getElementById("palRes").innerHTML = rows.length
+    ? rows.map((r, i) => `<div class="pal-row ${i === 0 ? "sel" : ""}" data-i="${i}">
+        <span>${r.t}</span><span class="k">${r.k}</span></div>`).join("")
+    : `<div class="empty">无匹配结果</div>`;
+  document.querySelectorAll(".pal-row").forEach(el => {
+    el.onclick = () => { rows[+el.dataset.i].run(); closePal(); };
+  });
+}
+function openPal() { palEl.classList.add("on"); document.getElementById("palInput").value = ""; renderPal(); document.getElementById("palInput").focus(); }
+function closePal() { palEl.classList.remove("on"); }
+document.getElementById("palBtn").onclick = openPal;
+document.getElementById("palInput").oninput = e => renderPal(e.target.value);
+
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPal(); return; }
+  if (e.key === "Escape") { closePal(); closePanel(); return; }
+  if (palEl.classList.contains("on") && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    const rows = [...document.querySelectorAll(".pal-row")];
+    if (!rows.length) return;
+    rows[palSel]?.classList.remove("sel");
+    palSel = (palSel + (e.key === "ArrowDown" ? 1 : rows.length - 1)) % rows.length;
+    rows[palSel].classList.add("sel");
+  }
+});
+
+/* ---------------- misc ---------------- */
+let tt;
+function toast(msg) {
+  const el = document.getElementById("toastEl");
+  el.textContent = msg; el.classList.add("on");
+  clearTimeout(tt); tt = setTimeout(() => el.classList.remove("on"), 1800);
+}
+function tickClock() {
+  const d = new Date();
+  document.getElementById("clock").textContent =
+    [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, "0")).join(":");
+}
+
+document.querySelectorAll("#ctxSeg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#ctxSeg button").forEach(x => x.classList.toggle("on", x === b));
+  document.body.dataset.context = b.dataset.c;
+});
+document.body.dataset.context = "explore";
+
+renderAll();
+renderStatus();
+tickClock();
+setInterval(tickClock, 1000);
+</script>
+</body>
+</html>

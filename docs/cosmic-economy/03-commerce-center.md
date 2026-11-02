@@ -104,6 +104,12 @@ company_actions
 | 港口经营 | Q5 + 星区主权者同意 | 停靠/仓储/关税代收 |
 
 - 许可有有效期/年检；
+
+**落地口径（T-15b，job `licence_renewal_tick` 每日）**：许可按**月**计费，
+`expires_at` 是"已付到"日期（`TERM_DAYS = 30`，审批时首月费对应首月有效）。
+到期且 `active` 的许可由 job 从持有人账户扣 `monthly_fee` 进 treasury，
+成功后 `expires_at += 30 天`；余额不足则置 `suspended`（可补款恢复），
+**不自动吊销**——吊销是 CCMC 的决定。
 - 违规可暂停/吊销；
 - AI 公司同样需要许可，不豁免；
 - **交易所/子交易所可以由玩家/AI/公司经营**，但必须：
@@ -471,3 +477,18 @@ cap = clamp(8% + traffic_index × 2% + strategic_factor × 3%, 5%, 15%)
 - `mm_programs`：登记 (actor, listing, quantity) 即为常驻做市程序；`mm_refresh_tick`（60s）
   对 60 秒未刷新的 active 程序重挂双边，失败写 `last_error` 而不中断其他程序。
 - 未做：券商会籍与经纪佣金、跨所路由（同一标的在多个交易所挂牌）、交易所自有撮合引擎与清算所。
+
+
+---
+
+## 16. 多所挂牌与跨所路由（`0125_broker_venue`）
+
+- `listing_venues (listing_id, exchange_id, fee_bps, status)`：一个标的可以在多个交易所挂牌，各自独立盘口。
+  IPO 时主所自动登记；其他所由该所运营方（或运维）通过 `POST /stocks/{ticker}/venues` 引入。
+- `stock_orders.venue_id` / `stock_trades.venue_id`：订单与成交都归属一个所；
+  **撮合按所隔离** —— A 所的挂单不会被 B 所的订单吃掉，`detail` 的盘口是各所聚合视图。
+- **路由**：下单可显式给 `venue_code`；不给时按最优可成交价选所（买看最低卖一、卖看最高买一），
+  全无所盘口时退化为「最低费率」；代码不存在返回 404。做空/还券按**深度**选所而不是价格。
+- 费率取 `listing_venues.fee_bps`（下单预算、成交结算、卖空收益三处一致），所以同一标的在不同所可以不同费率。
+- 主所不能撤下（422），只能停牌/退市；副所可以 `DELETE` 成 `suspended`，之后路由不再考虑它。
+- 未做：一笔单拆到多所的智能拆单（SOR）、跨所套利撮合、所间清算所与保证金共享、跨所价格保护。

@@ -39,7 +39,7 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
   撮合按 listing 行锁串行化，撤单与成交以订单状态 CAS 为准。
 - **运维**：`job_runs` 审计、Redis 锁、DLQ、灰度开关（`feature_flags`）、`/health/deep` 自检。
 
-### 2.2 宇宙经济系统（迁移 0110 → 0114）
+### 2.2 宇宙经济系统（迁移 0110 → 0140）
 
 | 迁移 | 能力 | 集成测试 |
 |---|---|---|
@@ -58,8 +58,28 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 | `0122_liquidation_fx` | 多币种清算：按 Q1 等值计量 estate，按顺位与比例从各币种余额中按 Q1 占比划付，`paid_q1` 记录实际受偿 | 1 |
 | `0123_exchange_matching` | 子交易所：牌照费 5,000 cc4、自定义手续费与上市费、`exchange_code` 挂牌后撮合按该所费率结算；`mm_programs` 让做市程序常驻，job `mm_refresh_tick`（60s）自动重挂双边 | 5 |
 | `0124_split_archive` | 拆股复权（价格/持仓/成本/K 线同比调整、挂单撤销、`stock_splits` 留痕）+ K 线冷归档（`stock_candle_archive`，job 每日搬 30 天前的 1m/5m） | 4 |
+| `0125_broker_venue` | 券商会籍与经纪佣金：券商牌照 2,000 cc4、入会费 500 cc4/所、客户经纪账户（每个客户一个，佣金受交易所会籍上限约束）、成交时按 bp 划付券商并落 `broker_commissions`；同一标的多所挂牌（`listing_venues`），订单带 `venue_id`、不指定时按最优盘口路由，撮合与费率按所隔离 | 4 |
+| `0126_split_cold` | 并股碎股折现（不足一股按并股后价格由公司金库付现，`cash_in_lieu`/`holders_rounded` 留痕）+ 复权因子接口 + 归档按月 RANGE 分区（`candle_archive_partitions`，job 预建/冷备 detach/可 restore） | 3 |
+| `0127_domain_events` | 同事务 append-only 事件日志 `domain_events`：`domain.events.publish` 与状态变更写在同一事务（回滚即消失），payload 只放 id/code/金额；`GET /events?since=` 增量读取 | 2 |
+| `0128_travel_authority` | 航行权威：`POST /travel/quote` 服务端算距离/燃料，`/travel/commit` 服务端扣费并落 `travel_log`；`GET /state` 补 `in_flight[]`（最多 5 条未到达）、`GET /ship` 服务端派生 `status[]` | 8 |
+| `0129_announcements` | 全服公告 `announcements`：无受众分段，`starts_at`/`ends_at` 界定展示窗口，severity 复用 09 词表四级让外壳直接渲染；全部写 `audit_log` | 6 |
+| `0130_crafting` | 生产线搬上服务端：配方为种子数据（不属玩家数据），冷却记在最后一次运行的 `ready_at` 而不是独立计时器——手改存档不再能凭空产出稀有材料 | 6 |
+| `0131_weekly_claims` | 周挑战领奖事实：目标（探索/改装等级/图鉴）本就派生，只有「是否已领」需要落库，每 `(player, week)` 一行 + 付款账本 tx | 4 |
+| `0132_relics` | 遗迹档案：行星→碎片索引由 FNV-1a 与客户端同哈希，只存「哪颗行星出了第几段 + 完成奖是否已发」；lore 文本仍留在客户端 | 4 |
+| `0133_planet_visits` | 行星足迹日志：`(player, planet_key)` 主键即去重，`coords`/`sector_key` 冗余存储让「今日探索星系/系统/行星」变成单次索引聚合，替代扫客户端存档计数 | 4 |
+| `0134_loan_collateral` | 抵押登记与清算（T-13 步骤 2–4）：`(loan_id, asset_id)` 唯一防一契两押，`pledged_value` 固定为登记时估值快照，`status` 走 `pledged→seized→sold`（还清 `released`） | 10 |
+| `0135_ipo_auction` | IPO 上议会（`council_motions.kind` 加 IPO 类）+ 首日集合竞价：`auction_ends_at` 窗口内只收单不撮合，`auction_cleared_at` 记录单一清算价，部分索引让清算 job 幂等 | 8 |
+| `0136_resolution_kinds` | `resolutions.kind` 补齐减资，并预留合并/要约收购，避免下一批 M&A 只为存一条决议再开迁移 | 7 |
+| `0137_property_disputes` | 产权争议 + 24 小时异议期（T-18）：冻结**不新造状态机**，复用 `property_encumbrances(kind='dispute')` + `status='frozen'`；`encumbrance_id` 保证解冻只解自己那条，不误伤银行 `lien` | 6 |
+| `0138_ledger_reversal` | 账本冲正：`reversal_of`/`reversal_reason` 两列 + 部分唯一索引「一笔至多冲正一次」，冲正冲正行即 redo；账本本身仍 append-only，纠错不改旧行 | 7 |
+| `0139_delisting_consolidation` | 退市三阶段（T-22）：`consolidation` 30 天照常交易让持有人有出口 → `auction` 3 天停牌、清算价取整理期 VWAP → 先还银行再按股分 | 5 |
+| `0140_investor_protection` | 投资者保护基金理赔（T-23）：0119 已把股票手续费 20% 划入 `insurance_fund`，本迁移补索赔窗口；每人同时最多一条未决 + 单笔上限 1 万，`pending`→`approved`/`partial` | 6 |
 
-当前迁移 head：`0124_split_archive`（与 `server/config.py::DEFAULT_REVISION` 同步）。
+当前迁移 head：`0140_investor_protection`（与 `server/config.py::DEFAULT_REVISION` 同步）。
+
+> 「集成测试」列 = 对应 `tests/integration/test_*.py` 里的测试函数数
+> （`grep -c 'def test_' <file>`，2026-11-02 复测）；一个测试文件覆盖多个迁移时归主迁移。
+> 全仓测试函数共 **323** 个（含 unit 与参数化未展开部分）。
 
 ### 2.3 测试
 
@@ -68,7 +88,7 @@ AI 回放与同权、股东会与法院流程、破产清算顺位等。
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 190 passed，约 28 分钟
+  python -m pytest tests -q      # 323 个测试函数，约 30 分钟
 ```
 
 ---
@@ -82,7 +102,7 @@ ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
        └─ /api/v1/*   → server/  （本分支：账户、货币、银行、公司、产权、股票、AI、法院）
                            ├─ domain/    业务规则与不变量
                            ├─ repo/      只写 SQL
-                           ├─ migrations/versions/   0110 → 0114
+                           ├─ migrations/versions/   0110 → 0140
                            └─ jobs/      定时任务（计息、发行、税收、K 线、AI tick、法院期限）
 
 PostgreSQL（账户 / 账本 / 订单 / 持仓 / 案件）    Redis（缓存 / 锁 / 限流）
@@ -92,11 +112,16 @@ PostgreSQL（账户 / 账本 / 订单 / 持仓 / 案件）    Redis（缓存 / �
 
 ```
 server/                权威后端（本分支核心）
-  api/v1/              接口：bank、commerce、properties、stocks、admin_ai、court、insolvency
+  api/v1/              接口：26 个蓝图 / 255 个端点（清单见 docs/api/endpoints.md）
+                         · 身份与世界：auth、session、meta、universe、travel、assets、explore、tasks
+                         · 经济：economy、ledger、bank、stocks、brokers、market、revenue、
+                           commerce、properties、protection
+                         · 治理与裁决：council、court、insolvency
+                         · 玩法与运维：crafting、admin_ai、admin_ops、cutover、internal_dt
   domain/              领域服务：currency、bank、company、property、stock、ai_*、court、insolvency
   repo/                纯 SQL 数据访问
   models/              请求模型（pydantic StrictModel）
-  migrations/versions/ 0110 → 0114
+  migrations/versions/ 0110 → 0140
   jobs/                定时任务与 worker
 pymodules/             上游游戏后端（宇宙生成、行星渲染、P2P、缓存）
 atlas-ui/react/        前端（React + Three.js）
@@ -164,7 +189,7 @@ python __main__.py                    # 上游单体入口（宇宙生成 + 游�
 - 已完成：0110–0119（货币银行、商业产权、股票、AI 玩家、公司法/法院/破产、跨区 2PC、AI provider、
   跨区判决承认与 2PC 执行、费用分账），172 个集成测试通过。
 - 前端：新增「星际股市」面板（盘口 / K 线 / 持仓，涨红跌绿），挂在星舰实验舱；`vite build` 与前端冒烟测试通过。
-- 待办：券商会籍与经纪佣金、交易所之间的跨所撮合、并股（ratio<1）的客户端提示、归档数据的分区与备份策略。
+- 待办：跨所路由的智能拆单（一笔单拆到多个所）、券商的客户资产托管与融资融券、归档冷备的异地导出（pg_dump/S3）。
 - 各迁移的已知缺口记录在对应分册的「落地状态」小节（如股票子交易所接入、玩家合议庭、清算多币种折算）。
 
 ---

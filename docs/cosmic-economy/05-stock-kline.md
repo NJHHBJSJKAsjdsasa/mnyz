@@ -393,9 +393,36 @@ listed
 
 #### `delisting_cases`
 
-- `status`: `triggered/auction/settled/cancelled`
+- `status`: `triggered/consolidation/auction/settled/cancelled`
 - `last_price`、`triggered_at`、`settled_at`
+- `consolidation_ends_at`、`auction_ends_at`、`clearing_price`、`distributed_amount`、`currency_code`
 - 关联 `insolvency_cases`（08）
+
+#### 实现口径（`0139_delisting_consolidation`）
+
+上面的流程图是目标态；已实现的是其中**能自洽收尾的那三段**：
+
+```text
+triggered → consolidation（30 天，照常交易）
+          → auction（3 天，停牌）
+          → settled（清算价 + 分配 + 股份注销）
+```
+
+- **触发**沿用既有判据（`_delisting_reason`：20 日零价 / 长期无成交 / 净资产为负 / 长期无成交兜底）。
+- **整理期照常交易**是这一条的核心：持有人不服清算价就自己走，这正是整理期存在的理由。
+  触发时把 listing 状态写回 `listed` 并清掉 halt（此前是立刻 `suspended`，等于没给出口）。
+- **清算价 = 整理期成交量加权均价**（`SUM(price*quantity)/SUM(quantity)`），
+  整段没有成交才回落到最后价 / 发行价。价格由市场印出来，不由运维填。
+- **分配顺序**：先还公司金库名下**活跃银行贷款**（游戏里唯一建模的债权人，走 `bank_service.repay`
+  以保证银行侧账本/额度一致），剩余现金**按持股比例**分给股东（金库股排除；floor 余数给最大持有人），
+  然后注销全部股份、平掉未平空头、listing 置 `delisted`。
+- 每一笔（债权人 / 股东）落 `stock_delisting_payouts`，带 `tx_id`；`distributed_amount` 是总额。
+- job `delisting_tick`（3600s）推进状态机；`due_delisting` 只返回**真的过期**的案子
+  （一轮里不会从整理期直接走到清算）。
+
+**未做**（与目标态的差距）：10/15 日预警与逐日停牌节奏（现为一次性进入整理期）、
+官方做市商双边报价与 ±10% 整理期涨跌幅、非银行债权人、`T+1` 未解锁股份转索赔权、
+跨区 2PC 清算、重整/重新上市。产权类资产拍卖不在这里做（属 04）。
 
 ---
 
@@ -494,6 +521,19 @@ listed
 - 赔付需 CCMC/央行联合批准；
 - 基金不足时官方交易所垫付，后续追偿。
 
+**实现口径（`0140_investor_protection`）**：基金账户就是 0119 已经把股票手续费 20% 划进来的
+`insurance_fund`，没有另起账户。
+
+- `POST /market/protection/claims`：`kind ∈ {firm_default, settlement_failure, fraud}`，
+  金额 > 0、≤ 1,000,000；**同一主体同时只能有一笔 pending**（部分唯一索引，不是代码判断）。
+- `POST /admin/market/protection/claims/{id}/decide`：审批 + 备注，**审批不封顶、赔付封顶**——
+  一笔 25,000 的申请会完整记录，实付 `min(申请额, 10,000, 基金余额)`，状态 `partial`，
+  差额在 `claimed - paid` 里看得见。基金枯竭时不是报错，而是付 0 并给 `rejected`。
+- 资金只从基金流向申请人（`kind='investor_protection'`），每次裁决写 `audit_log`。
+- `GET /market/protection` 给玩家看基金余额、上限与自己那几笔；
+  `GET /admin/market/protection/claims` 给运营看全部。
+- 未做：目标规模自动补足、政府拨款/交易所垫付、与法院判决联动、按净损失比例（现按申请额+上限）。
+
 ### 12.4 退市拍卖做市商参数
 
 - 做市商资本 ≥ 5,000 cc4；
@@ -521,10 +561,20 @@ listed
 - 单账户持仓上限只约束二级市场累计买入：内幕股东（公司 `share_holdings` 持有人）豁免；
 - 自成交在撮合层过滤（永不成交）；对倒检测为「1 分钟内同价买卖各 ≥3 笔即拒单」；
 - 做空的开空/还券都走「借券 + 市价单」路径，交割与股票同一套结算；
-- IPO 不设集合竞价，直接挂 treasury 卖单开始连续竞价。
+- **IPO 有两条路**（0135 / T-21）：① 快速通道 `POST /stocks/ipo`，自校验后直接挂牌，`call_auction_minutes` 默认 0
+  （立即连续竞价，旧客户端与测试依赖这个行为）；② **议会通道** `POST /council/ipo`，申请时先跑完全部门槛，
+  再由 5 个 AI 席位 + 玩家席位在 30 分钟内表决，**通过即自动挂牌**（参数在申请时冻结，执行前重新校验），
+  并默认开 30 分钟首日集合竞价。同一个 ticker 同时只能有一份在审申请。
+- **首日集合竞价**：`stock_listings.auction_ends_at` 未到期时，所有委托只入簿不撮合，市价单直接拒；
+  到期后 job `stock_call_auction_tick`（60s）按「最大成交量价、平局取最接近发行价」定单一清算价，
+  所有成交都用这个价（含报价更优的一方），然后 `auction_cleared_at` 落章、转入连续竞价。
+  候选价限制在首日 ±20% 熔断带内。
 
-未做：CCMC 审核与议会 4 票、玩家子交易所/券商接入撮合、拆股并股复权、退市整理期拍卖与做市商、
-清算分配（依赖 08）、投资者保护基金、K 线保留/冷归档、前端图表。
+已补：拆股并股复权（0124）、K 线冷归档（0124）、退市整理期与清算分配（0139）、
+投资者保护基金（0140）。
+
+未做：IPO 的「连续 2 季度盈利」条件（现只核净资产与成立天数）、CCMC 独立审核（现由议会一票制覆盖）、
+玩家子交易所/券商接入撮合、整理期做市商双边报价与 ±10% 带、退市后的重整/重新上市、前端图表。
 
 ---
 
@@ -551,3 +601,44 @@ listed
   归档是 `INSERT ... SELECT` + `DELETE` 同一个 CTE，幂等（重复归档不会重复插入）。
 - 未做：并股的碎股处理（当前向下取整，碎股直接消失）、复权因子接口（客户端画长周期图需要）、
   归档表的分区与冷备。
+
+
+---
+
+## 16. 券商会籍与经纪佣金（`0125_broker_venue`）
+
+- **牌照**：`POST /brokers/firms` 一次性 2,000 cc4 进 treasury，写入 `securities_firms`。
+- **会籍**：`POST /brokers/memberships {exchange_code, commission_bps}`，每所 500 cc4 给交易所运营方
+  （无运营方则进 treasury）。会籍上的 `commission_bps` 是该所允许的最高佣金。
+- **客户账户**：`POST /brokers/accounts {broker_code, commission_bps}`，`broker_code` 可填 actor code
+  或 actor id（玩家主体没有 code）。**每个客户只能有一个生效账户**，关闭后才能换券商。
+  券商必须在至少一个交易所有会籍；客户约定的 bp 不得超过该券商在所内的上限。
+- **收费**：成交结算时对买卖两侧各算一次 `min(客户 bp, 会籍 bp)`，`notional × bp / 10000`，
+  从客户账户划给券商，写入 `broker_commissions`（trade/broker/client/venue/notional/bps/amount 唯一到 trade+client）。
+  交易所手续费、印花税不变，佣金是**叠加**在手续费之上的。
+- 若券商在该所失去会籍（suspended），该所成交不再收佣金，客户退回「直接交易」路径。
+- 未做：券商自有客户资产托管（持仓仍记在客户 actor 名下）、融资融券由券商出借、佣金返还/阶梯费率、
+  券商的独立风控与强平。
+
+---
+
+## 17. 碎股折现、复权因子与归档分区（`0126_split_cold`）
+
+- **并股碎股**：`ratio < 1` 时每个持有人 `shares × ratio` 向下取整，不足一股的部分按**并股后价格**
+  （`last_price ÷ ratio`）折现，由**公司金库**付给持有人；金库余额不足直接 422，不做部分支付。
+  公司金库自己的碎股不付给自己（只记 `holders_rounded`），现金合计与受影响人数写在
+  `stock_splits.cash_in_lieu` / `holders_rounded`。
+- **复权因子**：`GET /stocks/{ticker}/adjustment-factors` 返回每次拆分的 `ratio` 与**累计因子**
+  （该次及之后所有 ratio 的乘积，越早的拆分因子越大）。
+  本系统的历史 K 线在拆股时已被改写（热表与 `stock_candle_archive` 一起改），因此因子是给
+  **外部缓存/回测**用的：把拆分前的原始价 ÷ 因子、原始量 × 因子即回到今日口径。
+- **归档分区**：`stock_candle_archive` 按月 RANGE 分区，边界锚定 **UTC 零点**（应用连接是
+  `SET TIME ZONE 'UTC'`，迁移脚本不是，早期按会话时区建分区会错位 8 小时）。
+  `candle_archive_partitions` 记录每个分区的区间、状态（hot/cold）、行数与 detach 时间。
+- **冷备**：`detach_cold(keep_months=24)` 把区间已过保留期的分区 `DETACH` 后改名为
+  `stock_candle_cold_YYYYMM`，状态置 cold 并记录行数；`restore_cold` 可把它 `ATTACH` 回去
+  （同月若已有非空热分区则 422，空的占位分区会被清掉再挂）。
+- **job**：`candle_partition_tick`（每日）预建未来 3 个月分区并执行冷备；`ensure_archive_partitions`
+  按**区间**判重，不会把已冷备的月份重新建成热分区。
+- 未做：冷备的异地导出（当前冷表仍在同库，异地备份需 pg_dump/S3）、冷表的分区级压缩、
+  复权因子的分红/配股调整（当前只处理拆并股）。

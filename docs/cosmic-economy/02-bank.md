@@ -215,6 +215,12 @@ bank_risk_factor = 1 - bank.reserve_ratio
 
 - 默认**浮动利率**：`interest_bps = policy_rate + bank_spread_bps + risk_premium_bps`；
 - 每月 1 日重定价，按重定价日央行基准 + 银行点差；
+
+**落地口径（T-12，job `bank_rate_reset_tick` 每日）**：`rate_type='floating'` 且
+`next_reset_at IS NULL OR <= now()` 的 `active/overdue` 贷款，按
+`policy_rate_bps + spread_bps + 期限溢价` 重定价，`next_reset_at = now() + 30 天`。
+期限溢价不额外存字段——用 `due_at - issued_at` 反推合同期限（30/90/180 取最近），
+这样 90 天的贷款不会因为政策利率变动被悄悄算成 30 天。固定利率贷款不参与。
 - 借款人可选择固定利率，但需银行审批且加 50bp；
 - 利息 = `outstanding × current_rate_bps / 10000 × days / 365`；
 - 逾期 3 天：罚息 +2%；
@@ -232,6 +238,18 @@ if overdue_days >= 7:
     if surplus: credit borrower
     if deficit: write bad_debt
 ```
+
+**落地口径（0134 / T-13 ②③④，2026-10-29）**
+
+| 阶段 | 实现 | 关键约束 |
+|---|---|---|
+| 抵押登记 | `POST /banks/<id>/loans` 新增 `collateral_asset_ids`；`bank_loan_collateral` 一行一产权，同时写 `property_encumbrances(kind='lien')` | 只能抵押自己的、`owned/listed`、无未解除负担的产权；覆盖率 **130%**（`PLEDGE_COVER_BPS`），按**登记时的估值快照**判定，之后重估不追溯 |
+| 默认扣押 | `loan_overdue_tick` 把 `overdue→defaulted` 的同时调 `seize()`：产权过户给银行、`property_assets.status='auction'`、开 3 天拍卖（底价 = 本金+应计利息，加价步长 1%） | 只处理 `pledged` 行，重复跑幂等；过户先于挂牌，成交记录才是 `bank → buyer` |
+| 拍卖成交 | `property_service._settle` 末尾调 `loan_collections.settle_liquidation`，用 `seller_net`（已扣 2% 交易税 + 1% 佣金 = 文档里的"费用"）分配 | 顺序 利息 → 本金 → 余额退借款人（`kind='loan_surplus'` 一笔转账）；银行留存部分进 vault |
+| 结果 | 全额覆盖 → `bank_loans.status='liquidated'`；不足 → `write_down` 保留 `defaulted` 与剩余债务（差额即坏账） | 抵押行 → `sold`，lien 解除；发 `collateral.seized` / `collateral.sold` 事件 |
+
+**未做**：逾期 3 天的 +2% 罚息；坏账核销到银行资本（现在只停留在 `outstanding` 上）；股票抵押
+（`securities_lending` 已有独立的保证金模型，不复用这条链）。
 
 ---
 

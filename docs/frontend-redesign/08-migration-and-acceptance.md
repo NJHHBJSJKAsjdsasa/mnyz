@@ -1,7 +1,7 @@
 # 08 · 实施计划与验收
 
 > 目标：可分阶段合并、每阶段可独立上线、任一步可 60 秒回滚。
-> 总工作量 ≈ 24 人日（单人）。5 个阶段，每阶段都有明确"改完能看见什么"。
+> 总工作量 ≈ 27 人日（单人）= 主计划 **25 人日** + P2.5 状态层 **2 人日**（变更记录里的 25 与这里的 27 指的是同一件事）。5 个阶段，每阶段都有明确"改完能看见什么"。
 
 ---
 
@@ -12,7 +12,8 @@
 | **P0 基座** | token 层 + `ui/` 11 个基础控件 + `global.css` 腰斩 | 几乎无（颜色微调） | 中：全局样式回归 | 3 |
 | **P1 外壳** | `shell/` 7 个 + 8 个 Layout 接入 | **大幅**（全新导航结构） | 高：布局冲击 | 4 |
 | **P2 页面** | 8 页重排 + B 组 12 个换壳 + 行星页 4 组标签 | **大幅** | 中 | 6 |
-| **P3 面板** | `panels/` 7 个 + 12 个 Tab 重写 | **功能增量**（经济系统上线） | 中：接口联调 | 8 |
+| **P2.5 状态** | 状态词表 + `ui/Status` + statusBus + StatusBar 接入 | 中（护盾/受损/燃料统一） | 低 | 2 |
+| **P3 面板** | `panels/` 7 个 + 12 个 Tab 重写 + 市场 10 个子分区 | **功能增量**（经济系统上线） | 中：接口联调 | 9 |
 | **P4 动效** | 删旧动画 + 新动效标定 + 性能调优 | 中（质感） | 低 | 3 |
 
 **顺序不可换**：P0 的 token 是 P1–P4 的前提；P1 的 `ShellProvider` 是 P3 的面板宿主前提。
@@ -142,11 +143,21 @@ React 的 reconciliation 若因 key/结构变化判定子树不同，会卸载�
 
 ---
 
-## 5. P3 · 经济面板（8 人日）
+## 5. P3 · 经济面板（9 人日）
 
 ### 5.1 顺序
 
-按 [06 §9](06-economy-surfaces.md)：`Assets → Market → Log → Bank → Company → Legal(产权) → Legal(诉讼/破产)`。
+按 [06 §9](06-economy-surfaces.md)：`Assets → Market(基础) → Market(进阶) → Log → Bank → Company → Legal(产权) → Legal(诉讼/破产)`。
+
+其中 **Market 拆两批**：
+
+| 批次 | 子分区 | 端点 | 说明 |
+|---|---|---:|---|
+| 基础 | 行情 / 委托 / 持仓 / 指数 | 11 | 改造现有 `StockMarketPanel` |
+| 进阶 | **做市 / 交易所 / 拆股 / 两融 / 发行 / 分红** | 15 | 0123–0124 新增能力，做市与拆股易被漏掉 |
+
+> 0123–0124 引入的 `mm_programs`（60s 自动重挂）与 `split`（撤销全部挂单）有**非直观副作用**，
+> 必须在 UI 上显式说明，否则会被当成 bug 报上来（见 06 §2.1 / §2.3）。
 
 每个面板的 DoD：
 
@@ -168,7 +179,9 @@ React 的 reconciliation 若因 key/结构变化判定子树不同，会卸载�
 
 - [ ] 6 个面板可打开，NavRail 徽章显示待办数
 - [ ] 74 个原沉睡端点中，至少 60 个有 UI 入口（其余为 admin/internal，本就不该有 UI）
+- [ ] 市场面板 10 个子分区全部可用，其中做市/交易所/拆股三个是 0123–0124 新增能力
 - [ ] 无英文错误码泄漏到界面
+- [ ] 做市程序 `last_error` 与拆股 `cancelled_orders` 均在界面上有中文呈现
 
 ---
 
@@ -195,16 +208,32 @@ React 的 reconciliation 若因 key/结构变化判定子树不同，会卸载�
 
 ---
 
+## 6.5 S1–S4 · 权威迁移（P4 之后，独立阶段）
+
+见 [11 §9](11-server-authority.md)。**这一步不是优化，是补裁决权**：
+
+| 步 | 内容 | 人日 |
+|---|---|---:|
+| S1 | 前端 6 个 `Utils/*` 写路径改只读；`ServerApi` 统一带 `Idempotency-Key` | 2 |
+| S2 | `travel/quote`、`travel/commit`、`/ship`、`/state.in_flight` | 4 |
+| S3 | `baseline + pending` 预测层、`<Pending>`、412/409 回滚 | 3 |
+| S4 | 删除 `consumeResources` / `TradeSystem.buy` / `HullSystem.save` + 篡改测试 | 2 |
+
+> S1 与 S2 **必须同批上线**：只读化当天若没有裁决端点，航行与贸易会直接不可用。
+
+---
+
 ## 7. 验收标准（全部阶段完成后）
 
 ### 7.1 契约（硬闸门，不过不能合并）
 
 ```bash
-# 全绿才算通过（6 条命令见 07 §5）
+# 全绿才算通过（7 条命令见 07 §5）
 git diff --name-only origin/main...HEAD -- 'server/**' 'pymodules/**' 'atlas-ui/template/**' \
   'atlas-ui/react/static/js/3DComponents/**' 'atlas-ui/react/static/js/3DEffects/**'
 npx tsc --noEmit
 npm run test:frontend
+python scripts/check_frontend_gates.py
 python test_fix.py
 ```
 
@@ -348,4 +377,25 @@ npm run build → 重启 Flask 进程
 | a11y 0 serious | 前端 | axe 报告 |
 | 视觉基线 42 张 | 设计 | 截图目录 |
 | 功能回归 10 项 | 测试 | 清单勾选 |
-| 后端零改动确认 | 后端 | `git diff --stat server/ pymodules/` 为空 |
+| 后端零改动确认 | 后端 | `git diff --stat server/ pymodules/` 为空（**仅约束 A 线**，见 §12） |
+
+---
+
+## 12. 附录 · 三条线的边界（2026-10-28 15:5x 补充）
+
+本文件的 27 人日**只算「前端重设计」这一条线**。工作区里同时还有另外两条线在动，
+排期/验收时不要混算，也不要拿本文件的闸门去卡另外两条线：
+
+| 线 | 目录 | 是否动 `server/` | 落点文档 | 状态 |
+|---|---|---|---|---|
+| **A 前端重设计**（本文） | `atlas-ui/react/static/js/{ui,shell,economy,css}` | **不动**（§11 最后一行只约束这条线） | `docs/frontend-redesign/` | P0 部分落（token/`ui/`/`economy/` 首切片），P1–P4 未开始 |
+| **B 后端改造** | `server/**` | **大动**（218 端点 / head `0127`） | `docs/frontend-redesign/10`、`12` | P0×6、P1×4、12-A/B/D/E 已落 |
+| **C 渲染移植** | `atlas-ui/react/static/js/3DComponents/realistic3/`、`PlanetLab/`、`Utils/RendererFlag.tsx`、`Components/RealisticPlanetStage.tsx` | 不动 | `docs/render-transplant/README.md` | 阶段 1–3 完成，阶段 4 部分；天花板 10–14.5 人日 |
+
+推论：
+
+1. **§11「后端零改动」现在必然失败** —— 因为 B 线已经改了 `server/`。这条闸门只在「单独评审 A 线的一次提交」时用，
+   判断方式是 `git diff --stat server/ pymodules/` 是否包含**本次提交**的路径，而不是工作区是否干净。
+2. **C 线的 14 个新文件不算 A 线的 D 组**（见 [05 §附录](05-component-inventory.md)），否则 D 组完成度会虚高。
+3. 三条线共享同一个 `vite build`：任何一条线的改动都要过 `tsc --noEmit` 与
+   `NODE_OPTIONS= npm run build`（沙箱 safe-delete 会打断正常 `npm run build`，见 `render-transplant/README.md §7`）。

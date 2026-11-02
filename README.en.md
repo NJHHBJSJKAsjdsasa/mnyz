@@ -43,7 +43,7 @@ Upstream: <https://github.com/SurceBeats/Atlas>
   matching is serialized per listing row; cancel-vs-fill resolved by CAS on order status.
 - **Operations**: `job_runs` audit trail, Redis locks, DLQ, feature flags for staged rollout, `/health/deep`.
 
-### 2.2 Cosmic economy (migrations 0110 → 0114)
+### 2.2 Cosmic economy (migrations 0110 → 0140)
 
 | Migration | Capabilities | Integration tests |
 |---|---|---|
@@ -62,8 +62,29 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 | `0122_liquidation_fx` | Multi-currency liquidation: estate measured in Q1 equivalent, distributed in priority order and pro rata out of every currency held, with `paid_q1` recording what was actually recovered | 1 |
 | `0123_exchange_matching` | Sub-exchanges: 5,000 cc4 licence, own commission and listing fee, `exchange_code` on IPO settles at that venue’s rate; `mm_programs` keep a maker program standing and `mm_refresh_tick` (60 s) re-quotes both sides | 5 |
 | `0124_split_archive` | Splits with price adjustment (listing/holders/cost basis/candles rescaled, resting orders cancelled, `stock_splits` audit) and candle archiving (`stock_candle_archive`, daily job moves 1m/5m older than 30 days) | 4 |
+| `0125_broker_venue` | Brokerage: 2,000 cc4 firm licence, 500 cc4 per-venue membership, one agency account per client (commission capped by the venue membership), commission paid to the broker per trade and audited in `broker_commissions`; multi-venue listings (`listing_venues`) with `venue_id` on orders, best-price routing when no venue is given, matching and fees scoped per venue | 4 |
+| `0126_split_cold` | Reverse-split cash for fractions (rounded down, paid by the company treasury, `cash_in_lieu`/`holders_rounded` audited), adjustment-factor endpoint, and a monthly RANGE-partitioned archive (`candle_archive_partitions`; the job pre-creates, detaches cold partitions and can restore them) | 3 |
+| `0127_domain_events` | Transactional append-only event log `domain_events`: `domain.events.publish` writes in the same transaction as the state change (a rollback erases both), payloads carry only id/code/amount; `GET /events?since=` reads incrementally | 2 |
+| `0128_travel_authority` | Server-side navigation: `POST /travel/quote` prices distance/fuel, `/travel/commit` debits and logs `travel_log`; `GET /state` gains `in_flight[]` (up to 5 unreached flights) and `GET /ship` derives `status[]` server-side | 8 |
+| `0129_announcements` | Server-wide announcements: no audience segmentation, `starts_at`/`ends_at` bound the display window, severity reuses the four-level status vocabulary so the shell can render it directly; everything lands in `audit_log` | 6 |
+| `0130_crafting` | Fabricator moved server-side: recipes are seed data (not player data) and cooldown lives on the last run’s `ready_at` instead of a separate timer — a hand-edited save can no longer mint rare materials | 6 |
+| `0131_weekly_claims` | Weekly challenge claims: the goal itself is derived (explored/adjusted levels/codex), only “was it claimed” needs storing — one row per `(player, week)` plus the ledger transaction that paid it | 4 |
+| `0132_relics` | Relic archive: the planet→fragment mapping is an FNV-1a hash shared with the client, so only “which fragment on which planet” and “was the completion reward paid” are stored; lore text stays in the client | 4 |
+| `0133_planet_visits` | Planet visit log: the `(player, planet_key)` primary key is the dedupe, `coords`/`sector_key` are denormalised so “galaxies/systems/planets explored today” is one indexed aggregate instead of client-blob scanning | 4 |
+| `0134_loan_collateral` | Collateral pledge and liquidation (T-13 steps 2–4): `(loan_id, asset_id)` is unique so one deed cannot secure two loans, `pledged_value` is frozen at pledge time, `status` walks `pledged→seized→sold` (`released` when repaid) | 10 |
+| `0135_ipo_auction` | IPO goes to the council (`council_motions.kind` gains IPO) plus a first-day call auction: orders are collected but not matched during `auction_ends_at`, `auction_cleared_at` records the single clearing price, and a partial index makes the clearing job idempotent | 8 |
+| `0136_resolution_kinds` | `resolutions.kind` gains capital reduction and reserves merger/tender, so the next M&A slice needs no migration just to store a resolution | 7 |
+| `0137_property_disputes` | Property disputes with a 24-hour contest window (T-18): the freeze introduces **no new state machine** — it reuses `property_encumbrances(kind='dispute')` plus `status='frozen'`; `encumbrance_id` releases exactly the row it created and never a bank `lien` | 6 |
+| `0138_ledger_reversal` | Ledger reversals: `reversal_of`/`reversal_reason` plus a partial unique index (“a transaction may be reversed at most once”); reversing a reversal is a redo. The ledger stays append-only — corrections never edit old rows | 7 |
+| `0139_delisting_consolidation` | Three delisting phases (T-22): `consolidation` trades normally for 30 days so holders get an exit → `auction` halts for 3 days and clears at the consolidation VWAP → banks are repaid first, the rest is split pro rata | 5 |
+| `0140_investor_protection` | Investor protection fund claims (T-23): 0119 already sends 20 % of stock fees to `insurance_fund`; this adds the claim window — one open claim per actor plus a per-claim cap of 10,000, `pending`→`approved`/`partial` | 6 |
 
-Current migration head: `0124_split_archive` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+Current migration head: `0140_investor_protection` (kept in sync with `server/config.py::DEFAULT_REVISION`).
+
+> The "Integration tests" column counts test functions in the matching
+> `tests/integration/test_*.py` (`grep -c 'def test_' <file>`, re-measured 2026-11-02);
+> when one file covers several migrations it is attributed to the primary one.
+> The repository holds **323** test functions in total (unit + parametrised not expanded).
 
 ### 2.3 Tests
 
@@ -73,7 +94,7 @@ treatment, shareholder meetings and court flow, and liquidation priority.
 
 ```bash
 ATLAS_TEST_DATABASE_URL="postgresql://postgres:***@127.0.0.1:5432/atlas_test" \
-  python -m pytest tests -q      # 190 passed, ~28 minutes
+  python -m pytest tests -q      # 323 test functions, ~30 minutes
 ```
 
 ---
@@ -88,7 +109,7 @@ Browser
                                      stocks, AI, courts, insolvency)
                            ├─ domain/    business rules and invariants
                            ├─ repo/      SQL only
-                           ├─ migrations/versions/   0110 → 0114
+                           ├─ migrations/versions/   0110 → 0140
                            └─ jobs/      scheduled work (interest, issuance, tax, candles, AI ticks, court deadlines)
 
 PostgreSQL (accounts / ledger / orders / positions / cases)    Redis (cache / locks / rate limits)
@@ -98,11 +119,16 @@ PostgreSQL (accounts / ledger / orders / positions / cases)    Redis (cache / lo
 
 ```
 server/                authoritative back end (the core of this fork)
-  api/v1/              endpoints: bank, commerce, properties, stocks, admin_ai, court, insolvency
+  api/v1/              26 blueprints / 255 endpoints (see docs/api/endpoints.md)
+                         · identity & world: auth, session, meta, universe, travel, assets, explore, tasks
+                         · economy: economy, ledger, bank, stocks, brokers, market, revenue,
+                           commerce, properties, protection
+                         · governance & adjudication: council, court, insolvency
+                         · gameplay & ops: crafting, admin_ai, admin_ops, cutover, internal_dt
   domain/              services: currency, bank, company, property, stock, ai_*, court, insolvency
   repo/                pure SQL data access
   models/              request models (pydantic StrictModel)
-  migrations/versions/ 0110 → 0114
+  migrations/versions/ 0110 → 0140
   jobs/                scheduled jobs and worker
 pymodules/             upstream game back end (universe generation, planet rendering, P2P, cache)
 atlas-ui/react/        front end (React + Three.js)

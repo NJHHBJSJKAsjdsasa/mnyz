@@ -8,7 +8,7 @@
 
 ## 1. 迁移拆分
 
-> 进度（2026-10-28）：`0110`–`0124` 已落地，`DEFAULT_REVISION = 0124_split_archive`。
+> 进度（2026-10-28）：`0110`–`0126` 已落地，`DEFAULT_REVISION = 0126_split_cold`。
 > 落地范围与未接服务项见 [README · 实现进度](README.md#实现进度)。
 
 ### `0110_currency_bank`
@@ -258,7 +258,7 @@ GET  /internal/dt/{tx}
 | `revenue_split_tick` | 每小时 | 手续费/税费分账（落地：按 `revenue_split_rules` 把归集款从 treasury 分出） |
 | `price_index_tick` | 5 分钟 | 价格指数快照（落地：每分钟一个点，同分钟 upsert） |
 | `mm_refresh_tick` | 60s | 做市程序自动重挂双边（落地：`mm_programs` 中 active 且 60s 未刷新的） |
-| `candle_archive_tick` | 每日 | K 线冷归档（落地：把 30 天前的 1m/5m 搬进 `stock_candle_archive`） |
+| `candle_archive_tick` | 每日 | K 线冷归档（落地：把 30 天前的 1m/5m 搬进 `stock_candle_archive`） |\n| `candle_partition_tick` | 每日 | 归档分区维护（落地：预建未来 3 个月分区 + 超期分区 detach 成冷备） |
 | `ai_economy_tick` | 60s | AI 玩家决策 |
 | `economy_reconciliation` | 每日 | 账本/持仓/2PC 对账 |
 

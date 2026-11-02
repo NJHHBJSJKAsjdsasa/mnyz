@@ -1,5 +1,42 @@
 # Changelog
 
+## [Unreleased] — mnyz 分支：权威服务端与宇宙经济系统
+
+> 本分支在上游 Atlas 之上新增 `server/`（Flask + pydantic + psycopg3 + Alembic + PostgreSQL + Redis）。
+> 本段记录 0110–0140 共 31 个迁移，版本号待合并上游时确定。
+
+### Added
+
+- **权威服务端 `server/`**：`api/v1`（26 蓝图 / 255 端点）→ `domain` → `repo` → PostgreSQL 分层；
+  写接口强制 `Idempotency-Key` + `require_auth(write=True)`，金额走 `currency_service.post` 单一复式记账入口；
+  错误统一 RFC 9457 problem+json；固定加锁顺序（actor → currency → bank → listing → order → asset → escrow → court）。
+- **经济系统迁移 0110–0140**：
+  - `0110` 九级货币、复式账本、Q4+ 转账、逐级兑换、存贷计息、存单、同业拆借、存款保险
+  - `0111` 公司注册与股权、财报、产权登记与估值、挂牌拍卖、托管结算（2% 税 + 1% 佣金）、持有税
+  - `0112` 股票：IPO、限价/市价撮合（5 档）、双边费 + 印花税、avg_cost、T+0/T+1、K 线、熔断、对倒检测、做空、分红、退市触发
+  - `0113` AI 玩家正式账户与确定性决策引擎（可回放）；`0116` provider 四档（disabled/shadow/canary/live）
+  - `0114` 公司法（章程/高管/股东会/回避）+ 商业法院 + 破产顺位清算
+  - `0115` 跨区 2PC（日志/决策/outbox/租约）；`0117` 跨区判决承认（8 类拒绝 + 一次上诉）；`0118` 判决执行走 2PC
+  - `0119` 费用分账（手续 50/30/20、持有税 70/30）；`0120` 市值加权指数 + 做市商双边报价
+  - `0121` 玩家合议庭（3+2 抽签/回避）；`0122` 多币种清算；`0123` 子交易所 + 常驻做市程序
+  - `0124` 拆股复权 + K 线冷归档；`0125` 券商会籍与经纪佣金 + 一票多场地挂牌；`0126` 并股碎股折现 + 分区归档
+  - `0127` 同事务 append-only 事件日志；`0128` 航行权威（quote/commit + `in_flight[]`）；`0129` 全服公告
+  - `0130` 生产线服务端化；`0131` 周挑战领奖；`0132` 遗迹档案；`0133` 行星足迹日志
+  - `0134` 抵押登记与清算（lien + 3 天拍卖 + 利息→本金→余额分配）
+  - `0135` IPO 议会审批 + 首日集合竞价；`0136` 减资/合并/要约决议类型
+  - `0137` 产权争议 24h 异议期；`0138` 账本冲正（一笔至多冲正一次）
+  - `0139` 退市整理期 30 天 → 清算 3 天 → 先还银行再按股分；`0140` 投资者保护基金理赔（上限 1 万）
+- **前端统一外壳**：`Shell/GameFrame` 四区（顶栏 / 左轨 / 舞台 / 底部状态）+ 右侧经济坞常驻；
+  `Utils/PageNavigation` 实现 PJJAX-lite 零刷新跨层导航（仅 `POST /navigate` 与 `/multiverse/exit` 整页加载）；
+  五套经济面板 / 26 个子分区接真实接口。
+- **质量闸门**：`docs/api/{endpoints.md,openapi.json}` 由 `scripts/gen_api_docs.py` 生成并 `--check` 进 CI；
+  `scripts/check_boundaries.py`（模块写权限）、`scripts/check_frontend_gates.py`（v1 直连 / Shell fetch / blur 预算 / 文件行数）。
+
+### Changed
+
+- README 迁移表补全至 `0140_investor_protection`（原止于 0126）。
+- 前端视觉两轮换肤后定为深空 HUD（`docs/frontend-redesign/15-game-hud.md`）。
+
 ## [2.10.434] - 2026-03-09
 
 - Minor fixes

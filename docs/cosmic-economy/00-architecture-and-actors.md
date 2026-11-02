@@ -155,6 +155,8 @@ currency_ledger_transactions
   ref_type text
   ref_id text
   memo text
+  reversal_of uuid            -- 指向被冲正的那笔（仅 kind='reversal' 非空）
+  reversal_reason text
   created_at timestamptz
 
 currency_ledger_entries
@@ -175,6 +177,30 @@ currency_ledger_entries
 5. 金额用 `Decimal`，禁止 float；最小单位 0.0001。
 6. 所有写接口必须 `Idempotency-Key`。
 7. 账本只追加，不更新/删除历史行；冲正用反向 tx。
+
+### 4.2.1 冲正（undo / redo，T-32）
+
+**不变**：历史行永远不改。「撤销」= 新写一笔**镜像**交易，`kind='reversal'`，
+`reversal_of` 指回原 tx，逐币种逐账套取反（`-delta`），因此天然平衡。
+`domain/ledger_reversal.py` 是唯一实现，`POST /admin/ledger/transactions/<tx_id>/reverse`（admin/ops）。
+
+- **镜像由分录算，不是重放业务**。重放 `stock_service.buy` 会把一周前的十几个前置校验
+  拿到今天的世界重跑一遍；对已记账的 delta 取反既简单又必然平衡。
+- **余额不足直接拒绝（409）**。收钱的人已经花掉了，就没有东西可扣；
+  强行写出负余额会破坏整个经济赖以成立的不变量。运维必须先补平，这才是诚实答案。
+- **一笔交易只能被冲正一次**（`currency_tx_one_reversal_idx` 部分唯一索引兜底）。
+  「重做」= 冲正那条冲正分录，是合法操作，第二笔镜像把原效果还回去。
+- **状态是派生的，不落库**。`reversal_of` 只表达边；某笔交易当前是否生效 =
+  其镜像链后代数的奇偶（偶数=生效，奇数=已撤销）。缓存一个 `reversed` 布尔值
+  在重做之后就会和行本身打架。
+- 每次冲正同时写 `audit_log(action='ledger.reverse')`：账本解释「钱怎么动的」，
+  审计行解释「谁决定的、为什么」。
+- 读取面：`GET /admin/ledger/transactions`（按 kind/actor/ref/since 过滤，
+  带 `reversed_by`）与 `GET /admin/ledger/transactions/<tx_id>`（含 `ancestors`
+  与 `net_effect`）。
+
+**未做**：按业务单据批量冲正（如整张委托单）、冲正后的下游补偿（订单/持仓回滚）。
+这两件都不是账本问题——账本只能保证钱回到原处，业务状态得各模块自己回滚。
 
 ### 4.3 对账任务
 

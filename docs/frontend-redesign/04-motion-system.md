@@ -1,6 +1,6 @@
 # 04 · 动效系统
 
-> 现状：88 个 `@keyframes`、76 处 `animation:` 声明、59 处 `animate-pulse/spin/bounce/ping`，
+> 现状：88 个 `@keyframes`、76 处 `animation:` 声明、**68 处** `animate-pulse/spin/bounce/ping`
 > 其中大量是**装饰性无限循环**；`prefers-reduced-motion` 只覆盖 8 个（且写错了 2 个）类名。
 > 目标：动画从"氛围装饰"变成"状态沟通"。所有动效可被解释为以下三职能之一，否则删除。
 
@@ -97,7 +97,7 @@ hover 只改 `background-color` / `border-color` / `color` / `box-shadow`。
 
 | 规则 | 值 | 原因 |
 |---|---|---|
-| 同屏无限循环动画 | **≤ 2** | 现状 59 处，移动端掉帧 |
+| 同屏无限循环动画 | **≤ 2** | 现状 68 处，移动端掉帧 |
 | 单元素同时过渡属性 | ≤ 3 | 减少 style recalc |
 | 允许动画的属性 | `opacity` / `transform` / `background-color` / `border-color` / `color` / `box-shadow` | 全部可合成或低成本 |
 | **禁止动画的属性** | `width` / `height` / `top` / `left` / `margin` / `padding` / `filter: blur` / `backdrop-filter` | 触发布局或高成本重绘 |
@@ -296,7 +296,7 @@ export const useReducedMotion = (): boolean => {
 | 类别 | 具体 | 数量 |
 |---|---|---|
 | `global.css` keyframes | 88 → 保留 ≤ 16 | 删 ~72 |
-| `animate-pulse` 装饰性使用 | 全部 | 59 处中的 ~50 |
+| `animate-pulse` 装饰性使用 | 全部 | 68 处中的 ~58 |
 | 全屏循环背景动画 | `digital-rain` / `matrix-char` / `neural-*` / `particle-drift` / `scan-horizontal*` / `scan-vertical*` / `holographic-shimmer` / `quantum-field::before/after` | 8 类 |
 | 故障效果常驻 | `cyberpunk-glitch` / `glitchFlicker` / `coordinateGlitchShake` / `coordinate-selector-glitch` | 4 类 |
 | 采矿旧动效 | `mining-*` 全部 30+ 类 + `MiningAnimationOverlay` 重写 | 1 组件 |

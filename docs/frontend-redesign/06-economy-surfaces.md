@@ -49,6 +49,11 @@ const submit = async (path: string, body?: unknown) => {
 | `http_401` | 登录已过期 | 打开 `ServerAuthPanel` |
 | 其它 | 操作失败（错误码：…） | Toast（`danger`）+ 可展开原始信息 |
 
+> **2026-10-28 15:5x 更新**：`server/infra/errors.py` 现有 **25 个 `ApiError` 子类**，上表只覆盖 6 个高频。
+> 已新增 `GET /meta/error-codes`（无需鉴权，遍历子类返回 `code → http_status → message`），
+> 前端应在启动时拉一次构建字典、本地只保留中文文案覆盖层 —— **别再手抄枚举**。
+> 未覆盖的 19 个走「其它」分支即可，不必逐个写文案。
+
 ### 0.3 货币显示组件 `Money`
 
 ```tsx
@@ -108,12 +113,22 @@ const submit = async (path: string, body?: unknown) => {
 
 ## 2. 市场面板 `#/market`
 
-**端点**：`GET /stocks`、`GET /stocks/<t>`、`GET /stocks/<t>/candles`、`GET /stocks/orders`、
-`POST /stocks/<t>/orders`、`DELETE /stocks/orders/<id>`、`GET /stocks/portfolio`、`GET /stocks/margin`、
-`POST /stocks/<t>/short|cover|lend|margin`、`POST /stocks/ipo`、`POST /stocks/<t>/dividends`、
-`GET /stocks/<t>/dividends`、`GET /stocks/<t>/delisting`、
-`GET /market/indices`、`GET /market/indices/<code>/points`、`GET /stocks/<t>/quote`、`POST /stocks/<t>/quotes`、
-`GET /exchanges`、`GET /stocks/<t>/mm-program`
+**端点**（共 39 个可用，跨 `stocks` 16 / `market` 18 / `brokers` 9 三个蓝图；另有 4 个 admin 专属不做入口）：
+
+```
+GET    /stocks                       GET    /stocks/<t>            GET  /stocks/<t>/candles?interval=&limit=&before=
+GET    /stocks/orders?ticker=        GET    /stocks/portfolio      GET  /stocks/margin
+GET    /stocks/<t>/quote             GET    /stocks/<t>/dividends  GET  /stocks/<t>/delisting
+GET    /stocks/<t>/mm-program        GET    /market/indices        GET  /market/indices/<code>/points?limit=
+GET    /exchanges
+POST   /stocks/<t>/orders            DELETE /stocks/orders/<id>    POST /stocks/ipo
+POST   /stocks/<t>/short|cover|lend|margin                        POST /stocks/<t>/quotes
+POST   /stocks/<t>/dividends         POST   /stocks/<t>/split      POST /stocks/<t>/mm-program
+DELETE /stocks/<t>/mm-program        POST   /exchanges
+```
+
+> `POST /admin/market/candles/archive` 与 `POST /admin/market/index/publish` 是 `admin`/`ops` 专属，
+> **前端不做入口**（见 §2.8）。
 
 ### 布局（三栏，≥1280px）
 
@@ -143,25 +158,238 @@ export const DOWN = "var(--down)"; // #3FD68C 跌 = 绿
 
 现状 `StockMarketPanel` 里是硬编码 `#f87171` / `#4ade80`，改为引用 token（值近似，视觉可接受）。
 
-### 子分区 Tabs
+### 子分区 Tabs（10 个）
 
 | Tab | 内容 | 端点 |
 |---|---|---|
-| 行情 `quotes` | 上述三栏 | stocks + candles + quote |
+| 行情 `quotes` | 上述三栏 | `stocks` + `candles` + `quote` |
 | 我的委托 `orders` | 表格：时间/标的/方向/价/量/已成交/状态 + 撤单 | `/stocks/orders`、`DELETE` |
 | 持仓 `portfolio` | 表格 + 汇总 | `/stocks/portfolio` |
-| 融资融券 `margin` | 保证金账户、维持担保比例（低于 130% 标 `danger`）、可平仓提示 | `/stocks/margin`、`short`、`cover`、`lend`、`margin` |
-| 发行 `ipo` | 表单：代码/名称/发行价/股数/募资额预览 + 门槛提示（Q4） | `POST /stocks/ipo` |
-| 做市 `mm` | 我的做市程序：标的、双边报价、剩余额度、开关 | `mm-program` GET/POST/DELETE |
-| 分红 `dividends` | 历史分红表 + 发起（仅发行人） | `dividends` GET/POST |
+| 融资融券 `margin` | 保证金账户、维持担保比例（< 130% 标 `danger`）、可平仓提示 | `/stocks/margin`、`short`、`cover`、`lend`、`margin` |
+| 发行 `ipo` | 表单：代码/名称/发行价/股数/**挂牌交易所**/募资额预览 + Q4 门槛 | `POST /stocks/ipo` |
+| **做市 `mm`** | 我的做市程序 + 健康度 + 手动双边报价 | `mm-program` ×3、`POST /quotes` |
+| **交易所 `venues`** | 全部交易所清单 + 申请子交易所牌照 | `GET/POST /exchanges` |
+| **公司行动 `actions`** | 拆股（危险操作）+ 分红 + 退市信息 | `split`、`dividends`、`delisting` |
+| 指数 `indices` | 指数卡 + 指数点位序列图 | `/market/indices`、`/points` |
+| **券商与场地 `brokers`** | 券商牌照 / 会员 / 经纪账户 / 多挂牌场地 | `brokers/*` 9 个、`/stocks/<t>/venues` |
 
-### 下单交互细节
+> 现状 `StockMarketPanel` 只在页面顶部显示一行指数，`book` / `chart` / `portfolio` 三个 tab。
+> 新增 6 个子分区，全部用现有端点。
 
-1. 价格输入框旁显示 `±1 档` 快捷按钮（点击 = 当前对手价）。
-2. 数量输入框下方显示"≈ 金额"和"手续费"，实时计算（前端算，服务端为准）。
-3. **提交前二次确认**（金额 > 账户 10% 时）：`Modal` 列出 方向/价/量/金额/手续费，`danger` 描边确认按钮。
-4. 提交后按钮进入 `loading`，成功后 3s 轮询一次 `portfolio` + `orders` 刷新（不用长连接）。
-5. 熔断中（±20%/±30%）时，下单区显示 `warn` 横幅并禁用市价单。
+---
+
+### 2.1 做市 `mm`（0123 新增）
+
+`mm_programs` 是一张**常驻表**，`mm_refresh_tick` 每 **60 秒**自动为所有 `active` 程序
+重新挂双边报价，失败时把错误码写进 `last_error`、成功时更新 `last_run_at`。
+前端必须把这个"后台在跑"的事实可视化，否则玩家不知道为什么挂单会自己变。
+
+```
+┌─ 我的做市程序 ────────────────────────────────────────────────────┐
+│ 标的   数量   状态      上次运行          健康度        操作        │
+│ ATL    200    active    12:03:40 (12s前)  ● 正常        [暂停]      │
+│ VEGA   500    active    11:58:10          ⚠ 资金不足    [补足][暂停] │
+│                                          （insufficient_funds）    │
+│ NX-1   100    paused    —                 ● 已暂停      [恢复]      │
+└───────────────────────────────────────────────────────────────────┘
+自动重挂间隔 60s · 上次全量刷新 12:03:40
+```
+
+> 界面**只显示中文**（"资金不足"）；原始错误码放 `title` 属性供排查，不出现在正文。
+
+- `status`：`active` → 绿色点 `down`；`paused` → `n-600`；有 `last_error` → `warn`。
+- `last_error` 是**后端错误码**，必须过 §0.2 的映射表翻成中文（例：`insufficient_funds` → "资金不足，双边报价未挂出"）。
+- `last_run_at` 显示相对时间（"12 秒前"），由全局 1s tick 驱动，不发请求。
+- `[暂停]` = `DELETE /stocks/<t>/mm-program`（**实际是置 `paused`，不是删除**，文案要说清"暂停"）。
+- `[恢复]` = `POST /stocks/<t>/mm-program`，body `{ "quantity": 200 }`（`quantity` 必须是正整数，必填）。
+- `[立即刷新]` = `POST /stocks/<t>/quotes`，body `{ "quantity": 200, "refresh": true }`。
+
+**表单校验**（前端先拦，后端也拦）：
+
+| 字段 | 规则 | 错误文案 |
+|---|---|---|
+| `quantity` | 正整数 | 数量必须大于 0 |
+| 标的 | 必须已上市 | 该股票未上市（后端 404 文案已中文化，直接透传） |
+
+### 2.2 交易所 `venues`（0123 新增）
+
+```
+┌─ 交易所 ───────────────────────────────────────────────────────────────┐
+│ 代码   名称            类型   币种  状态    费率    上市费    运营方        │
+│ CSX    宇宙联合交易所   official cc4  active  10 bp   0         系统        │
+│ ALPHA  Alpha 板        sub     cc4  active  25 bp   1,200 Q4  你          │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─ 申请子交易所（.surface-raised 折叠区，默认收起）──────────────────────┐
+│ 代码 [ALPHA] 3-8 位大写字母或数字                                       │
+│ 名称 [Alpha 板]  最多 80 字                                             │
+│ 费率 [25] bp（0–100）      上市费 [1200] Q4                             │
+│ 牌照费 5,000 cc4（一次性，付给 treasury）                                │
+│ [确认开设]                                                              │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+字段直接对应 `POST /exchanges` 的 body：`{ code, name, fee_bps, listing_fee }`
+（**只有这 4 个**；`currency_code` 后端写死默认 `cc4`，前端不传）。
+
+校验与限制（全部来自后端实现，前端需前置提示）：
+
+| 约束 | 值 | 来源 |
+|---|---|---|
+| 代码格式 | `^[A-Z0-9]{3,8}$` | `exchange_service.CODE_RE` |
+| 代码唯一 | 已占用则 `unprocessable` | `exchange_by_code` |
+| `fee_bps` | 整数 0–100 | `create_sub` |
+| `listing_fee` | ≥ 0，4 位小数 | `create_sub` |
+| 牌照费 | 5,000 cc4，从个人 actor 划到 treasury | `SUB_EXCHANGE_FEE` |
+| 限流 | 5 次 / 小时 | `rate_limit("exchange_create", 5, 3600)` |
+
+**UI 必须做的两件事**：
+
+1. 提交前显示"将从你的 cc4 余额扣除 5,000 牌照费"，并检查余额（`GET /wallet/currencies`）。
+2. `last_listings` 上限（`max_listings`）在 `GET /exchanges` 的响应里**没有返回** ——
+   所以不要在列表里显示"挂牌数 x/y"，只显示费率与上市费。
+
+### 2.3 拆股 `actions` → 拆股（危险操作）
+
+```
+拆股 / 合股  标的 ATL（你持有 62% 股权，具备提案权）
+
+比例 [2]  : 1        允许 0.01 – 100，且不能为 1
+                    > 1 为拆股（股价降、股数升），< 1 为合股
+
+影响预览（前端计算，仅示意，以执行结果为准）
+  股价      812.40  →  406.20
+  总股本    1,000,000  →  2,000,000
+  我的持股  620,000  →  1,240,000
+  我的成本  810.00  →  405.00
+  我的挂单  3 笔 将全部撤销  ← danger 高亮
+
+⚠ 该操作不可撤销；所有未成交挂单会被直接撤销而非重新定价。
+[取消]                                        [确认拆股]（danger 实心）
+```
+
+- body：`{ "ratio": "2" }`（字符串，`Decimal`）；后端限制 `0.01 ≤ ratio ≤ 100` 且 `ratio ≠ 1`，
+  仅"公司控股方"可执行（`Forbidden`）。
+- 响应：`{ ticker, ratio, last_price, prev_close, cancelled_orders, adjusts: ["listing","holders","candles"] }`。
+- 成功后展示结果卡：撤销挂单数 `cancelled_orders`、复权范围 `adjusts` 三项打勾。
+- 限流 5 次 / 天。
+- **不能用 `Modal` 的默认确认按钮** —— 必须是 `danger` 实心 + 文案含"不可撤销"。
+
+### 2.4 指数 `indices`
+
+- `GET /market/indices` → `{ indices: [{ code, name, value, change_pct }] }`。
+- `GET /market/indices/<code>/points?limit=120` → 点位序列，用于 `Sparkline`（左栏）与
+  详情区折线（点击指数卡展开）。`limit` 是**唯一被支持的分页参数**（默认 120，最大由后端兜底）。
+- 指数的 `value` / `change_pct` 是字符串（Decimal），必须 `Number()` 后再画图。
+
+### 2.5 场地与费率契约（2026-10-28 已补齐，可直接展示）
+
+`GET /stocks` 与 `GET /stocks/<ticker>` 共用 `_payload_listing()`，现在返回：
+
+```
+existing 16 个字段
++ exchange_id     主挂牌交易所 id
++ exchange_code   主挂牌交易所代码
++ fee_bps         主场地费率（0–100）
++ venues[]        { exchange_id, exchange_code, exchange_name, kind, fee_bps, status }
+```
+
+据此本面板可以做（此前只能绕开）：
+
+1. **按交易所分组**：`stocks.filter(s => s.exchange_code === code)`，交易所卡上直接显示挂牌数；
+2. **股票行徽章**：主所代码 + 多挂牌标记（`venues.length > 1` 时显示"多场地 N"）；
+3. **下单面板显示费率**，分两行，缺一不可：
+
+```
+本所费率      CSX 10 bp
+我的券商佣金  ATLAS 证券 6 bp   （未开户 / 券商无该所会籍 → 此行显示"直连，无佣金"）
+预计费用      ≈ 1.92 Q4        （按金额 × 16bp，标注"以成交结果为准"）
+```
+
+费率口径（照抄实现，不要自己发明）：
+
+| 项 | 规则 | 来源 |
+|---|---|---|
+| 交易所费 | 该场地 `venues[].fee_bps`，成交时按 `venue_id` 计收 | `_listing_fee_bps` |
+| 券商佣金 | `min(经纪账户 commission_bps, 券商会籍 commission_bps)`，**叠加**在交易所费之上，付给券商 | `_agency_commission` |
+| 无经纪账户 | 只有交易所费，无佣金 | 同上 |
+| 印花税 | 卖出方另收 0.10%，与场地无关 | `_tax` |
+| 自动路由 | 不传 `venue_code` 时按**最优可成交价**选场地；无报价退回**最低佣金** | `_resolve_venue` |
+
+4. **交易所子分区与股票子分区联动**：点交易所卡 → 过滤该所挂牌股票（数据来自 `stocks[].venues`，
+   不需要额外请求）。
+5. **IPO 表单**可以预览上市费：`GET /exchanges` 已返回 `listing_fee`，选所后显示
+   "上市费 5,000 Q4，从公司金库扣除"。注意 `max_listings` / 当前挂牌数仍未返回（见 10 §P0-2）。
+
+> 历史：该字段曾缺失，旧版设计曾要求"不显示费率、只并列不联动"。本轮已解除，
+> 若实现中发现旧文案请一并替换。
+
+### 2.6 下单交互细节
+
+1. 价格输入框旁 `±1 档` 快捷按钮（点击 = 当前对手价）。
+2. 数量框下方显示 "≈ 金额"（前端算）；费用按 §2.5 的三行展示（本所费率 / 券商佣金 / 预计费用），
+   末行必须标注"以成交结果为准"。
+3. **提交前二次确认**（金额 > 账户 10% 时）：`Modal` 列出 方向/价/量/金额，`danger` 描边确认。
+4. 提交后按钮 `loading`，成功后刷新 `portfolio` + `orders` 一次（不做 3s 轮询）。
+5. 熔断中（`halted_until` 非空 / `circuit_breaker_pct`）时，下单区 `warn` 横幅并禁用市价单，
+   显示 `halt_reason`。
+6. `settlement_mode` 为 `t1` 时，持仓区标注"T+1 可卖"，卖出按钮对当日买入部分禁用。
+
+### 2.7 券商与场地 `brokers`（0125 新增）
+
+0125 把「一只票只能在一个交易所挂牌」改成**多场地挂牌 + 智能路由**。
+三个角色必须分清，否则 UI 会做成四不像：
+
+| 角色 | 是什么 | 端点 |
+|---|---|---|
+| **券商** firm | 一个经济主体拿到券商牌照 | `POST /brokers/firms`（`{capital}`） |
+| **会员** membership | 券商成为某交易所的会员，带自己的佣金率 | `POST /brokers/memberships`（`{exchange_code, commission_bps}`） |
+| **经纪账户** account | 玩家在某券商开户，交易走该券商通道 | `POST /brokers/accounts`（`{broker_code, commission_bps?}`） |
+| **挂牌场地** venue | 某只股票在某个交易所挂牌，各有费率 | `GET/POST/DELETE /stocks/<t>/venues` |
+
+```
+┌─ 券商与场地 ──────────────────────────────────────────────────────────┐
+│ 我的券商          ATLAS 证券    状态 active    资本 120,000 Q4         │
+│ 会员资格          CSX（佣金 5bp）· ALPHA（佣金 8bp）                   │
+│ 经纪账户          在 ALPHA 券商开户 · 佣金 6bp                          │
+├───────────────────────────────────────────────────────────────────────┤
+│ 挂牌场地  ATL                                                          │
+│  CSX    主交易所   10 bp    active    [撤牌]                            │
+│  ALPHA  Alpha 板   25 bp    active    [改费率] [撤牌]                   │
+│  [+ 新增挂牌场地]  选择交易所 → 费率 → 确认（需控股方）                  │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+规则（来自实现，前端照抄不要自己发明）：
+
+| 规则 | 值 | 来源 |
+|---|---|---|
+| 场地 `fee_bps` | 0–100，缺省继承交易所费率 | `VenueRequest` |
+| 会员 `commission_bps` | 0–100，默认 5 | `MembershipRequest` |
+| 挂牌/摘牌权限 | 需控股方（与拆股同） | `broker_service.join_listing` |
+| 下单不指定场地 | 后端按**最优可成交价**路由，无报价时退回**最低佣金** | `stock_service._resolve_venue` |
+| 下单指定场地 | 传 `venue` 代码；未挂牌则 404「该标的未在 X 挂牌」 | 同上 |
+| 摘牌后 | 状态置 `suspended`，持仓保留 | `broker_service.leave_listing` |
+
+**UI 必须说明的两件事**（否则玩家会当成 bug 报）：
+
+1. 「同一只票在不同板的价格可能不同，默认按最优价成交」——下单面板要有「路由：自动 / 指定场地」切换。
+2. 「撤牌不会强制平仓，但之后无法在该板交易」。
+
+与 [09](09-state-and-context.md) 衔接，新增两个 statusId：
+
+| statusId | 严重度 | 触发 |
+|---|---|---|
+| `broker.no_membership` | caution | 有券商但未加入任何交易所 |
+| `venue.suspended` | degraded | 某挂牌场地被暂停 |
+
+### 2.8 明确不做入口
+
+| 端点 | 原因 |
+|---|---|
+| `POST /admin/market/candles/archive` | `admin`/`ops` 专属（后端校验 `account_role`） |
+| `POST /admin/market/index/publish` | 同上 |
+| `POST /stocks/<t>/quote` | 仅发布"我的报价快照"，与 `quotes` 功能重叠，普通玩家用不到 |
 
 ---
 
@@ -369,15 +597,19 @@ UI 必须把这三条**在投票界面上显式呈现**：
 
 ## 9. 实施顺序（按价值/成本比）
 
-| 序 | 面板 | 端点 | 理由 |
-|---|---|---|---|
+| 序 | 面板 | 端点数 | 理由 |
+|---|---|---:|---|
 | 1 | `#/assets` | 7 | 一切的基础，玩家最先需要"我有多少" |
-| 2 | `#/market` | 16 | 已有 `StockMarketPanel` 可改造，增量最小 |
+| 2a | `#/market` 基础区（行情/委托/持仓/指数） | 11 | 已有 `StockMarketPanel` 可改造，增量最小 |
+| 2b | `#/market` 进阶区（做市/交易所/拆股/两融/发行/分红） | 15 | 0123–0124 新增能力，**不做则这批后端等于白写** |
 | 3 | `#/log` | 1 | 成本最低，解决"钱去哪了"，先上线先受益 |
 | 4 | `#/bank` | 28 | 依赖最多，但货币系统是经济地基 |
 | 5 | `#/company` | 14 | 依赖 bank（注册资本需 Q 级） |
 | 6 | `#/legal`（产权） | 10 | 依赖 company（可卖给公司） |
 | 7 | `#/legal`（诉讼/破产） | 22 | 最复杂，最后做 |
+
+> 2a 与 2b 可以合并成一个 PR，但如果时间紧，**2a 先上**（玩家能交易），2b 随后
+> （玩家能用做市和拆股）。2b 的"拆股"是公司行动，依赖 5 的公司治理，可再后移。
 
 ---
 
@@ -386,8 +618,15 @@ UI 必须把这三条**在投票界面上显式呈现**：
 - **不做**玩家间即时聊天/私信（后端无端点）。
 - **不做**公司回购/增发/并购按钮（后端无端点）。
 - **不做**银行牌照申请 UI（08 分册标注为缺口）。
-- **不做**子交易所创建 UI（`POST /exchanges` 存在但需要议会动议，前端只读列表）。
+- **不做** K 线归档、指数发布两个 admin 入口（`admin`/`ops` 专属，见 §2.8）。
+- **不做**"按交易所分组"的股票列表（`/stocks` 不返回 `exchange_id`，见 §2.5）。
 - **不做**任何前端的金额/份额计算结果作为权威值 —— 一律提交后以响应为准。
+
+> ⚠ **与 03 分册的偏差（已核实代码）**：`03-commerce-center.md` 写"子交易所需 Q6 资本金 + 议会动议
+> + 央行审查"，但**当前实现**（`exchange_service.create_sub`）只校验代码格式/唯一性/费率区间，
+> 并收取 **5,000 cc4 牌照费**（个人 actor → treasury），**没有议会动议与央行审查校验**。
+> UI 因此**提供**开所入口，但表单下方必须注明：
+> "按 03 分册规划，开所还需议会动议与央行审查；当前版本以实现为准：缴费即开。"
 
 ---
 
@@ -400,3 +639,7 @@ UI 必须把这三条**在投票界面上显式呈现**：
 - [ ] 涨跌色 100% 使用 `--up` / `--down`（红涨绿跌）
 - [ ] 面板打开/关闭不触发页面 3D 重载
 - [ ] 面板打开后 60s 内无任何 `setInterval` 新建（除行情 15s 一项）
+- [ ] 做市程序卡片显示 `last_run_at` 相对时间与 `last_error` 中文文案
+- [ ] 拆股确认框含"挂单将被全部撤销"的 `danger` 提示与影响预览
+- [ ] 开所表单显示 5,000 cc4 牌照费与余额校验
+- [ ] 界面无任何"手续费率 / 交易所徽章"（契约缺口，见 §2.5）

@@ -218,6 +218,14 @@ property_tax_bills
 5. 24h 争议期；
 6. 放款给卖方。
 
+**落地口径（0137 / T-18）**：第 3、4 步是原子的（托管 → 划转 → 过户同事务），第 5 步是**事后窗口**：
+成交后 24 小时内，交易双方或当前持有人可 `POST /properties/<asset_key>/dispute` 提出争议；
+受理即把产权置 `frozen`、撤销该产权所有 `open` 挂牌，并写一条 `property_encumbrances(kind='dispute')`
+——挂牌与买入的拦截复用既有检查（`list_asset` 要求 `owned`、`buy` 拒绝未解除负担），没有第二套状态机。
+争议 72 小时未裁决自动过期并解除冻结（job `property_dispute_tick`，每小时）；
+CCMC 裁决（`POST /properties/disputes/<id>/resolve`）成立则把 `dispute` 转成 `freeze` 继续锁着（等法院），
+驳回则释放并恢复可售。**未做**：第 6 步的"放款延后到争议期结束"——现在卖方仍在成交时即时收款。
+
 ### 4.2 拍卖
 
 - 起拍价 + 最小加价；

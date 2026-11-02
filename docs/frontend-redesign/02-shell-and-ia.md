@@ -244,6 +244,8 @@ interface ShellState {
 - **唯一的 tick**：`setInterval(1000)` 驱动宇宙时钟 + 资源刷新（替代现状 5 个定时器）。
 - **唯一的数据缓存**：`Map<endpoint, { data, at }>`，面板切走再切回 60s 内不发请求。
 - 网络错误统一进 `toast`，不再各组件 `console.error`。
+- 状态归属与派生规则见 [09 §2.1](09-state-and-context.md)：组件**只读不写**，写必须走 shell 的 action。
+- NavRail 徽章、StatusBar 状态条、通知中心计数，三者都读同一个 `statusBus`，不得各算。
 
 ---
 

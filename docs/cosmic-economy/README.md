@@ -123,7 +123,7 @@ python sim/simulate.py --only low # 单场景
 | `0121_court_panel` | ✅ 已落地 | `court_panels`/`court_panel_members`、`court_panel`（抽签/回避/表决/异议）、`api/v1/court.py` 端点、3 个集成测试 |
 | `0122_liquidation_fx` | ✅ 已落地 | `insolvency_claims.paid_q1`、`insolvency_service` 多币种按 Q1 等值分配、1 个集成测试 |
 | `0123_exchange_matching` | ✅ 已落地 | `exchanges` 费率/上市费、`mm_programs` + job `mm_refresh_tick`、`api/v1/market.py` 交易所与做市程序端点、5 个集成测试 |
-| `0124_split_archive` | ✅ 已落地 | `stock_splits`/`stock_candle_archive`、`stock_corporate`（拆股复权 + 归档）、4 个集成测试 |
+| `0124_split_archive` | ✅ 已落地 | `stock_splits`/`stock_candle_archive`、`stock_corporate`（拆股复权 + 归档）、4 个集成测试 |\n| `0125_broker_venue` | ✅ 已落地 | `broker_memberships`/`broker_accounts`/`broker_commissions`/`listing_venues`、`broker_service`、`api/v1/brokers.py`、`venue_id` 隔离撮合、4 个集成测试 |\n| `0126_split_cold` | ✅ 已落地 | 碎股折现 + 复权因子 + 按月分区归档（`candle_archive_partitions`、detach/restore、job `candle_partition_tick`）、3 个集成测试 |
 
 `0110` 已实现的能力：
 

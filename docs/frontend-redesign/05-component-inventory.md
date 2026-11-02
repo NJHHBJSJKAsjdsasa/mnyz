@@ -10,14 +10,40 @@
 | 类 | 文件数 | 行数 | 占全站 |
 |---|---:|---:|---:|
 | A 冻结（不修改） | 79 | 40,124 | 55.3% |
-| B 包装（逻辑不动，只换外壳） | 12 | 3,163 | 4.4% |
-| C 重写（表现层） | 27 | 8,216 | 11.3% |
-| 保留原样（`Utils/` 逻辑层 + `Icons/` + `Hooks/`） | 96 | 20,207 | 27.8% |
-| D 新增 | 0 → 约 28 | +≈7,000 | — |
+| B 包装（逻辑不动，只换外壳） | 13 | 3,509 | 4.8% |
+| C 重写（表现层） | 33 | 7,556 | 10.4% |
+| 保留原样（`Utils/` 逻辑层 + `Icons/` + `Hooks/` + 其余） | 109 | 20,521 | 28.3% |
+| D 新增 | 0 → 约 48 | +≈10,500 | — |
 | E 删除 | 5 | 904 | 1.2% |
 
-> 口径：按文件归类，行数为 `wc -l` 实测加总，全站 72,614 行（239 文件）。
+> 口径：按文件归类，行数为 `wc -l` 实测加总，全站 72,614 行 / 239 文件（2026-10-28 12:00 基线）。
+> 五列（不含 D）相加 = 239 文件 / 72,614 行，无重叠。
 > `Utils/` 15,005 行全部"保留原样"——它是数据层与玩法状态机，重设计中一行不改。
+> E 组 5 个文件当前也在"保留原样"里，删除后总计降为 71,710 行。
+
+### 附录 · 基线 → 现值拆解（2026-10-28 16:4x 复测，渲染移植阶段 5 后）
+
+全站现值 **281 文件 / 84,755 行**（+42 文件 / +12,141 行），差额全部来自新增，A/B/C/保留/E 五类未变：
+
+| 新增 | 文件 | 行数 | 归属 |
+|---|---:|---:|---|
+| `js/3DComponents/realistic3/` | 23 | 8,580 | 渲染移植（14 vendored + adapter/systemAdapter/systemTypes/moons/perf/variantCache/view/VENDOR.md） |
+| `js/economy/` | 5 | 1,121 | 经济四面板 + 外壳（v1.6 首个切片） |
+| `js/ui/` | 4 | 488 | `Money` / `Status` / `bits` / `api` |
+| `js/PlanetLab/main.tsx` | 1 | 225 | dev-only 实验页（不进 build） |
+| `js/SystemLab/` | 2 | 324 | 恒星 / 恒星系 / 异象 实验页 + fixture（不进 build） |
+| `js/Components/RealisticPlanetStage.tsx` | 1 | 204 | 真实渲染舞台壳 |
+| `js/Components/RealisticStarStage.tsx` | 1 | 145 | 单颗恒星展台 |
+| `js/Components/RealisticSystemStage.tsx` | 1 | 490 | 恒星系页落点（标签 / 点选 / 行星检视器 / setDetailed / setPlanetColor） |
+| `js/Components/WarpTunnelFX.tsx` | 1 | 223 | 超跳跃换皮：隧道光环 + 速度线 + 径向色散（2D overlay） |
+| `js/Components/ExoticShowcase.tsx` | 1 | 263 | 星系尺度天体展品 |
+| `css/tokens.css` | 1 | 99 | 设计 token 层 |
+| `js/Utils/RendererFlag.tsx` | 1 | 39 | 渲染开关 |
+| 合计 | 42 | 12,193 | 与「+12,141」差 52 行 = 12:00 的基线快照与逐目录复测之间本来就有的误差（存量文件在此期间也被就地改过） |
+
+> **D 组进度**：原计划"约 48 文件 / ≈10,500 行"，已落 **11 文件 / 1,708 行**（`economy/` 5 + `ui/` 4 + `tokens.css`）≈ 16%；
+> 其余 31 文件（`realistic3/` 23 + `RendererFlag.tsx` + 四个 Stage/Showcase + `WarpTunnelFX.tsx` + `SystemLab/` 2）属渲染移植线，**不计入 D 组**，
+> 否则 D 组完成度会虚高而实际设计系统只落了 token 与 4 个基础件。
 
 ---
 
@@ -98,19 +124,19 @@
 
 | 文件 | 行数 | 处置 |
 |---|---:|---|
-| `Components/ExplorationLab.tsx` | 125 | 重写容器：12 平铺 → 4 组 × N（见 02 §3.2）。12 个 Tab 组件**零改动** |
-| `Components/PlanetInfo.tsx` | 535 | 拆为 4 个（见下） |
-| `Components/FuelBars.tsx` | 315 | 重写为 `StatusBar` 的资源段；12 资源读取逻辑复用 |
-| `Components/Header.tsx` | 56 | 重写为 `TopRail`；`UniverseDetection` 轮询删除，改用 `ShellContext` |
-| `Components/ServerAuthPanel.tsx` | 140 | 保留逻辑；改成 `Modal` + 表单 token |
-| `Components/SpaceshipPanel.tsx` | 907 | 保留全部业务逻辑（升级/改装/维修）；外壳改 `ContextDrawer` 内的分段面板 |
-| `Components/TaskPanel.tsx` | 270 | 保留逻辑；改 `ContextDrawer` |
-| `Components/TreasureChest.tsx` | 242 | 保留逻辑；改 `Modal` |
-| `Components/DidYouKnow.tsx` | 225 | 保留轮播逻辑；外壳改右下角 Toast 卡（现状是浮动圆圈，遮挡交互） |
-| `Components/VersionFooter.tsx` | 115 | 内容并入 `StatusBar` 右侧，组件删除 |
-| `Components/Pagination.tsx` | 191 | 重写（唯一改动：样式 + 无障碍） |
-| `Components/CosmicBanner.tsx` | 41 | 保留（坐标滚动条），改色 |
-| `Components/ResourceStatusBar.tsx` + `ResourceCollectionButton.tsx` | 214 | 合并进新的 `PlanetActions` |
+| `Components/ExplorationLab.tsx` | 125 → **150** | ✅ 重写容器：12 平铺 → 4 簇（勘探/经营/成长/势力，见 02 §3.2）。12 个 Tab 组件**零改动**；多出的 25 行是分组表与 `aria-pressed` |
+| `Components/PlanetInfo.tsx` | 535 → **270** | ✅ 拆为 4 个（见 §3.1），四块全部落地 |
+| `Components/FuelBars.tsx` | 315 → **76** | ✅ 拆成容器 + `fuel/FuelBar.tsx`(116) + `fuel/resourceConfig.tsx`(54)；5s 轮询改订阅（`Hooks/useShipResources.ts`）。**没有**并入 `StatusBar`：`StatusBar` 只在经济外壳里，而顶栏资源条要出现在全部 5 个游戏页 |
+| `Components/Header.tsx` | 56 | ✅ 重写为令牌化仪器条（T-77）；`UniverseDetection` 轮询删除，改用 `ShellContext` |
+| `Components/ServerAuthPanel.tsx` | 140 | ✅ 保留逻辑；改成 `ui/Modal` + 表单 token，且不再默认弹出（T-78） |
+| `Components/SpaceshipPanel.tsx` | 907 → **224** | ✅ 逻辑 → `spaceship/useSpaceshipPanel.ts`(321)，三个 tab → `spaceship/{StatsTab,ShipTab,SavedTab}.tsx`(175/147/247)。**外壳仍是右下浮层**，Drawer 版待 `ui/Drawer`（T-69） |
+| `Components/TaskPanel.tsx` | 270 | 🟡 保留逻辑；已与 `SpaceshipPanel`/`TreasureChest` 定好堆叠顺序（T-76），Drawer 化未做 |
+| `Components/TreasureChest.tsx` | 242 | 🟡 保留逻辑；同上 |
+| `Components/DidYouKnow.tsx` | 225 | ✅ 保留轮播逻辑；容器改 `pointer-events-none`，去掉两个装饰循环 |
+| `Components/VersionFooter.tsx` | 115 → **91** | ✅ 图标拆到 `footer/icons.tsx`(48)，删掉声明后从未被读的 `showBadge`。**未并入 `StatusBar`**：它在 7 个 Layout 里都渲染（含 FAQ/错误页），`StatusBar` 只属于经济外壳，合并会把版本号从 5 个页面弄丢 |
+| `Components/Pagination.tsx` | 191 | 🟡 样式与无障碍未改（不阻塞） |
+| `Components/CosmicBanner.tsx` | 41 | 🟡 保留（坐标滚动条），改色未做 |
+| `Components/ResourceStatusBar.tsx` | 127 | ✅ **直接删除**（T-84）：全仓 0 引用，`isExpanded` 永不变，`efficiency`/`getTravelCostPreview` 算完不用。`ResourceCollectionButton.tsx` 保留 |
 
 ### 3.1 `PlanetInfo` 拆分方案
 
@@ -125,6 +151,25 @@
 
 原 `PlanetInfo.tsx` 保留为薄壳，按顺序组合以上 4 个，供阶段一先跑通再由阶段三替换。
 **所有业务逻辑（`ResourceEventManager`、`PlanetScanSystem`、`LocationBookmarks` 调用）一行不改。**
+
+**落地情况（2026-10-29）**：`PlanetOverview`(120) / `PlanetOwnership`(54) / `PlanetMoonCard`(101) / `PlanetTechData`(48) + `planet/format.ts`(26)，主文件 270 行只留状态与数据流。
+`PlanetEffectsControl` 与 `PlanetActions` 没有按原计划拆 —— 前者只剩一行 `<EffectsControl …/>`，再包一层是纯函数调用开销；
+后者的两个按钮各自带请求与冷却，合并会强迫它们共享一个 props 袋子。
+
+### 3.2 拆分手法与验收（2026-10-29）
+
+三次拆分用的都是同一套手法，记下来是为了下一批不用重新想：
+
+1. **逻辑先出、标记后出**。先把手写状态与 effect 抽成 hook（`useSpaceshipPanel` / `useShipResources`），
+   hook 返回 `PanelBag`，子组件用 `Pick<PanelBag, "a"|"b">` 只声明自己读的字段，父组件 `<Tab {...panel} />`。
+   好处是标记搬运期间不用改一行 JSX。
+2. **逐字搬运，不做"顺手优化"**。`SpaceshipPanel` 的三个 tab、`FuelBars` 的单段、`Arecibo` 的 158 个方法
+   全是原样剪切。验证靠渲染产物而不是靠读 diff：
+   - 纯计算（Arecibo）→ `npm run check:arecibo` 比对 22 组 SHA-1；
+   - 纯展示（FuelBars / PlanetInfo）→ `tsc` + 冒烟 + 构建，标记差异靠 `git diff --word-diff` 复核。
+3. **拆分必须让某条约束变得可执行**。`check_frontend_gates.py` 新增 `SIZE_BUDGET = 1200`：
+   非渲染面文件超过 1200 行直接 fail，渲染面（`3DComponents/`、`3DEffects/`、`*3DViewer*`、半冻结三个）豁免。
+   没有这条，`Arecibo` 这种 4.5k 行文件迟早会重新长出来。
 
 ---
 
@@ -172,47 +217,94 @@
 
 ---
 
-## 5. D 组 · 新增组件（约 28 个）
+## 5. D 组 · 新增组件（约 48 个）
 
-### 5.1 外壳（7）
+### 5.1 外壳（7）· ✅ 已落地 2026-10-28
+
+> 原 `economy/EconomyShell.tsx`（299 行）把这 7 个职责塞在一个文件里。现在按下面拆开，
+> 旧文件降到 **57 行**（只剩"哪些面板 + 各渲染什么"）。`Shell/*` 7 件 665 行，含 `PanelHost` 共 **704 行**。
+>
+> **硬约束已进闸门**：`scripts/check_frontend_gates.py` 检查 `Shell/**` 里不得出现 `fetch(`
+> （当前 0）—— 数据只能经 `ShellProvider`。
 
 | 组件 | 职责 |
 |---|---|
-| `Shell/AtlasShell.tsx` | 外壳容器 |
-| `Shell/ShellProvider.tsx` | 唯一状态源 + 唯一 tick + 数据缓存 |
-| `Shell/ShellRouter.tsx` | hash ↔ `ShellView` 映射 |
-| `Shell/TopRail.tsx` | 顶栏 |
-| `Shell/NavRail.tsx` | 左侧导航（移动端底部栏） |
-| `Shell/StatusBar.tsx` | 底部状态带（含资源段） |
-| `Shell/CommandPalette.tsx` | ⌘K 面板 |
+| `Shell/AtlasShell.tsx` | 外壳容器（四区组装 + launcher + ⌘K）· **171 行** |
+| `Shell/ShellProvider.tsx` | 唯一状态源 + 唯一 tick + 数据缓存（`useShell()`）· 99 行 |
+| `Shell/ShellRouter.tsx` | hash ↔ `ShellView` 映射（`useShellRouter()`）· 49 行 |
+| `Shell/TopRail.tsx` | 顶栏（52px，含 `ui/Status` 与 ⌘K 入口）· 78 行 |
+| `Shell/NavRail.tsx` | 左侧导航 118px（badge 由 snapshot 派生）· 71 行 |
+| `Shell/StatusBar.tsx` | 底部状态带 30px · 38 行 |
+| `Shell/CommandPalette.tsx` | ⌘K 面板（过滤 + ↑↓ + Esc）· 157 行 |
 
-### 5.2 基础控件（11）
+### 5.2 基础控件（11）· ✅ 已落地 2026-10-28
+
+> 全部在 `atlas-ui/react/static/js/ui/`，统一从 `ui/index.ts` 导入；用 `tokens.css` 的
+> `--atlas-*` 变量，不写十六进制色值。`Button`(4×3) / `IconButton` / `Input` / `NumberInput`(mono+步进) /
+> `Select` / `Checkbox` / `Switch`(role=switch) / `Badge`(6 tone) / `Tooltip` / `Tabs`(两级) / `Progress`(含
+> indeterminate)。`tsc --noEmit` 0 错。
 
 `ui/Button.tsx`（4 variant × 3 size）、`ui/IconButton.tsx`、`ui/Input.tsx`、
 `ui/NumberInput.tsx`（mono + 步进）、`ui/Select.tsx`、`ui/Checkbox.tsx`、`ui/Switch.tsx`、
 `ui/Badge.tsx`、`ui/Tooltip.tsx`、`ui/Tabs.tsx`（含组/子标签两级）、`ui/Progress.tsx`。
 
-### 5.3 结构控件（6）
+### 5.3 结构控件（6）· ✅ 5/6 已落地 2026-10-29
 
-`ui/Panel.tsx`（`.surface-plate` + 可选角标 + 标题区 + 操作区）、
-`ui/Table.tsx`（发丝边框、定宽列、mono 数值、排序、空态）、
-`ui/Drawer.tsx`、`ui/Modal.tsx`、`ui/Toast.tsx`（`ToastHost` 单例）、
-`ui/EmptyState.tsx` / `ui/Skeleton.tsx`。
+| 文件 | 行数 | 说明 |
+|---|---:|---|
+| `ui/Panel.tsx` | 56 | 标题区 + 操作区 + hint，`.surface-plate` 底色 |
+| `ui/Table.tsx` | 119 | 发丝边框、定宽列、mono 数值、空态（排序未做，见下） |
+| `ui/Modal.tsx` | 139 | `.surface-overlay` 宿主 + Esc + 焦点回填 |
+| `ui/Toast.tsx` | 118 | `ToastHost` 单例，挂在 `AtlasShell` |
+| `ui/EmptyState.tsx` | 28 | 空态占位 |
+| `ui/Skeleton.tsx` | 28 | 与 `prefers-reduced-motion` 联动 |
+| `ui/Drawer.tsx` | — | **未建**：1280/768 两档用 CSS 网格折叠（`.market-quotes`），没有必须用抽屉的交互 |
 
-### 5.4 数据展示（4）
+> `panels/PanelHost.tsx` **已落地**（39 行，keep-alive：`visibility` 切换，隐藏面板绝对定位零高，
+> 不占滚动高度）。**`Table` 的排序没有实现**——`panels/` 里 26 个子分区的数据量都不到一屏，
+> 排序交给服务端的 `ORDER BY` 更省事；等真有翻页表格再加。
 
-`ui/MetricGrid.tsx`（6 格仪表，`divide-x`）、`ui/Sparkline.tsx`（纯 SVG，用于指数/余额趋势）、
-`ui/CandleChart.tsx`（从 `StockMarketPanel` 抽出，逻辑不变）、`ui/StatusDot.tsx`。
+### 5.4 数据展示（4）· 🟡 2/4 已落地
 
-### 5.5 hook（3）
+`ui/Sparkline.tsx`（47，纯 SVG）、`ui/CandleChart.tsx`（102，从 `StockMarketPanel` 抽出）**已落地**；
+`ui/MetricGrid.tsx`、`ui/StatusDot.tsx` **未建**——面板头部信息量用 `Panel` 的 `hint` 就够，
+再抽一个 6 格仪表反而要多维护一套断点。等真有"一屏 6 个并列指标"的页面再建。
 
-`Hooks/useReducedMotion.ts`、`Hooks/useInViewPause.ts`、`Hooks/useHashView.ts`。
+### 5.5 hook（3）· ⬜ 未建（按需）
 
-### 5.6 新增业务面板（7，见 [06](06-economy-surfaces.md)）
+计划：`Hooks/useReducedMotion.ts`、`Hooks/useInViewPause.ts`、`Hooks/useHashView.ts`。
+现状 `Hooks/` 下只有 `useAtlasKeySequence.tsx`：
+
+- `useHashView` 的功能被 `Shell/ShellRouter.tsx`（49 行）吸收，不必单独存在；
+- `useReducedMotion` 在 `animations.css` 里用 `@media (prefers-reduced-motion)` 处理，TS 侧暂时不需要；
+- `useInViewPause` 只有 3D 层需要，而 3D 层属冻结区（07 §1），不动。
+
+### 5.6 新增业务面板（7 + 市场子分区 10 = 17，见 [06](06-economy-surfaces.md)）
 
 `panels/AssetsPanel.tsx`、`panels/MarketPanel.tsx`、`panels/BankPanel.tsx`、
 `panels/CompanyPanel.tsx`、`panels/LegalPanel.tsx`、`panels/LogPanel.tsx`、
-`panels/PanelHost.tsx`。
+`panels/PanelHost.tsx`
+
+市场面板的子分区拆成独立文件（0123–0124 让它从 3 个 tab 涨到 9 个）：
+
+```
+panels/Market/
+├── QuotesTab.tsx      行情三栏（复用现有 CandleChart）
+├── OrdersTab.tsx      我的委托
+├── PortfolioTab.tsx   持仓
+├── IndicesTab.tsx     指数卡 + 点位序列
+├── MarginTab.tsx      融资融券（维持担保比例）
+├── IpoTab.tsx         发行（含 exchange_code 可选）
+├── DividendsTab.tsx   分红
+├── MmTab.tsx          做市程序（last_run_at / last_error）
+├── VenuesTab.tsx      交易所清单 + 开所（5000 cc4 牌照费）
+└── ActionsTab.tsx     拆股（危险操作）+ 退市信息
+```
+
+`panels/_shared/`：**实际落地 2 个** —— `useWrite.ts`（57，幂等键 + inFlight + 错误映射）、
+`errors.ts`（22，`messageOf`）。计划里的 `Money.tsx`/`GateNotice.tsx`/`usePanelData.ts`/`errorText.ts`
+**没有单独建**：金额统一用 `ui/Money`，门槛提示由 `Panel` 的 `hint` + `Toast` 承担，
+每个面板的读数据逻辑差异太大（有的要轮询、有的只要一次），抽公共 hook 反而增加间接层。
 
 ---
 
@@ -288,17 +380,35 @@ atlas-ui/react/static/js/
 | P0 基座 | token + `global.css` 腰斩 + `ui/` 11 个基础控件 | 7 新增 + 2 改 | 3 人日 |
 | P1 外壳 | `shell/` 7 个 + 8 个 Layout 接入 | 7 新增 + 8 改 | 4 人日 |
 | P2 页面 | 8 个 Layout 重排 + B 组 12 个换壳 | 20 改 | 6 人日 |
-| P3 面板 | 12 个 Tab 重写 + `panels/` 7 个 | 19 改 + 7 新增 | 8 人日 |
+| P3 面板 | 12 个 Tab 重写 + `panels/` 7 个 + 市场 10 个子分区 | 19 改 + 7 新增 | 9 人日 |
 | P4 动效 | 删旧动画 + 新动效标定 + 性能调优 | 全局 | 3 人日 |
 
-合计约 **24 人日**（单人）。可分阶段独立合并，每阶段都可上线。
+合计约 **25 人日**（单人）。可分阶段独立合并，每阶段都可上线。
 
 ---
 
-## 9. 验收（本文件）
+## 9. 验收（本文件）· 2026-10-29 复核
 
-- [ ] A 组 71 个文件 `git diff` 为空（`StarfieldWarpReveal` / `MultiverseTransitionCanvas` / `PlanetVisualizationUniversal` 只允许出现"调用时机/prop 透传"级别的 diff）
-- [ ] E 组 5 个死文件已删除，`npx tsc --noEmit` 仍为 0 错误
-- [ ] `ui/` 下组件无任何 `ServerApi` / `localStorage` 引用（纯展示）
-- [ ] `panels/` 下组件无任何硬编码颜色
-- [ ] 每个新增组件都有 `Props` 接口导出
+- [x] A 组冻结文件无实质改动：`3DComponents/`、`3DEffects/`、`StarfieldWarpReveal` 均无 diff。
+      唯一的渲染相关 diff 在 `Components/SystemVisualizationUniversal.tsx`（+28），内容是
+      `useRealistic ? <RealisticSystemStage/> : <SolarSystem3DViewerLeft/>` 的**换壳**，属允许级别（调用时机/prop 透传）。
+- [x] **E 组 5 个死文件已删除**（904 行，2026-10-29）：`MatrixTextReveal`(486) / `NavigationForm`(46) /
+      `StorageDebug`(60) / `SystemVisualization`(118) / `PlanetVisualization`(194)，同时清掉
+      `__planet__.tsx:5` 那条未使用的 import。删后 `npx tsc --noEmit` 仍为 0 错。
+- [x] `ui/` 下 21 个组件零 `ServerApi` / `localStorage`；唯一引用在 `ui/api.ts`（数据层，非组件，设计如此）。
+- [x] `panels/` 34 个文件零硬编码颜色（`#hex` / `rgba()` 各 0 处），零 `backdrop-blur`。
+- [ ] **`Props` 接口导出未强制**：`BankPanel` / `LegalPanel` / `LogPanel` 用内联类型（无 props 时没意义），
+      有 props 的（`AssetsPanel`、`MarketPanel` 的子分区）都显式声明了。**结论：按需，不作为门禁。**
+
+### 9.1 2026-10-29 第二轮拆分复核
+
+| 文件 | 拆前 | 拆后 | 校验 |
+|---|---:|---|---|
+| `Utils/LifeAreciboTranslator.tsx` | 4,515 | **113** + `Utils/arecibo/` 8 模块（最大 929） | `npm run check:arecibo` 22 组 SHA-1 逐位一致 |
+| `Components/PlanetInfo.tsx` | 432 | **270** + `planet/` 3 新块 | `tsc` 0 错、冒烟 34/34、`vite build` 通过 |
+| `Components/FuelBars.tsx` | 306 | **76** + `fuel/` 2 文件 | 同上；5s 轮询改事件订阅 |
+| `Components/ResourceStatusBar.tsx` | 127 | **删除** | 全仓 0 引用 |
+| `Components/ExplorationLab.tsx` | 125 | **150**（12 标签分 4 簇） | 有意增量，见 §3 |
+| `Components/VersionFooter.tsx` | 115 | **91** + `footer/icons.tsx`(48) | 删死 prop `showBadge` |
+
+新增硬闸门：`SIZE_BUDGET = 1200`（非渲染面），当前最大为 `Utils/arecibo/data.ts` 930 行。
