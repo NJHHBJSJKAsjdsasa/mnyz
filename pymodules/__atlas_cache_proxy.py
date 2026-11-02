@@ -90,8 +90,10 @@ class CachedSolarSystem(SolarSystem):
             self.num_planets = cached_data["num_planets"]
             self.stars = cached_data.get("stars") or []
             self.star_system_type = cached_data.get("star_system_type", "single")
-            self.planets = {}
-            self._build_planets(self.num_planets)
+            # Planets are lazy now (see `SolarSystem.planets`): this attribute and
+            # the flag below are what the property checks.
+            self._planets = {}
+            self._planets_built = False
             return
 
         super().__init__(seed, index, constants)

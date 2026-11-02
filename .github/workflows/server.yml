@@ -14,7 +14,29 @@ on:
       - "tests/**"
 
 jobs:
+  boundaries:
+    # Hard gate: module ownership + generated API docs must match the code.
+    # No database, no services — this job is cheap enough to run first and fail fast.
+    runs-on: ubuntu-latest
+    env:
+      ATLAS_ENV: dev
+      ATLAS_DATABASE_URL: ""
+      ATLAS_SKIP_SELF_CHECK: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements-server.txt
+      - name: Module boundaries (R1: no cross-module writes)
+        run: python scripts/check_boundaries.py
+      - name: API docs are generated, not hand-edited
+        run: python scripts/gen_api_docs.py --check
+
   test:
+    needs: boundaries
     runs-on: ubuntu-latest
     services:
       postgres:

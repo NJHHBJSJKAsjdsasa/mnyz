@@ -9,13 +9,27 @@ from pymodules.__atlas_seedmaster import seedmaster
 from pymodules.__atlas_config import config
 from pymodules.__universe_elements import periodic_table
 
+# Ported from upstream ATLAS 3.0.2 (2026-11-01). Types only an 11th planet — a
+# frontier world beyond a ten-planet system — can have; they behave as gas giants.
+#
+# The system draws one of FRONTIER_SLOTS slots for its 11th planet: slot n is
+# FRONTIER_TYPES[n - 1], anything higher means "no 11th planet yet". That is why
+# the list may only ever grow at the end: a type added later can only create
+# planets in systems that drew its slot, and never rewrites a planet that exists.
+# The renderer already knows all four (`3DComponents/realistic3/looks.ts`), so this
+# side was the only missing half.
+FRONTIER_TYPES = ["Super Puff", "Super Ringed", "Mirror", "Ruby Cloud"]
+FRONTIER_SLOTS = 8
+
 
 class Planet:
-    def __init__(self, seed, name, constants, star_mass=None):
+    def __init__(self, seed, name, constants, star_mass=None, frontier_type=None):
         self.seed = seed
         self.name = name
         self.constants = constants
         self.star_mass = star_mass or constants.M_SUN
+        # The type this planet was handed by its system's frontier slot, or None.
+        self.frontier_type = frontier_type
 
         self.initialize_planet_attributes()
 
@@ -61,6 +75,13 @@ class Planet:
         return seed_int
 
     def choose_planet_type(self):
+        # A frontier planet is told its type; it does not draw one.
+        #
+        # This also protects every existing planet: adding types to the list below
+        # would make `random.choice` consume a different number of random bits and
+        # shift every attribute that follows it in the same planet.
+        if self.frontier_type:
+            return self.frontier_type
         return random.choice(
             [
                 "Rocky",
@@ -654,24 +675,26 @@ class Planet:
         return decision
 
     def correct_temperature_orbital_distance(self):
+        """Set the temperature for *now* from the mean and the place on the orbit.
+
+        Ported from upstream ATLAS 3.0.2, which fixes two real errors here:
+
+        1. The distance scaling ran on **Celsius**. Below freezing that inverts the
+           physics: multiplying a negative number by a factor < 1 makes it *warmer*,
+           so a frozen world heated up as it moved away from its star. Radiative
+           equilibrium scales kelvin, so convert, scale, convert back.
+        2. It used ``1/sqrt(d)`` on the absolute distance instead of
+           ``sqrt(a/d)`` on the relative one, which mis-scaled every orbit.
+
+        Also new: ``mean_temperature`` is kept so a client can recompute the
+        temperature at any instant via ``temperature_at`` (the planet panel follows
+        the simulation clock without another request), a cold world can no longer be
+        warmed by a thick atmosphere, and nothing drops below the cosmic background.
+        """
         current_time = time.time()
 
-        time_elapsed_seconds = current_time - config.cosmic_origin_time
-
-        orbital_period = self.orbital_period_seconds
-        angle_velocity_orbit = 2 * math.pi / orbital_period
-
-        angle_orbit = (self.initial_orbital_angle + time_elapsed_seconds * angle_velocity_orbit) % (2 * math.pi)
-
-        semi_major_axis = self.orbital_radius
-        eccentricity = self.eccentricity_factor
-        current_distance = semi_major_axis * (1 - eccentricity**2) / (1 + eccentricity * math.cos(angle_orbit))
-
-        if current_distance < 0.1:
-            current_distance = 0.1
-
-        distance_factor = 1 / (current_distance**0.5)
-        self.surface_temperature *= distance_factor
+        # The type's temperature is the planet's mean, at its mean distance.
+        self.mean_temperature = self.surface_temperature
 
         atmosphere_factors = {
             "Thick": 1.2,
@@ -696,6 +719,39 @@ class Planet:
             "Toxic": 1.4,
         }
 
-        atmosphere_factor = atmosphere_factors.get(self.atmosphere, 1.0)
+        self.atmosphere_factor = atmosphere_factors.get(self.atmosphere, 1.0)
+        self.surface_temperature = self.temperature_at(current_time)
 
-        self.surface_temperature *= atmosphere_factor
+    def temperature_at(self, unix_time):
+        """Temperature at a moment (unix seconds) along the orbit.
+
+        Clients work it out the same way from ``mean_temperature`` and
+        ``atmosphere_factor`` as their clock runs, so the number on screen and the
+        number in the generator never disagree.
+        """
+        time_elapsed_seconds = unix_time - config.cosmic_origin_time
+
+        orbital_period = self.orbital_period_seconds
+        angle_velocity_orbit = 2 * math.pi / orbital_period
+
+        angle_orbit = (self.initial_orbital_angle + time_elapsed_seconds * angle_velocity_orbit) % (2 * math.pi)
+
+        semi_major_axis = self.orbital_radius
+        eccentricity = self.eccentricity_factor
+        current_distance = semi_major_axis * (1 - eccentricity**2) / (1 + eccentricity * math.cos(angle_orbit))
+
+        if current_distance < 0.1:
+            current_distance = 0.1
+
+        # Radiative equilibrium scales the mean temperature (in kelvin) by sqrt(a/d).
+        kelvin = self.mean_temperature + 273.15
+        kelvin *= (semi_major_axis / current_distance) ** 0.5
+        celsius = kelvin - 273.15
+
+        # Multiplies above 0 °C, divides below: a cold world never warms under a
+        # frozen sky.
+        factor = self.atmosphere_factor
+        celsius = celsius * factor if celsius >= 0 else celsius / factor
+
+        # Nothing is colder than the cosmic background (2.7 K).
+        return max(celsius, -270.45)

@@ -6,6 +6,10 @@ import hashlib
 from enum import Enum
 from typing import List, Dict, Tuple
 from pymodules.__atlas_seedmaster import seedmaster, consistent_hash
+# Frontier worlds (11th planet, upstream 3.0.2) are giants too, so every rule that
+# asks "is this a gas giant" has to include them — otherwise their moons would be
+# sized and placed like a rocky planet's.
+from pymodules.__universe_init_planet import FRONTIER_TYPES
 
 
 class MoonOrigin(Enum):
@@ -42,7 +46,7 @@ class Moon:
         self.mass = self.parent_planet.mass * mass_ratio
 
         if self.origin == MoonOrigin.COFORMATION:
-            if self.parent_planet.planet_type in ["Gas Giant", "Frozen Gas Giant"]:
+            if self.parent_planet.planet_type in ["Gas Giant", "Frozen Gas Giant", *FRONTIER_TYPES]:
                 self.moon_type = "icy"
                 self.density = self.moon_rng.uniform(900, 1500)
             else:
@@ -104,7 +108,7 @@ class Moon:
                 self.orbital_period = 2 * math.pi * math.sqrt((self.semi_major_axis * 1000) ** 3 / (self.parent_planet.constants.G * self.parent_planet.mass))
 
     def _get_max_mass_ratio(self) -> float:
-        if self.parent_planet.planet_type in ["Gas Giant", "Frozen Gas Giant"]:
+        if self.parent_planet.planet_type in ["Gas Giant", "Frozen Gas Giant", *FRONTIER_TYPES]:
             return 1e-3
         else:
             return 1e-2
@@ -114,7 +118,7 @@ class Moon:
         max_orbit = self.hill_radius * 0.4
 
         if self.origin == MoonOrigin.COFORMATION:
-            if self.parent_planet.planet_type in ["Gas Giant", "Frozen Gas Giant"]:
+            if self.parent_planet.planet_type in ["Gas Giant", "Frozen Gas Giant", *FRONTIER_TYPES]:
                 planet_radius_km = self.parent_planet.diameter / 2
                 min_realistic = max(min_orbit, planet_radius_km * 3)
                 max_realistic = min(max_orbit, planet_radius_km * 25)
@@ -335,7 +339,7 @@ class MoonSystem:
             return 0.0
         planet_radius_km = self.planet.diameter / 2
 
-        if self.planet.planet_type in ["Gas Giant", "Frozen Gas Giant"]:
+        if self.planet.planet_type in ["Gas Giant", "Frozen Gas Giant", *FRONTIER_TYPES]:
             satellite_density = 1000
         else:
             satellite_density = 3000
@@ -371,7 +375,7 @@ class MoonSystem:
 
         mass_factor = min(1.0, math.log10(max(1, self.planet.mass / 1e23)))
 
-        if self.planet.planet_type in ["Gas Giant", "Frozen Gas Giant"]:
+        if self.planet.planet_type in ["Gas Giant", "Frozen Gas Giant", *FRONTIER_TYPES]:
             base_probability = 0.95
         elif self.planet.planet_type in ["Super Earth", "Rocky", "Oceanic"]:
             base_probability = 0.5
@@ -391,8 +395,12 @@ class MoonSystem:
 
         origin_rng = random.Random(self.system_seed + consistent_hash("moon_origins"))
 
-        if self.planet.planet_type in ["Gas Giant", "Frozen Gas Giant"]:
-            num_regular = origin_rng.randint(2, min(8, int(planet_mass_earth / 10)))
+        if self.planet.planet_type in ["Gas Giant", "Frozen Gas Giant", *FRONTIER_TYPES]:
+            # `max(2, ...)` is not cosmetic: a Super Puff is a giant of very low
+            # density (Saturn-sized envelope around a few Earth masses), so
+            # `int(mass / 10)` can be 0 and `randint(2, 0)` raises. Upstream hit the
+            # same thing when it added the frontier types.
+            num_regular = origin_rng.randint(2, max(2, min(8, int(planet_mass_earth / 10))))
             origins.extend([(MoonOrigin.COFORMATION, i) for i in range(num_regular)])
         elif planet_mass_earth > 0.5:
             if origin_rng.random() < 0.3:

@@ -21,3 +21,11 @@
 .env.server.docker
 .secrets/
 .pytest_cache/
+
+# Build / check scratch (npm run check:shaders, vite --outDir dist_check)
+/.tmp/
+/dist_check/
+static/models/
+
+# Local run artifacts (logs, ad-hoc scripts)
+/.run/

@@ -317,7 +317,10 @@ def register_universe_page_routes(app, universe, config):
                         "重力": safe_value(f"{planet.gravity:.2f} m/s²"),
                         "轨道半径": safe_value(f"{planet.orbital_radius:.2f} AU"),
                         "轨道周期": safe_value(f"{planet.orbital_period_seconds / (365.25 * 24 * 3600):.2f} 年"),
-                        "表面温度": safe_value(f"{planet.surface_temperature:.2f} K"),
+                        # `surface_temperature` is Celsius; this label said "K", so every
+                        # planet read ~273 degrees too cold. Show both — the number players
+                        # compare against is Celsius, astronomers read kelvin.
+                        "表面温度": safe_value(f"{planet.surface_temperature:.1f} °C"),
                         "元素": safe_value(", ".join(planet.elements)),
                         "生命形式": safe_value(planet.life_forms),
                     }

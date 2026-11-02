@@ -31,7 +31,20 @@ class Universe:
 
             galaxy_seed = self.generate_galaxy_seed(x, y, z)
             galaxy_name = generate_name(galaxy_seed, "galaxy")
-            galaxy_type = random.choice(["Dwarf", "Spiral", "Elliptical"])
+            # Deterministic per coordinate, *not* `random.choice`.
+            #
+            # `random.choice` consumed the process-global RNG, whose state depends
+            # on everything every earlier caller happened to do. The page process
+            # and the API process therefore disagreed about the type of the same
+            # galaxy — and with it `num_systems`, which is derived from the type.
+            # The page said 11,038 systems, `/api/v1/universe/systems` said
+            # 354,136 for the same coordinates. Anything that has to agree across
+            # processes (search, bookmarks, saved positions) was reading a
+            # different galaxy than the player was standing in.
+            #
+            # A galaxy's identity is already a sha256 of the universe seed and the
+            # coordinate; the type belongs to that identity too.
+            galaxy_type = ("Dwarf", "Spiral", "Elliptical")[galaxy_seed % 3]
 
             self.galaxies[(x, y, z)] = Galaxy(
                 galaxy_seed,

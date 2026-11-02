@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Realistic system lab · Atlas 3.0 renderer</title>
+    <style>
+      html,
+      body,
+      #systemlab-root {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: #05070c;
+        color: #dbe6f2;
+        font: 13px/1.5 ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Dev-only harness for the vendored 3.0 star / system / exotic layers. Not wired into the app. -->
+    <div id="systemlab-root"></div>
+    <script type="module" src="/atlas-ui/react/static/js/SystemLab/main.tsx"></script>
+  </body>
+</html>

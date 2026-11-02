@@ -52,6 +52,12 @@ def get_planet_color_map():
         "Nebulous": "#FFC0CB",
         "Aquifer": "#00FFFF",
         "Exotic": "#FF00FF",
+        # Frontier worlds — 11th planet only. Palette values taken from upstream
+        # 3.0.2 so the classic views match the realistic ones.
+        "Super Puff": "#F7C6D9",
+        "Super Ringed": "#E3C99A",
+        "Mirror": "#D9DEE6",
+        "Ruby Cloud": "#9B111E",
     }
 
 
