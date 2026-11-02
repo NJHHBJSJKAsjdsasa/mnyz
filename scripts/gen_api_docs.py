@@ -13,6 +13,7 @@ from the ``parse_model(...)`` call inside each view, query parameters from
 from __future__ import annotations
 
 import argparse
+import difflib
 import importlib
 import inspect
 import json
@@ -291,11 +292,27 @@ def main() -> int:
     md_text = render_markdown(built["rows"])
 
     if args.check:
-        stale = []
-        if not OUT_JSON.exists() or OUT_JSON.read_text(encoding="utf-8") != spec_text:
-            stale.append(OUT_JSON.name)
-        if not OUT_MD.exists() or OUT_MD.read_text(encoding="utf-8") != md_text:
-            stale.append(OUT_MD.name)
+        stale: list[str] = []
+        for path, expected in ((OUT_JSON, spec_text), (OUT_MD, md_text)):
+            if not path.exists():
+                stale.append(f"{path.name} (missing)")
+                continue
+            current = path.read_text(encoding="utf-8")
+            if current == expected:
+                continue
+            stale.append(path.name)
+            # Spread the first differences into the log: "docs are stale" alone forces a
+            # round trip through CI to find out *what* moved.
+            diff = difflib.unified_diff(
+                current.splitlines(keepends=True),
+                expected.splitlines(keepends=True),
+                fromfile=f"{path.name} (on disk)",
+                tofile=f"{path.name} (from code)",
+                n=1,
+            )
+            print(f"--- drift in {path.relative_to(ROOT)} ---")
+            for line in list(diff)[:40]:
+                print(line.rstrip("\n"))
         if stale:
             print(f"[fail] stale: {', '.join(stale)} — run python scripts/gen_api_docs.py")
             return 1

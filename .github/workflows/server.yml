@@ -45,9 +45,27 @@ jobs:
       - name: "Module boundaries (R1: no cross-module writes)"
         run: python scripts/check_boundaries.py
       - name: API docs are generated, not hand-edited
-        run: python scripts/gen_api_docs.py --check
+        shell: bash
+        run: |
+          set +e
+          OUT=$(python scripts/gen_api_docs.py --check 2>&1); CODE=$?
+          echo "$OUT"
+          if [ $CODE -ne 0 ]; then
+            MSG=$(printf '%s' "$OUT" | head -30 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=api-docs drift::$MSG"
+            exit 1
+          fi
       - name: Doc facts match the code
-        run: python scripts/doc_facts.py --check
+        shell: bash
+        run: |
+          set +e
+          OUT=$(python scripts/doc_facts.py --check 2>&1); CODE=$?
+          echo "$OUT"
+          if [ $CODE -ne 0 ]; then
+            MSG=$(printf '%s' "$OUT" | head -30 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=doc-facts drift::$MSG"
+            exit 1
+          fi
 
   frontend:
     # Pure static checks — no database, no browser. Runs in parallel with `boundaries`.
@@ -69,7 +87,16 @@ jobs:
       - name: Frontend gates (v1 direct / Shell fetch / blur budget / file size)
         run: python scripts/check_frontend_gates.py
       - name: Logic smoke (deterministic gameplay modules)
-        run: npm run test:frontend
+        shell: bash
+        run: |
+          set +e
+          OUT=$(npm run test:frontend 2>&1); CODE=$?
+          echo "$OUT"
+          if [ $CODE -ne 0 ]; then
+            MSG=$(printf '%s' "$OUT" | tail -40 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=frontend smoke failed::$MSG"
+            exit 1
+          fi
       - name: Shader + system variant snapshots
         run: npm run check:render
       - name: Arecibo fingerprint snapshots
