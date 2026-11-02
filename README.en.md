@@ -45,11 +45,11 @@ Upstream: <https://github.com/SurceBeats/Atlas>
 
 ### 2.2 Cosmic economy (migrations 0110 → 0140)
 
-The chain holds **50** versioned migrations with head `0140_investor_protection`; `api/v1` exposes
+The chain holds **51** versioned migrations with head `0141_job_catch_up`; `api/v1` exposes
 **26** blueprints and **255** endpoints (authoritative list in [`docs/api/endpoints.md`](docs/api/endpoints.md),
 generated from the code).
 
-<!--fact:migrations.count=50--> <!--fact:migrations.head=0140_investor_protection--> <!--fact:api.blueprints=26--> <!--fact:api.endpoints=255-->
+<!--fact:migrations.count=51--> <!--fact:migrations.head=0141_job_catch_up--> <!--fact:api.blueprints=26--> <!--fact:api.endpoints=255-->
 
 | Migration | Capabilities | Integration tests |
 |---|---|---|
@@ -90,7 +90,7 @@ The head above is kept in sync with `server/config.py::DEFAULT_REVISION` (startu
 > The "Integration tests" column counts test functions in the matching
 > `tests/integration/test_*.py` (`grep -c 'def test_' <file>`, re-measured 2026-11-02);
 > when one file covers several migrations it is attributed to the primary one.
-> The repository holds **325** test functions in total (unit + parametrised not expanded).<!--fact:tests.functions=325-->
+> The repository holds **327** test functions in total (unit + parametrised not expanded).<!--fact:tests.functions=327-->
 
 ### 2.3 Tests
 

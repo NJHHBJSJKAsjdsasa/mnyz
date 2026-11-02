@@ -1,6 +1,6 @@
 # 03 · 后端
 
-> 基线（2026-11-02）：**26 蓝图 / 255 端点 / 14 模块 / 34 个定时任务 / 50 个迁移文件**<!--fact:api.blueprints=26--> <!--fact:api.endpoints=255--> <!--fact:modules.count=14--> <!--fact:jobs.count=34--> <!--fact:migrations.count=50-->，
+> 基线（2026-11-02）：**26 蓝图 / 255 端点 / 14 模块 / 34 个定时任务 / 51 个迁移文件**<!--fact:api.blueprints=26--> <!--fact:api.endpoints=255--> <!--fact:modules.count=14--> <!--fact:jobs.count=34--> <!--fact:migrations.count=51-->，
 > 契约、边界、迁移链全部一致。结构没问题，**问题是「错了没人知道」**。
 
 ---
@@ -53,6 +53,25 @@
 >    **独立事务**里调 `fail_run()`，写入 `{"error": "ValueError: ...", "duration_ms": ...}`。
 > 3. 未做：`catch_up`（重启补偿）与 `atlas_job_duration_ms` 直方图。
 >    前者要改 `job_runs` 结构（新迁移），后者要在 job 结束时 `metrics.observe`，可以一起做。
+
+> **实施状态（2026-11-02 夜，三项全部落地）**
+>
+> | 项 | 实现 |
+> |---|---|
+> | `/health/jobs` | 对照 `SCHEDULE` 判 `ok / failing / stale / never-ran`，异常即 503，并带 `catch_up` 标记 |
+> | 失败可见 | `tasks.fail_run()` 在独立事务写 `{"error","duration_ms"}`，事务回滚也留痕 |
+> | 重启补偿 | 迁移 `0141` 加 `job_runs.catch_up`；`jobs/catch_up.py:due()` 找「最后成功超过 1.5× 周期」的 job，`run_due()` 逐个补跑；`python -m server.jobs.cli --catch-up` |
+> | 耗时指标 | `atlas_job_duration_ms{job}` 直方图（成功与失败都记）+ `atlas_job_failures_total{job}` 计数器 |
+>
+> **两个刻意的边界**：
+> - `due()` **跳过没有任何历史记录的 job** —— 新库否则会在首启时补跑全部 34 个，那是 bootstrap（`run_all`）的活；
+> - 宽限取 1.5× 周期 —— 60 秒的 job 停了 90 秒不补（下一拍就覆盖），日级 job 错过就直接补。
+>
+> `catch_up` 在一天内是**粘性**的：当天只要有一次是补跑，记录就保持 `true`
+> （`catch_up = job_runs.catch_up OR EXCLUDED.catch_up`），不会因为后面按时跑一次就把"迟到"抹掉。
+>
+> **部署方式**：worker 起来之后执行一次 `python -m server.jobs.cli --catch-up`。
+> 多实例安全 —— `run_job` 里有 Redis 锁，抢不到的直接 `skipped: locked`。
 
 ---
 

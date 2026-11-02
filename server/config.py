@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = REPO_ROOT / ".env.server"
-DEFAULT_REVISION = "0140_investor_protection"
+DEFAULT_REVISION = "0141_job_catch_up"
 
 _VALID_ENVS = {"dev", "staging", "prod"}
 _VALID_CACHE_BACKENDS = {"pg", "sqlite", "json"}

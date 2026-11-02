@@ -8,6 +8,7 @@ import sys
 
 from .. import create_app
 from ..config import ConfigError
+from .catch_up import run_due
 from .runner import run_all
 
 
@@ -15,6 +16,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Atlas maintenance jobs")
     parser.add_argument("jobs", nargs="*", help="job names; default = all")
     parser.add_argument("--list", action="store_true", help="list job names")
+    parser.add_argument(
+        "--catch-up",
+        action="store_true",
+        help="re-run only the jobs that missed their schedule window (call after the worker starts)",
+    )
     args = parser.parse_args(argv)
 
     from .tasks import JOBS
@@ -28,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"config error: {exc}", file=sys.stderr)
         return 2
     with app.app_context():
-        results = run_all(args.jobs)
+        results = run_due() if args.catch_up else run_all(args.jobs)
     print(json.dumps(results, ensure_ascii=False, indent=2, default=str))
     return 0 if all(item.get("ok") or item.get("skipped") for item in results) else 1
 

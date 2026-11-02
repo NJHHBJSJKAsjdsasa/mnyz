@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 
+from ..infra import metrics
 from ..infra.context import cache, db
 from .tasks import JOBS, fail_run, finish_run, start_run
 
@@ -48,7 +49,7 @@ LOCK_TTL = {
 }
 
 
-def run_job(name: str) -> dict:
+def run_job(name: str, catch_up: bool = False) -> dict:
     if name not in JOBS:
         raise KeyError(f"unknown job {name}")
     holder = cache().acquire_lock(f"job:{name}", LOCK_TTL.get(name, 300))
@@ -57,21 +58,24 @@ def run_job(name: str) -> dict:
     started = time.perf_counter()
     try:
         with db().transaction() as conn:
-            start_run(conn, name)
+            start_run(conn, name, catch_up=catch_up)
             result = JOBS[name](conn)
             finish_run(conn, name, result)
         elapsed = round((time.perf_counter() - started) * 1000, 2)
-        log.info("job ok", extra={"job": name, "duration_ms": elapsed})
-        return {"job": name, "ok": True, "duration_ms": elapsed, "result": result}
+        metrics.observe("atlas_job_duration_ms", elapsed, {"job": name})
+        log.info("job ok", extra={"job": name, "duration_ms": elapsed, "catch_up": catch_up})
+        return {"job": name, "ok": True, "duration_ms": elapsed, "catch_up": catch_up, "result": result}
     except Exception as exc:
         elapsed = round((time.perf_counter() - started) * 1000, 2)
+        metrics.observe("atlas_job_duration_ms", elapsed, {"job": name})
+        metrics.inc("atlas_job_failures_total", {"job": name})
         log.exception("job failed", extra={"job": name, "duration_ms": elapsed})
         # The job body's transaction is gone (and with it start_run's row), so the failure
         # has to be written in a fresh transaction — otherwise a crashing job leaves no
         # trace in job_runs and /health/jobs cannot see it at all.
         try:
             with db().transaction() as conn:
-                fail_run(conn, name, f"{type(exc).__name__}: {exc}", elapsed)
+                fail_run(conn, name, f"{type(exc).__name__}: {exc}", elapsed, catch_up=catch_up)
         except Exception:  # pragma: no cover - recording must never mask the real error
             log.exception("could not record job failure", extra={"job": name})
         raise

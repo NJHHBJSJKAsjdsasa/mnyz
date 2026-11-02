@@ -228,3 +228,52 @@ def test_failed_job_still_leaves_a_row_when_its_transaction_rolls_back(test_dsn)
     assert row["detail"]["error"] == "ValueError: boom"
     assert row["detail"]["duration_ms"] == 12.5
     assert row["finished_at"] is not None
+
+
+# --------------------------------------------------------------- catch-up
+def test_catch_up_only_picks_jobs_that_missed_their_window(test_dsn):
+    """Grace is 1.5× the period, and a job with no history is left to bootstrap."""
+    from server.jobs.catch_up import due
+
+    with psycopg.connect(test_dsn, row_factory=dict_row) as conn:
+        conn.execute("DELETE FROM job_runs")  # test_dsn does not truncate; `client` does
+        conn.commit()
+        assert due(conn) == []  # fresh database: nothing to compensate
+
+        # 60s period, last success 2h ago → overdue
+        conn.execute(
+            """
+            INSERT INTO job_runs (job_name, run_date, started_at, finished_at, ok)
+            VALUES ('ai_economy_tick', current_date - 1, now() - interval '2 hours',
+                    now() - interval '2 hours', true)
+            """
+        )
+        # 3600s period, last success 2min ago → next tick covers it
+        conn.execute(
+            """
+            INSERT INTO job_runs (job_name, run_date, started_at, finished_at, ok)
+            VALUES ('cleanup', current_date, now() - interval '2 minutes',
+                    now() - interval '2 minutes', true)
+            """
+        )
+        conn.commit()
+        overdue = due(conn)
+
+    assert [item["job"] for item in overdue] == ["ai_economy_tick"]
+    assert overdue[0]["period_s"] == 60
+
+
+def test_catch_up_flag_sticks_for_the_rest_of_the_day(test_dsn):
+    """A compensating run and a normal run on the same day: the day is still marked late."""
+    from server.jobs.tasks import start_run
+
+    with psycopg.connect(test_dsn, row_factory=dict_row) as conn:
+        conn.execute("DELETE FROM job_runs")
+        start_run(conn, "cleanup", catch_up=True)
+        conn.commit()
+        start_run(conn, "cleanup", catch_up=False)
+        conn.commit()
+        row = conn.execute(
+            "SELECT catch_up FROM job_runs WHERE job_name = 'cleanup'"
+        ).fetchone()
+    assert row["catch_up"] is True

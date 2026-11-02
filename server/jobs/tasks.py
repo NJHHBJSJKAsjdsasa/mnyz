@@ -41,15 +41,16 @@ log = logging.getLogger(__name__)
 PARTITIONED = ("ledger_entries", "outbox_events", "audit_log")
 
 
-def start_run(conn, name: str) -> None:
+def start_run(conn, name: str, catch_up: bool = False) -> None:
     conn.execute(
         """
-        INSERT INTO job_runs (job_name, run_date, started_at, ok, detail)
-        VALUES (%s, %s, now(), false, NULL)
+        INSERT INTO job_runs (job_name, run_date, started_at, ok, detail, catch_up)
+        VALUES (%s, %s, now(), false, NULL, %s)
         ON CONFLICT (job_name, run_date)
-        DO UPDATE SET started_at = now(), ok = false, detail = NULL
+        DO UPDATE SET started_at = now(), ok = false, detail = NULL,
+                      catch_up = job_runs.catch_up OR EXCLUDED.catch_up
         """,
-        (name, date.today()),
+        (name, date.today(), catch_up),
     )
 
 
@@ -63,7 +64,8 @@ def finish_run(conn, name: str, detail: dict) -> None:
     )
 
 
-def fail_run(conn, name: str, error: str, duration_ms: float | None = None) -> None:
+def fail_run(conn, name: str, error: str, duration_ms: float | None = None,
+             catch_up: bool = False) -> None:
     """Record a failed run.
 
     Must be called in its own transaction: the job's transaction rolls back, and with it
@@ -75,12 +77,13 @@ def fail_run(conn, name: str, error: str, duration_ms: float | None = None) -> N
         detail["duration_ms"] = duration_ms
     conn.execute(
         """
-        INSERT INTO job_runs (job_name, run_date, started_at, finished_at, ok, detail)
-        VALUES (%s, %s, now(), now(), false, %s::jsonb)
+        INSERT INTO job_runs (job_name, run_date, started_at, finished_at, ok, detail, catch_up)
+        VALUES (%s, %s, now(), now(), false, %s::jsonb, %s)
         ON CONFLICT (job_name, run_date)
-        DO UPDATE SET finished_at = now(), ok = false, detail = EXCLUDED.detail
+        DO UPDATE SET finished_at = now(), ok = false, detail = EXCLUDED.detail,
+                      catch_up = job_runs.catch_up OR EXCLUDED.catch_up
         """,
-        (name, date.today(), _json(detail)),
+        (name, date.today(), _json(detail), catch_up),
     )
 
 

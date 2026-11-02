@@ -111,7 +111,9 @@ def jobs():
         row = seen.get(name)
         if row is None:
             stale.append({"job": name, "reason": "never ran"})
-            report.append({"job": name, "period_s": period, "last_ok": None, "state": "never-ran"})
+            report.append(
+                {"job": name, "period_s": period, "last_ok": None, "catch_up": False, "state": "never-ran"}
+            )
             continue
         last_ok = row["last_finished_at"]
         overdue = last_ok is None or (now - last_ok).total_seconds() > period * 2
@@ -137,6 +139,7 @@ def jobs():
                 "last_ok": ts(last_ok) if row["last_ok"] else None,
                 "last_ok_date": row["last_ok_date"].isoformat() if row["last_ok_date"] else None,
                 "failed_7d": int(row["failed_7d"]),
+                "catch_up": bool(row["last_catch_up"]),
                 "state": state,
             }
         )

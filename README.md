@@ -41,10 +41,10 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 
 ### 2.2 宇宙经济系统（迁移 0110 → 0140）
 
-迁移链共 **50** 个版本，当前 head 是 `0140_investor_protection`；`api/v1` 对外 **26** 个蓝图、**255** 个端点
+迁移链共 **51** 个版本，当前 head 是 `0141_job_catch_up`；`api/v1` 对外 **26** 个蓝图、**255** 个端点
 （权威清单 [`docs/api/endpoints.md`](docs/api/endpoints.md)，由代码生成）。
 
-<!--fact:migrations.count=50--> <!--fact:migrations.head=0140_investor_protection--> <!--fact:api.blueprints=26--> <!--fact:api.endpoints=255-->
+<!--fact:migrations.count=51--> <!--fact:migrations.head=0141_job_catch_up--> <!--fact:api.blueprints=26--> <!--fact:api.endpoints=255-->
 
 | 迁移 | 能力 | 集成测试 |
 |---|---|---|
@@ -84,7 +84,7 @@ AI 玩家、商业法院与破产跑在 PostgreSQL 上，AI 与真人走同一�
 
 > 「集成测试」列 = 对应 `tests/integration/test_*.py` 里的测试函数数
 > （`grep -c 'def test_' <file>`，2026-11-02 复测）；一个测试文件覆盖多个迁移时归主迁移。
-> 全仓测试函数共 **325** 个（含 unit 与参数化未展开部分）。<!--fact:tests.functions=325-->
+> 全仓测试函数共 **327** 个（含 unit 与参数化未展开部分）。<!--fact:tests.functions=327-->
 
 ### 2.3 测试
 
