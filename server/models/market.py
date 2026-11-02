@@ -27,7 +27,7 @@ class QuoteRequest(StrictModel):
     refresh: bool = True
 
 
-class SplitRequest(StrictModel):
+class StockSplitRequest(StrictModel):
     ratio: Decimal = Field(gt=0, max_digits=12, decimal_places=4)
 
 

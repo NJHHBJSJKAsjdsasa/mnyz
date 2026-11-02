@@ -65,7 +65,7 @@ class InsolvencyRequest(StrictModel):
     reason: str = Field(default="", max_length=1000)
 
 
-class ClaimRequest(StrictModel):
+class InsolvencyClaimRequest(StrictModel):
     kind: str = Field(pattern="^(secured|priority|unsecured|equity|fine)$")
     amount: Decimal = Field(gt=0, max_digits=24, decimal_places=4)
 

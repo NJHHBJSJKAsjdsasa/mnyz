@@ -9,7 +9,7 @@ from pydantic import Field
 from .auth import StrictModel
 
 
-class ClaimRequest(StrictModel):
+class FundClaimRequest(StrictModel):
     kind: str = Field(pattern="^(firm_default|settlement_failure|fraud)$")
     amount: Decimal = Field(gt=0, max_digits=24, decimal_places=4)
     reason: str = Field(min_length=2, max_length=500)

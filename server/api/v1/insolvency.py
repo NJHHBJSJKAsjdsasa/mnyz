@@ -7,7 +7,7 @@ from flask import Blueprint, g
 from ...domain import currency_service, insolvency_service
 from ...infra.context import db
 from ...infra.errors import Forbidden
-from ...models.legal import ClaimRequest, InsolvencyRequest, PlanRequest, PlanVoteRequest
+from ...models.legal import InsolvencyClaimRequest, InsolvencyRequest, PlanRequest, PlanVoteRequest
 from ...repo import players as player_repo
 from ..deps import (
     begin_idempotency,
@@ -63,7 +63,7 @@ def detail(case_id: str):
 @require_auth(write=True)
 @rate_limit("insolvency_claim", 20, 3600)
 def file_claim(case_id: str):
-    body = parse_model(ClaimRequest)
+    body = parse_model(InsolvencyClaimRequest)
 
     def action(conn, player):
         return insolvency_service.file_claim(

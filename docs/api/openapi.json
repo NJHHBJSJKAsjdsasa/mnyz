@@ -289,7 +289,7 @@
         "title": "RecognitionDecisionRequest",
         "type": "object"
       },
-      "SplitRequest": {
+      "RevenueSplitRequest": {
         "properties": {
           "kind": {
             "anyOf": [
@@ -322,7 +322,7 @@
             "title": "Amount"
           }
         },
-        "title": "SplitRequest",
+        "title": "RevenueSplitRequest",
         "type": "object"
       },
       "ReverseRequest": {
@@ -1565,10 +1565,10 @@
         "title": "InsolvencyRequest",
         "type": "object"
       },
-      "ClaimRequest": {
+      "InsolvencyClaimRequest": {
         "properties": {
           "kind": {
-            "pattern": "^(firm_default|settlement_failure|fraud)$",
+            "pattern": "^(secured|priority|unsecured|equity|fine)$",
             "title": "Kind",
             "type": "string"
           },
@@ -1584,52 +1584,13 @@
               }
             ],
             "title": "Amount"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 2,
-            "title": "Reason",
-            "type": "string"
-          },
-          "currency_code": {
-            "default": "cc4",
-            "maxLength": 8,
-            "title": "Currency Code",
-            "type": "string"
-          },
-          "ref_type": {
-            "anyOf": [
-              {
-                "maxLength": 40,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Ref Type"
-          },
-          "ref_id": {
-            "anyOf": [
-              {
-                "maxLength": 80,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Ref Id"
           }
         },
         "required": [
           "kind",
-          "amount",
-          "reason"
+          "amount"
         ],
-        "title": "ClaimRequest",
+        "title": "InsolvencyClaimRequest",
         "type": "object"
       },
       "PlanRequest": {
@@ -1859,6 +1820,73 @@
           "participants"
         ],
         "title": "BeginRequest",
+        "type": "object"
+      },
+      "FundClaimRequest": {
+        "properties": {
+          "kind": {
+            "pattern": "^(firm_default|settlement_failure|fraud)$",
+            "title": "Kind",
+            "type": "string"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,25}0*$)\\d{0,20}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 2,
+            "title": "Reason",
+            "type": "string"
+          },
+          "currency_code": {
+            "default": "cc4",
+            "maxLength": 8,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "ref_type": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ref Type"
+          },
+          "ref_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ref Id"
+          }
+        },
+        "required": [
+          "kind",
+          "amount",
+          "reason"
+        ],
+        "title": "FundClaimRequest",
         "type": "object"
       },
       "LocalSaveRequest": {
@@ -2424,6 +2452,28 @@
           "quantity"
         ],
         "title": "ShortRequest",
+        "type": "object"
+      },
+      "StockSplitRequest": {
+        "properties": {
+          "ratio": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,13}0*$)\\d{0,8}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Ratio"
+          }
+        },
+        "required": [
+          "ratio"
+        ],
+        "title": "StockSplitRequest",
         "type": "object"
       },
       "VenueRequest": {
@@ -3308,7 +3358,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SplitRequest"
+                "$ref": "#/components/schemas/RevenueSplitRequest"
               }
             }
           }
@@ -7255,7 +7305,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ClaimRequest"
+                "$ref": "#/components/schemas/InsolvencyClaimRequest"
               }
             }
           }
@@ -7759,7 +7809,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ClaimRequest"
+                "$ref": "#/components/schemas/FundClaimRequest"
               }
             }
           }
@@ -10332,7 +10382,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SplitRequest"
+                "$ref": "#/components/schemas/StockSplitRequest"
               }
             }
           }

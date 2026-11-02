@@ -288,7 +288,7 @@
 |---|---|---|---|---|---|
 | `POST` | `/api/v1/insolvency` | POST /api/v1/insolvency | Bearer | 是 | `InsolvencyRequest` |
 | `GET` | `/api/v1/insolvency/{case_id}` | GET /api/v1/insolvency/{case_id} | Bearer | — | — |
-| `POST` | `/api/v1/insolvency/{case_id}/claims` | POST /api/v1/insolvency/{case_id}/claims | Bearer | 是 | `ClaimRequest` |
+| `POST` | `/api/v1/insolvency/{case_id}/claims` | POST /api/v1/insolvency/{case_id}/claims | Bearer | 是 | `InsolvencyClaimRequest` |
 | `POST` | `/api/v1/insolvency/{case_id}/liquidate` | POST /api/v1/insolvency/{case_id}/liquidate | Bearer | 是 | — |
 | `POST` | `/api/v1/insolvency/{case_id}/plan` | POST /api/v1/insolvency/{case_id}/plan | Bearer | 是 | `PlanRequest` |
 | `POST` | `/api/v1/insolvency/{case_id}/plan/confirm` | POST /api/v1/insolvency/{case_id}/plan/confirm | Bearer | 是 | `PlanVoteRequest` |
@@ -337,7 +337,7 @@
 | `GET` | `/api/v1/stocks/{ticker}/quote` | GET /api/v1/stocks/{ticker}/quote | Bearer | — | — |
 | `POST` | `/api/v1/stocks/{ticker}/quote` | POST /api/v1/stocks/{ticker}/quote | Bearer | 是 | — |
 | `POST` | `/api/v1/stocks/{ticker}/quotes` | Two-sided quote: refresh my own resting orders and re-price both sides. | Bearer | 是 | `QuoteRequest` |
-| `POST` | `/api/v1/stocks/{ticker}/split` | POST /api/v1/stocks/{ticker}/split | Bearer | 是 | `SplitRequest` |
+| `POST` | `/api/v1/stocks/{ticker}/split` | POST /api/v1/stocks/{ticker}/split | Bearer | 是 | `StockSplitRequest` |
 
 ## meta
 
@@ -370,14 +370,14 @@
 | `GET` | `/api/v1/admin/market/protection/claims` ?limit, status | GET /api/v1/admin/market/protection/claims | Bearer | — | — |
 | `POST` | `/api/v1/admin/market/protection/claims/{claim_id}/decide` | POST /api/v1/admin/market/protection/claims/{claim_id}/decide | Bearer | 是 | `ClaimDecisionRequest` |
 | `GET` | `/api/v1/market/protection` | GET /api/v1/market/protection | Bearer | — | — |
-| `POST` | `/api/v1/market/protection/claims` | POST /api/v1/market/protection/claims | Bearer | 是 | `ClaimRequest` |
+| `POST` | `/api/v1/market/protection/claims` | POST /api/v1/market/protection/claims | Bearer | 是 | `FundClaimRequest` |
 
 ## revenue
 
 | 方法 | 路径 | 说明 | 鉴权 | 幂等 | 请求体 |
 |---|---|---|---|---|---|
 | `GET` | `/api/v1/admin/economy/revenue` | GET /api/v1/admin/economy/revenue | Bearer | — | — |
-| `POST` | `/api/v1/admin/economy/revenue/split` | POST /api/v1/admin/economy/revenue/split | Bearer | — | `SplitRequest` |
+| `POST` | `/api/v1/admin/economy/revenue/split` | POST /api/v1/admin/economy/revenue/split | Bearer | — | `RevenueSplitRequest` |
 
 ## session_state
 

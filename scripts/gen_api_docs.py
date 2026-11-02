@@ -49,6 +49,15 @@ def _import_models() -> dict[str, type]:
         module = importlib.import_module(f"server.models.{path.stem}")
         for name, obj in vars(module).items():
             if inspect.isclass(obj) and hasattr(obj, "model_json_schema"):
+                if name in models and models[name] is not obj:
+                    # Schema keys are the bare class name, so a duplicate silently wins
+                    # whichever file globbed last — and glob order differs between
+                    # Windows and Linux, which made CI and local disagree.
+                    raise SystemExit(
+                        f"duplicate model name {name!r}: "
+                        f"{models[name].__module__} vs {module.__name__}. "
+                        "Rename one; the OpenAPI schema key comes from the class name."
+                    )
                 models[name] = obj
     _ = package
     return models

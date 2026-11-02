@@ -20,7 +20,7 @@ from ...models.market import (
     HaltRequest,
     MmProgramRequest,
     QuoteRequest,
-    SplitRequest,
+    StockSplitRequest,
 )
 from ...repo import currency as currency_repo
 from ...repo import players as player_repo
@@ -205,7 +205,7 @@ def mm_disenroll(ticker: str):
 @require_auth(write=True)
 @rate_limit("stock_split", 5, 86400)
 def split_stock(ticker: str):
-    body = parse_model(SplitRequest)
+    body = parse_model(StockSplitRequest)
 
     def action(conn, player):
         actor = currency_repo.actor_for_player(conn, str(player["id"]))

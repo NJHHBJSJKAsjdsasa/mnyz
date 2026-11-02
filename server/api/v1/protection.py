@@ -12,7 +12,7 @@ from flask import Blueprint, g, request
 from ...domain import currency_service, investor_protection
 from ...infra.context import db
 from ...infra.errors import Forbidden
-from ...models.protection import ClaimDecisionRequest, ClaimRequest
+from ...models.protection import ClaimDecisionRequest, FundClaimRequest
 from ...repo import players as player_repo
 from ..deps import (
     begin_idempotency,
@@ -66,7 +66,7 @@ def fund_overview():
 @require_auth(write=True)
 @rate_limit("protection_claim", 10, 3600)
 def file_claim():
-    body = parse_model(ClaimRequest)
+    body = parse_model(FundClaimRequest)
 
     def action(conn):
         actor_id = _actor_id(conn)

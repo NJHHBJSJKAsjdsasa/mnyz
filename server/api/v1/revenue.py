@@ -9,7 +9,7 @@ from flask import Blueprint, g
 from ...domain import revenue_service
 from ...infra.context import db
 from ...infra.serialize import ts
-from ...models.revenue import SplitRequest
+from ...models.revenue import RevenueSplitRequest
 from ...repo import revenue as revenue_repo
 from ..deps import parse_model, rate_limit, require_admin, require_auth, success
 
@@ -46,7 +46,7 @@ def overview():
 @rate_limit("revenue_split", 20, 3600)
 def split():
     require_admin()
-    body = parse_model(SplitRequest)
+    body = parse_model(RevenueSplitRequest)
     with db().transaction() as conn:
         if body.kind:
             result = revenue_service.run(
