@@ -1,0 +1,20 @@
+# Coverage scope for `pytest --cov=server`.
+#
+# Migrations are excluded on purpose: they are plain DDL executed once by
+# `python -m server.cli migrate`, and CI already proves they apply cleanly on an empty
+# database. Counting them as "uncovered Python" would just depress the number.
+[run]
+source = server
+branch = False
+omit =
+    server/migrations/*
+    server/wsgi.py
+
+[report]
+# Lines already annotated `# pragma: no cover` in the code stay excluded — the project
+# uses that marker for "cannot happen" branches and for seed paths owned by migrations.
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+skip_covered = True

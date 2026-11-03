@@ -134,7 +134,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install
-        run: pip install -r requirements-server.txt pytest
+        run: pip install -r requirements-server.txt pytest pytest-cov
       - name: Create databases
         run: |
           psql postgresql://postgres:atlas@127.0.0.1:5432/postgres -c "CREATE DATABASE atlas"
@@ -147,8 +147,13 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -m pytest tests -q > pytest.log 2>&1; CODE=$?
+          python -m pytest tests -q --cov=server --cov-report=term-missing > pytest.log 2>&1; CODE=$?
           tail -40 pytest.log
+          # Coverage has to be visible somewhere; the runner is the only place that can
+          # afford a full serial run (locally it takes 20+ minutes).
+          COV=$(grep -E "^TOTAL" pytest.log | tail -1)
+          [ -n "$COV" ] && echo "::notice title=coverage::$COV"
+          echo "$COV" >> "$GITHUB_STEP_SUMMARY"
           if [ $CODE -ne 0 ]; then
             BODY=$(grep -E "^(FAILED|ERROR) +tests/" pytest.log | head -25)
             [ -z "$BODY" ] && BODY=$(tail -25 pytest.log)
