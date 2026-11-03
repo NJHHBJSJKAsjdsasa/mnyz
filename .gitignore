@@ -27,5 +27,10 @@
 /dist_check/
 static/models/
 
+# Build output — not source. `.dockerignore` already excluded it from images, which meant
+# `Dockerfile` was shipping a UI without a manifest; the image now builds it in a node stage.
+# Local page runs need `npx vite build` first (Flask reads the manifest once at startup).
+/atlas-ui/react/dist/
+
 # Local run artifacts (logs, ad-hoc scripts)
 /.run/

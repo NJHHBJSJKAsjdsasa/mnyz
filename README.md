@@ -166,8 +166,14 @@ docker compose -f docker-compose.server.yml up -d
 
 ```bash
 npm install && npm run dev            # Vite 开发前端
+npx vite build                        # 生产包（写 atlas-ui/react/dist）
 python __main__.py                    # 上游单体入口（宇宙生成 + 游戏 API）
 ```
+
+> **`atlas-ui/react/dist` 不在版本库里**（`.gitignore` 已排除）。全新 clone 直接跑
+> `python __main__.py` 会白屏——先 `npx vite build`。
+> 另外 Flask **只在启动时读一次** `dist/.vite/manifest.json`，所以重新构建后要重启进程。
+> Docker 不受影响：`Dockerfile` 里有一个 node 阶段负责构建，镜像自带产物。
 
 > 两套后端可以并存：`__main__.py` 提供程序化宇宙与渲染数据，`server.run` 提供账户与经济；
 > 只跑经济功能时不需要启动上游单体。

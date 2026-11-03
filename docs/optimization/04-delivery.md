@@ -104,6 +104,22 @@ frontend:
 
 **判据**：`git ls-files | grep dist/` 为空；`docker build -f Dockerfile.server .` 成功且镜像内含 manifest。
 
+> **实施状态（2026-11-04）：按方案 A 落地，并顺带发现镜像一直是坏的。**
+>
+> 1. `.gitignore` 加 `/atlas-ui/react/dist/`，`git rm -r --cached` 移出 97 个文件（磁盘保留）。
+> 2. **`Dockerfile` 原本就构建不出能跑页面的镜像**：`.dockerignore` 里写着
+>    `atlas-ui/react/dist`（`ea8eedd` 那次一起加的），于是 `COPY . /app_defaults` 永远拷不到产物，
+>    容器里没有 `.vite/manifest.json`，页面直接白屏。也就是说「dist 入库」这件事
+>    一直只是在给**本地开发**供血，Docker 那条路其实是断的。
+>    现在加了 `node:22-slim` 的 `ui` 阶段（先 `COPY package*.json` 再 `npm ci`，保住依赖层缓存），
+>    产物用 `COPY --from=ui` 注入 `/app_defaults/atlas-ui/react/dist`。
+> 3. `README` §5.3 补了两句：新克隆要先 `npx vite build`；Flask 只在启动时读 manifest，
+>    重建后必须重启。
+> 4. 验证：`git ls-files | grep dist` = 0；本地 `dist` 仍完整（93 条 manifest、94 个资源引用、0 缺失），
+>    页面不受影响；`dist_check/` 仍是 CI 的构建校验目录。
+>
+> **未验证**：`docker build` 本身——本机 Docker daemon 没起。这条要等有 Docker 的环境确认。
+
 ---
 
 ## 3. 提交粒度与分支（P0）

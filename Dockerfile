@@ -1,3 +1,17 @@
+# --- UI build stage ---------------------------------------------------------
+# `atlas-ui/react/dist` is not in version control (and `.dockerignore` excludes it), so the
+# bundle has to be produced here. Without this stage the image shipped a UI with no
+# manifest and served a blank page.
+FROM node:22-slim AS ui
+
+WORKDIR /ui
+# deps first so a source-only change does not re-run `npm ci`
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npx vite build
+
+# --- runtime -----------------------------------------------------------------
 FROM python:3.11-slim
 
 # Python env vars
@@ -24,6 +38,9 @@ RUN pip install -r requirements.txt
 
 # copy to modify on local
 COPY . /app_defaults
+
+# the bundle is built in the ui stage above, never copied from the working tree
+COPY --from=ui /ui/atlas-ui/react/dist /app_defaults/atlas-ui/react/dist
 
 # encrypoint
 COPY entrypoint.sh /entrypoint.sh
